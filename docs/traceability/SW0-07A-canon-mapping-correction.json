@@ -1,0 +1,19 @@
+{
+  "slice":"SW0-07A",
+  "title":"CB-00 Invariant Mapping Correction",
+  "baseline":"CB-00-v0.1",
+  "reason":"Post-merge audit found that SW0-06/SW0-07 machine-readable invariant IDs had drifted from the authoritative CB-00 invariant catalogue.",
+  "corrections":[
+    {"id":"INV-007","authoritative":"Physical quantity creation/destruction requires traceable event, transformation or measured variance.","current":"RED","reason":"negative quantity/over-allocation proofs are insufficient for the full invariant"},
+    {"id":"INV-008","authoritative":"Split/merge/repack/process/return cannot destroy provenance.","current":"RED","reason":"lot receipt alone does not prove transformation provenance"},
+    {"id":"INV-009","authoritative":"Unavailable/unsafe/held quantity cannot become available merely through allocation or projection.","current":"PARTIAL_GREEN","proof":"tests/node/sw0-06.test.mjs"},
+    {"id":"INV-010","authoritative":"Ownership, possession, custody, control, allocation and encumbrance remain distinguishable.","current":"PARTIAL_GREEN","proof":"packages/inventory + tests/node/sw0-06.test.mjs"},
+    {"id":"INV-016","authoritative":"Positive expected return cannot justify an action that violates hard liquidity/solvency constraints.","current":"RED"},
+    {"id":"INV-017","authoritative":"Security interests/restrictions remain visible to any disposition/availability decision.","current":"RED"},
+    {"id":"INV-018","authoritative":"No unauthorized double pledge or double representation of unencumbered collateral capacity.","current":"RED"},
+    {"id":"INV-019","authoritative":"Possession, custody, title, risk, acceptance, settlement and discharge are orthogonal.","current":"PARTIAL_GREEN","proof":"tests/node/sw0-07.test.mjs"},
+    {"id":"INV-020","authoritative":"Only actually conforming performed quantity is discharged.","current":"PARTIAL_GREEN","proof":"tests/node/sw0-07.test.mjs"}
+  ],
+  "doctrine":"Correction is additive. Historical SW0-06/SW0-07 release evidence is not deleted; this record supersedes its invariant-ID interpretation.",
+  "next":"SW0-08 may proceed only against authoritative invariant text, not prior numeric assumptions."
+}
