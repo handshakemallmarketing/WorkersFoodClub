@@ -1,0 +1,9 @@
+{
+  "release":"SW0-12D",
+  "title":"Live PostgreSQL Durability Conformance",
+  "status":"PARTIAL_GREEN",
+  "delivered":["PostgreSQL service in constitutional-conformance CI","live migration execution","durable command result persistence proof","duplicate idempotency rejection proof","database aggregate-version stale-write rejection","transaction rollback proof against partial canonical publication"],
+  "affectedInvariants":["INV-027","INV-028"],
+  "limitations":["not every domain module is yet wired through the durable committer","no production multi-node load test","overall SW0 release candidate GO not claimed"],
+  "next":"Close remaining RED adversarial fixtures and enter SW0-RC1 clean-room review."
+}
