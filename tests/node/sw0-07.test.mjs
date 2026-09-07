@@ -1,43 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {InMemoryFulfillmentLedger} from '../../dist/packages/fulfillment/src/index.js';
-
+import {InMemoryObligationResolutionLedger} from '../../dist/packages/resolution/src/index.js';
 const allocation={allocationId:'a1',lotId:'lot-1',obligationId:'obl-1',specificationId:'spec-rice',quantity:{amount:5,unit:'kg'}};
-const obligation={id:'obl-1',beneficiary:'club',quantity:{amount:5,unit:'kg'}};
+const obligation={id:'obl-1',beneficiary:'member-1',quantity:{amount:5,unit:'kg'}};
+const ledger=()=>new InMemoryFulfillmentLedger(new InMemoryObligationResolutionLedger());
 const work=(id,state,supersedes)=>({id,allocationId:'a1',lotId:'lot-1',obligationId:'obl-1',specificationId:'spec-rice',quantity:{amount:5,unit:'kg'},state,operatorId:'worker-1',placeId:'pickup-1',occurredAt:'2026-09-07T12:00:00Z',evidenceIds:[`ev-${id}`],...(supersedes?{supersedes}:{})});
 function ready(l){l.recordWork(work('pick','PICKED'),allocation);l.recordWork(work('pack','PACKED','pick'),allocation);return l.recordWork(work('ready','READY_FOR_PICKUP','pack'),allocation);}
 const handover={id:'ho-1',fulfillmentWorkId:'ready',obligationId:'obl-1',fromCustodianId:'club',toParticipantId:'member-1',placeId:'pickup-1',handedOverAt:'2026-09-07T12:10:00Z',evidenceIds:['ev-ho']};
-
-test('C8 fulfillment work must preserve allocation lineage and ordered state',()=>{
- const l=new InMemoryFulfillmentLedger();
- assert.throws(()=>l.recordWork(work('pack','PACKED'),allocation),/FULFILLMENT_MUST_BEGIN_PICKED/);
- l.recordWork(work('pick','PICKED'),allocation);
- assert.throws(()=>l.recordWork(work('ready','READY_FOR_PICKUP'),allocation),/FULFILLMENT_WORK_LINEAGE_REQUIRED/);
-});
-
-test('INV-016 pickup handover requires ready work and evidence',()=>{
- const l=new InMemoryFulfillmentLedger(); l.recordWork(work('pick','PICKED'),allocation);
- assert.throws(()=>l.handover(handover),/HANDOVER_NOT_READY/); ready(new InMemoryFulfillmentLedger());
-});
-
-test('INV-017 handover does not equal acceptance or discharge',()=>{
- const l=new InMemoryFulfillmentLedger(); ready(l); l.handover(handover);
- assert.equal(l.performance(obligation).state,'OPEN');
-});
-
-test('INV-018 acceptance is a distinct evidence-backed member act',()=>{
- const l=new InMemoryFulfillmentLedger(); ready(l); l.handover(handover);
- l.accept({id:'acc-1',handoverId:'ho-1',obligationId:'obl-1',participantId:'member-1',state:'ACCEPTED',quantity:{amount:5,unit:'kg'},acceptedAt:'2026-09-07T12:11:00Z',evidenceIds:['ev-acc']},obligation);
- assert.equal(l.performance(obligation).state,'DISCHARGED');
-});
-
-test('C8 partial acceptance yields partial discharge, not completion',()=>{
- const l=new InMemoryFulfillmentLedger(); ready(l); l.handover(handover);
- l.accept({id:'acc-1',handoverId:'ho-1',obligationId:'obl-1',participantId:'member-1',state:'PARTIALLY_ACCEPTED',quantity:{amount:3,unit:'kg'},acceptedAt:'2026-09-07T12:11:00Z',evidenceIds:['ev-acc']},obligation);
- assert.equal(l.performance(obligation).state,'PARTIALLY_DISCHARGED');
-});
-
-test('C8 wrong participant cannot accept another member handover',()=>{
- const l=new InMemoryFulfillmentLedger(); ready(l); l.handover(handover);
- assert.throws(()=>l.accept({id:'acc-1',handoverId:'ho-1',obligationId:'obl-1',participantId:'other-member',state:'ACCEPTED',quantity:{amount:5,unit:'kg'},acceptedAt:'2026-09-07T12:11:00Z',evidenceIds:['ev-acc']},obligation),/ACCEPTANCE_PARTICIPANT_MISMATCH/);
-});
+test('C8 fulfillment work must preserve allocation lineage and ordered state',()=>{const l=ledger();assert.throws(()=>l.recordWork(work('pack','PACKED'),allocation),/FULFILLMENT_MUST_BEGIN_PICKED/);l.recordWork(work('pick','PICKED'),allocation);assert.throws(()=>l.recordWork(work('ready','READY_FOR_PICKUP'),allocation),/FULFILLMENT_WORK_LINEAGE_REQUIRED/);});
+test('pickup handover requires ready work and evidence',()=>{const l=ledger();l.recordWork(work('pick','PICKED'),allocation);assert.throws(()=>l.handover(handover,obligation),/HANDOVER_NOT_READY/);});
+test('INV-019 handover does not equal acceptance or discharge',()=>{const l=ledger();ready(l);l.handover(handover,obligation);assert.equal(l.performance(obligation).state,'OPEN');});
+test('INV-019 acceptance is a distinct evidence-backed member act',()=>{const l=ledger();ready(l);l.handover(handover,obligation);l.accept({id:'acc-1',handoverId:'ho-1',obligationId:'obl-1',participantId:'member-1',state:'ACCEPTED',quantity:{amount:5,unit:'kg'},acceptedAt:'2026-09-07T12:11:00Z',evidenceIds:['ev-acc']},obligation);assert.equal(l.performance(obligation).state,'DISCHARGED');});
+test('INV-020 partial acceptance yields partial discharge, not completion',()=>{const l=ledger();ready(l);l.handover(handover,obligation);l.accept({id:'acc-1',handoverId:'ho-1',obligationId:'obl-1',participantId:'member-1',state:'PARTIALLY_ACCEPTED',quantity:{amount:3,unit:'kg'},acceptedAt:'2026-09-07T12:11:00Z',evidenceIds:['ev-acc']},obligation);assert.equal(l.performance(obligation).state,'PARTIALLY_DISCHARGED');});
+test('C8 wrong participant cannot accept another member handover',()=>{const l=ledger();ready(l);l.handover(handover,obligation);assert.throws(()=>l.accept({id:'acc-1',handoverId:'ho-1',obligationId:'obl-1',participantId:'other-member',state:'ACCEPTED',quantity:{amount:5,unit:'kg'},acceptedAt:'2026-09-07T12:11:00Z',evidenceIds:['ev-acc']},obligation),/ACCEPTANCE_PARTICIPANT_MISMATCH/);});
