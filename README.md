@@ -1,21 +1,20 @@
-# Food Club Ghana — SW0-08
-Exception, Remedy & Completion Slice — v0.7.0-alpha.1
+# Food Club Ghana — SW0-09
+Actual Fulfilled Economics, Benchmark & Savings Ledger — v0.8.0-alpha.1
 
 **Baseline:** CB-00 v0.1 / SW0-01 v0.1  
-**Predecessor:** SW0-07B Kernel Integrity & Conformance Harness Hardening  
-**Status:** PARTIAL GREEN — exception/remedy/substitution semantics are executable; returns, savings and durable settlement remain open.
+**Predecessor:** SW0-08 Exception, Remedy & Completion  
+**Status:** PARTIAL GREEN — final transaction savings and structural-advantage distinctions are executable; projection rebuild, remaining P0 controls and durable persistence remain open.
 
 ## What changed
-- Preserved rejected member acceptance as zero conforming performed quantity rather than forcing a false delivery state.
-- Added evidence-backed SHORTFALL, REJECTION, SUBSTITUTION_REQUIRED and DISPUTE exception records.
-- Added refund, replacement and remedy-credit obligations linked to the original purchase obligation and exception.
-- Kept performed quantity separate from remedied quantity in completion projections, so a refund never masquerades as delivery.
-- Added material-substitution controls that preserve the original specification and require equivalence evidence, member consent and economic recomputation before resolution.
-- Added quantity guards against exception overstatement, remedy overallocation, remedy overcompletion and obligation overresolution.
-- Classified remedy credit explicitly as `REMEDY_CREDIT_NOT_STORED_VALUE`; no wallet or lending semantics are introduced.
-- Added effect-idempotent refund retry proof through CommandBus.
-- Advanced INV-021 to PARTIAL_GREEN and strengthened INV-019, INV-020 and INV-027.
-- Advanced adversarial fixtures FX-008, FX-009 and FX-011 to GREEN.
+- Added versioned governed benchmark methods bounded by specification, quantity, place, service level, time, normalization rule, availability rule and qualifying observation evidence.
+- Benchmark valuation now requires an executable alternative and cannot cite evidence outside the governed observation set.
+- Added actual fulfilled member economics with goods outlay, mandatory charges, refunds and evidence lineage.
+- Added a signed savings ledger so positive, zero and negative savings are all representable and preserved.
+- Savings corrections are additive through explicit `supersedes`; prior savings entries remain intact.
+- Added purpose-specific cost bases with declared method version and evidence-backed cost components.
+- Added structural-advantage assessment that keeps subsidy, promotion, cross-subsidy and grant support separate from risk-adjusted system cost.
+- Advanced INV-012, INV-013 and INV-014 to PARTIAL_GREEN and strengthened INV-024.
+- Advanced FX-013 benchmark cherry-pick, FX-014 hidden negative savings and FX-015 supplier-promo laundering to GREEN.
 
 ## Local proof
 ```bash
@@ -28,9 +27,9 @@ pnpm test:kernel
 ```
 
 ## Constitutional status
-SW0-08 does **not** claim overall SW0 conformance. A completed obligation may now be reconstructed as performed quantity plus separately governed remedy quantity; the system never relabels a refund, replacement or credit as original conforming delivery.
+SW0-09 does **not** claim overall SW0 conformance. Savings is derived only from a governed comparable benchmark and actual fulfilled member economics. Mandatory charges are included, refunds require recomputation, unfavorable savings remain visible, and non-structural support cannot be relabeled as structural advantage.
 
-Still intentionally open: INV-022 returned-goods quality re-entry, durable database remedy persistence, external refund-provider integration, title/risk-transfer policy, stored-value/credit products, and final savings economics.
+Still intentionally open: INV-015 bounded future price-protection promises, INV-016/017/018 capital/security controls, INV-022 return-to-stock quality gating, projection rebuild/freshness, durable database economics persistence and full adversarial closure.
 
 ## Next slice
-**SW0-09 — Actual Fulfilled Economics, Benchmark & Savings Ledger Slice**: compute final member savings only from actual fulfilled/remedied economics against a governed comparable benchmark, preserve zero/negative savings, and prevent promotion/subsidy from masquerading as structural advantage.
+**SW0-10 — Projection & Rebuild Slice**: make inventory, fulfillment, savings and member operational views disposable/rebuildable from canonical sources, prove drop/rebuild equivalence, expose freshness/lineage, and advance INV-029 without granting projections write authority.
