@@ -1,0 +1,17 @@
+{
+  "slice":"SW0-09",
+  "version":"v0.8.0-alpha.1",
+  "status":"PARTIAL_GREEN",
+  "implemented":[
+    "versioned governed member-savings benchmark methods with bounded specification, quantity, place, service and validity",
+    "benchmark valuations restricted to executable alternatives and governed observation evidence",
+    "actual fulfilled member economics including mandatory charges and refunds",
+    "signed savings ledger preserving positive, zero and negative outcomes",
+    "additive savings correction lineage",
+    "purpose-specific evidence-backed cost basis",
+    "structural advantage separated from subsidy, promotion, cross-subsidy and grant support"
+  ],
+  "invariants":{"INV-012":"PARTIAL_GREEN","INV-013":"PARTIAL_GREEN","INV-014":"PARTIAL_GREEN","INV-024":"PARTIAL_GREEN"},
+  "fixtures":{"FX-013":"GREEN","FX-014":"GREEN","FX-015":"GREEN"},
+  "not_claimed":["INV-015 price-protection promise enforcement","basket-wide multi-obligation savings aggregation","durable database economics persistence","external benchmark provider integration","overall SW0 conformance"]
+}
