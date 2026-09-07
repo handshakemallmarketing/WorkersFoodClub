@@ -1,0 +1,11 @@
+{
+  "slice":"SW0-12",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "purpose":"Define and adversarially prove the atomic persistence contract required for durable command idempotency before a database adapter is introduced.",
+  "mappings":[
+    {"invariantId":"INV-027","proof":"packages/durability/src/index.ts + tests/node/sw0-12.test.mjs","claim":"atomic claim gives one execution owner; committed result replays; idempotency key cannot alias another command"},
+    {"invariantId":"INV-028","proof":"packages/durability/src/index.ts + tests/node/sw0-12.test.mjs","claim":"persistence contract establishes the serialization seam; database transaction/version enforcement remains outstanding"}
+  ],
+  "notClaimed":["database durability","multi-process crash recovery","serializable PostgreSQL adapter","transactional atomicity across domain writes and command-result commit","overall SW0 GO"]
+}
