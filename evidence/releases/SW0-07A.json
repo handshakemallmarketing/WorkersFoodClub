@@ -1,0 +1,9 @@
+{
+  "slice":"SW0-07A",
+  "status":"CORRECTION",
+  "supersedes_interpretation":["SW0-06 invariant-ID mapping","SW0-07 invariant-ID mapping"],
+  "preserves_history":true,
+  "implemented":["rebound executable proofs to authoritative CB-00 invariant text","reverted unsupported GREEN claims to RED","moved fulfillment proofs to INV-019/INV-020","recorded correction rather than rewriting historical release evidence"],
+  "current_status":{"INV-007":"RED","INV-008":"RED","INV-009":"PARTIAL_GREEN","INV-010":"PARTIAL_GREEN","INV-016":"RED","INV-017":"RED","INV-018":"RED","INV-019":"PARTIAL_GREEN","INV-020":"PARTIAL_GREEN","INV-030":"PARTIAL_GREEN"},
+  "not_claimed":["full invariant-registry automation","overall SW0 conformance"]
+}
