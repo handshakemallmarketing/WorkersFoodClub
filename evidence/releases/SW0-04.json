@@ -1,0 +1,22 @@
+{
+  "slice":"SW0-04",
+  "baseline":"CB-00-v0.1",
+  "branch":"sw0-04-membership-catalog-offer",
+  "status":"PARTIAL_GREEN",
+  "implemented":[
+    "eligibility decision separated from membership relationship",
+    "membership establishment requires qualifying evidence and policy version",
+    "Specification identity separated from SKU/listing identifiers",
+    "contextual PriceObservation with specification, money, quantity basis, place, time, transaction level and conditions",
+    "bounded MemberOffer with validity window, place, specification, quantity, member price, policy versions and price-evidence lineage",
+    "cross-specification price-evidence mismatch rejection"
+  ],
+  "proofs":["tests/node/sw0-04.test.mjs"],
+  "not_claimed":[
+    "demand commitment or order conformance",
+    "benchmark or savings conformance",
+    "inventory availability",
+    "payment or settlement",
+    "overall SW0 conformance"
+  ]
+}
