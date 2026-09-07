@@ -3,86 +3,22 @@ import assert from 'node:assert/strict';
 import {asId,quantity} from '../../dist/packages/kernel/src/index.js';
 import {InMemoryFulfillmentLedger} from '../../dist/packages/fulfillment/src/index.js';
 import {InMemoryRemedyLedger} from '../../dist/packages/remedy/src/index.js';
+import {InMemoryObligationResolutionLedger} from '../../dist/packages/resolution/src/index.js';
 import {InMemoryAuthorityStore,AuthorityEvaluator} from '../../dist/packages/authority/src/index.js';
 import {CommandBus,InMemoryIdempotencyStore} from '../../dist/packages/application/src/index.js';
-
-const pid=x=>asId(x), oid=x=>asId(x), sid=x=>asId(x), eid=x=>asId(x), gid=x=>asId(x), cid=x=>asId(x);
+const pid=x=>asId(x),oid=x=>asId(x),sid=x=>asId(x),eid=x=>asId(x),gid=x=>asId(x),cid=x=>asId(x);
 const obligation={id:oid('obligation:1'),participantId:pid('participant:member'),beneficiary:pid('participant:member'),specificationId:sid('spec:rice-5kg'),quantity:quantity(5,'kg')};
 const exception=(overrides={})=>({id:'exception:shortfall',obligationId:obligation.id,participantId:obligation.participantId,kind:'SHORTFALL',affectedQuantity:quantity(2,'kg'),occurredAt:'2026-09-07T12:15:00Z',evidenceIds:[eid('evidence:shortfall')],...overrides});
 const refund=(overrides={})=>({id:'remedy:refund',sourceExceptionId:'exception:shortfall',originalObligationId:obligation.id,participantId:obligation.participantId,kind:'REFUND',quantity:quantity(2,'kg'),createdAt:'2026-09-07T12:20:00Z',authorizedEventId:'event:refund-authorized',evidenceIds:[eid('evidence:refund-authorized')],economicClassification:'REMEDY_SETTLEMENT',...overrides});
-
-function readyFulfillment(){
- const l=new InMemoryFulfillmentLedger();
- const allocation={allocationId:'allocation:1',lotId:asId('lot:1'),obligationId:obligation.id,specificationId:obligation.specificationId,quantity:quantity(5,'kg')};
- const base=(id,state,supersedes)=>({id,allocationId:allocation.allocationId,lotId:allocation.lotId,obligationId:obligation.id,specificationId:obligation.specificationId,quantity:quantity(5,'kg'),state,operatorId:pid('participant:operator'),placeId:'pickup:1',occurredAt:'2026-09-07T12:00:00Z',evidenceIds:[eid(`evidence:${id}`)],...(supersedes?{supersedes}:{})});
- l.recordWork(base('pick','PICKED'),allocation); l.recordWork(base('pack','PACKED','pick'),allocation); l.recordWork(base('ready','READY_FOR_PICKUP','pack'),allocation);
- l.handover({id:'handover:1',fulfillmentWorkId:'ready',obligationId:obligation.id,fromCustodianId:pid('participant:club'),toParticipantId:obligation.participantId,placeId:'pickup:1',handedOverAt:'2026-09-07T12:10:00Z',evidenceIds:[eid('evidence:handover')]});
- return l;
+const remedyLedger=(resolution=new InMemoryObligationResolutionLedger())=>new InMemoryRemedyLedger(resolution);
+function readyFulfillment(resolution=new InMemoryObligationResolutionLedger()){
+ const l=new InMemoryFulfillmentLedger(resolution);const allocation={allocationId:'allocation:1',lotId:asId('lot:1'),obligationId:obligation.id,specificationId:obligation.specificationId,quantity:quantity(5,'kg')};const base=(id,state,supersedes)=>({id,allocationId:allocation.allocationId,lotId:allocation.lotId,obligationId:obligation.id,specificationId:obligation.specificationId,quantity:quantity(5,'kg'),state,operatorId:pid('participant:operator'),placeId:'pickup:1',occurredAt:'2026-09-07T12:00:00Z',evidenceIds:[eid(`evidence:${id}`)],...(supersedes?{supersedes}:{})});l.recordWork(base('pick','PICKED'),allocation);l.recordWork(base('pack','PACKED','pick'),allocation);l.recordWork(base('ready','READY_FOR_PICKUP','pack'),allocation);l.handover({id:'handover:1',fulfillmentWorkId:'ready',obligationId:obligation.id,fromCustodianId:pid('participant:club'),toParticipantId:obligation.participantId,placeId:'pickup:1',handedOverAt:'2026-09-07T12:10:00Z',evidenceIds:[eid('evidence:handover')]},obligation);return l;
 }
-
-test('C8 rejected acceptance may record zero conforming quantity and does not discharge',()=>{
- const l=readyFulfillment();
- l.accept({id:'acceptance:rejected',handoverId:'handover:1',obligationId:obligation.id,participantId:obligation.participantId,state:'REJECTED',quantity:quantity(0,'kg'),acceptedAt:'2026-09-07T12:12:00Z',evidenceIds:[eid('evidence:rejection')]},obligation);
- assert.equal(l.performance(obligation).state,'OPEN');
-});
-
-test('FX-008 partial fulfillment cannot be projected complete while quantity remains unresolved',()=>{
- const r=new InMemoryRemedyLedger();
- const p=r.completion(obligation,quantity(3,'kg'));
- assert.equal(p.state,'PARTIALLY_RESOLVED');
- assert.equal(p.unresolvedQuantity.amount,2);
-});
-
-test('shortfall history is preserved and completed refund resolves without pretending delivery',()=>{
- const r=new InMemoryRemedyLedger();
- r.recordException(exception(),obligation);
- r.createRemedy(refund());
- r.completeRemedy({id:'completion:refund',remedyObligationId:'remedy:refund',quantity:quantity(2,'kg'),completedAt:'2026-09-07T12:25:00Z',evidenceIds:[eid('evidence:refund-settled')]});
- const p=r.completion(obligation,quantity(3,'kg'));
- assert.equal(p.state,'COMPLETED_WITH_REMEDY');
- assert.equal(p.performedQuantity.amount,3);
- assert.equal(p.remediedQuantity.amount,2);
- assert.ok(r.getException('exception:shortfall'));
-});
-
-test('FX-009 material substitution without consent cannot resolve original obligation',()=>{
- const r=new InMemoryRemedyLedger();
- r.recordException(exception({id:'exception:sub',kind:'SUBSTITUTION_REQUIRED'}),obligation);
- r.proposeSubstitution({id:'substitution:pending',exceptionId:'exception:sub',obligationId:obligation.id,originalSpecificationId:obligation.specificationId,substituteSpecificationId:sid('spec:rice-alt'),affectedQuantity:quantity(2,'kg'),equivalenceRuleVersion:'equivalence:v1',equivalenceEvidenceIds:[eid('evidence:equivalence')],consent:'PENDING',consentEvidenceIds:[],economicRecomputationEvidenceIds:[eid('evidence:recompute')],proposedAt:'2026-09-07T12:20:00Z'},obligation);
- assert.throws(()=>r.createRemedy(refund({id:'remedy:sub',sourceExceptionId:'exception:sub',kind:'REPLACEMENT',substitutionProposalId:'substitution:pending'})),/SUBSTITUTION_NOT_CONSENTED/);
- assert.equal(r.completion(obligation,quantity(3,'kg')).state,'PARTIALLY_RESOLVED');
-});
-
-test('INV-021 consented substitution preserves original promise, equivalence and economic recomputation',()=>{
- const r=new InMemoryRemedyLedger();
- r.recordException(exception({id:'exception:sub',kind:'SUBSTITUTION_REQUIRED'}),obligation);
- const s=r.proposeSubstitution({id:'substitution:consented',exceptionId:'exception:sub',obligationId:obligation.id,originalSpecificationId:obligation.specificationId,substituteSpecificationId:sid('spec:rice-alt'),affectedQuantity:quantity(2,'kg'),equivalenceRuleVersion:'equivalence:v1',equivalenceEvidenceIds:[eid('evidence:equivalence')],consent:'CONSENTED',consentEvidenceIds:[eid('evidence:member-consent')],economicRecomputationEvidenceIds:[eid('evidence:recompute')],proposedAt:'2026-09-07T12:20:00Z'},obligation);
- assert.equal(s.originalSpecificationId,obligation.specificationId);
- r.createRemedy(refund({id:'remedy:replacement',sourceExceptionId:'exception:sub',kind:'REPLACEMENT',substitutionProposalId:s.id}));
- r.completeRemedy({id:'completion:replacement',remedyObligationId:'remedy:replacement',quantity:quantity(2,'kg'),completedAt:'2026-09-07T12:30:00Z',evidenceIds:[eid('evidence:replacement-accepted')]});
- assert.equal(r.completion(obligation,quantity(3,'kg')).state,'COMPLETED_WITH_REMEDY');
-});
-
-test('remedies cannot exceed affected or original obligation quantity',()=>{
- const r=new InMemoryRemedyLedger(); r.recordException(exception(),obligation); r.createRemedy(refund());
- assert.throws(()=>r.createRemedy(refund({id:'remedy:extra',quantity:quantity(1,'kg')})),/REMEDY_OVERALLOCATION/);
- r.completeRemedy({id:'completion:refund',remedyObligationId:'remedy:refund',quantity:quantity(2,'kg'),completedAt:'2026-09-07T12:25:00Z',evidenceIds:[eid('evidence:settlement')]});
- assert.throws(()=>r.completion(obligation,quantity(4,'kg')),/OBLIGATION_OVERRESOLUTION/);
-});
-
-test('C6 remedy credit is classified as remedy settlement, not stored-value wallet',()=>{
- const r=new InMemoryRemedyLedger(); r.recordException(exception(),obligation);
- const credit=r.createRemedy(refund({id:'remedy:credit',kind:'CREDIT',economicClassification:'REMEDY_CREDIT_NOT_STORED_VALUE'}));
- assert.equal(credit.economicClassification,'REMEDY_CREDIT_NOT_STORED_VALUE');
-});
-
-test('FX-011 refund retry cannot duplicate settlement effect through command idempotency',async()=>{
- const r=new InMemoryRemedyLedger(); r.recordException(exception(),obligation); r.createRemedy(refund());
- const authorities=new InMemoryAuthorityStore(); const actor=pid('participant:supervisor'), grant=gid('grant:refund');
- authorities.put({id:grant,grantorId:pid('participant:board'),actorId:actor,actions:['CompleteRefundRemedy'],targetPrefix:'remedy:',validFrom:'2026-09-01T00:00:00Z'});
- const idem=new InMemoryIdempotencyStore(); const bus=new CommandBus(new AuthorityEvaluator(authorities),{idempotencyStore:idem}); let effects=0;
- bus.register({action:'CompleteRefundRemedy',handle:()=>{effects++;r.completeRemedy({id:'completion:refund',remedyObligationId:'remedy:refund',quantity:quantity(2,'kg'),completedAt:'2026-09-07T12:25:00Z',evidenceIds:[eid('evidence:settlement')]});return ['event:refund-completed'];}});
- const command={commandId:cid('command:refund'),idempotencyKey:'idem:refund',actorId:actor,action:'CompleteRefundRemedy',targetId:'remedy:refund',authorityGrantIds:[grant],evidenceIds:[eid('evidence:settlement')],policyVersions:['remedy:v1'],requestedAt:'2026-09-07T12:25:00Z',correlationId:'corr:refund',payload:{}};
- const first=await bus.execute(command); const retry=await bus.execute(command);
- assert.equal(first.status,'ACCEPTED'); assert.equal(retry.replayed,true); assert.equal(effects,1); assert.equal(r.getCompletion('completion:refund').quantity.amount,2);
-});
+test('C8 rejected acceptance may record zero conforming quantity and does not discharge',()=>{const l=readyFulfillment();l.accept({id:'acceptance:rejected',handoverId:'handover:1',obligationId:obligation.id,participantId:obligation.participantId,state:'REJECTED',quantity:quantity(0,'kg'),acceptedAt:'2026-09-07T12:12:00Z',evidenceIds:[eid('evidence:rejection')]},obligation);assert.equal(l.performance(obligation).state,'OPEN');});
+test('FX-008 partial fulfillment cannot be projected complete while quantity remains unresolved',()=>{const r=remedyLedger();assert.equal(r.completion(obligation,quantity(3,'kg')).state,'PARTIALLY_RESOLVED');});
+test('shortfall history is preserved and completed refund resolves without pretending delivery',()=>{const r=remedyLedger();r.recordException(exception(),obligation);r.createRemedy(refund());r.completeRemedy({id:'completion:refund',remedyObligationId:'remedy:refund',quantity:quantity(2,'kg'),completedAt:'2026-09-07T12:25:00Z',evidenceIds:[eid('evidence:refund-settled')]});assert.equal(r.completion(obligation,quantity(3,'kg')).state,'COMPLETED_WITH_REMEDY');});
+test('FX-009 material substitution without consent cannot resolve original obligation',()=>{const r=remedyLedger();r.recordException(exception({id:'exception:sub',kind:'SUBSTITUTION_REQUIRED'}),obligation);r.proposeSubstitution({id:'substitution:pending',exceptionId:'exception:sub',obligationId:obligation.id,originalSpecificationId:obligation.specificationId,substituteSpecificationId:sid('spec:rice-alt'),affectedQuantity:quantity(2,'kg'),equivalenceRuleVersion:'equivalence:v1',equivalenceEvidenceIds:[eid('evidence:equivalence')],consent:'PENDING',consentEvidenceIds:[],economicRecomputationEvidenceIds:[eid('evidence:recompute')],proposedAt:'2026-09-07T12:20:00Z'},obligation);assert.throws(()=>r.createRemedy(refund({id:'remedy:sub',sourceExceptionId:'exception:sub',kind:'REPLACEMENT',substitutionProposalId:'substitution:pending'})),/SUBSTITUTION_NOT_CONSENTED/);});
+test('INV-021 consented substitution preserves original promise, equivalence and economic recomputation',()=>{const r=remedyLedger();r.recordException(exception({id:'exception:sub',kind:'SUBSTITUTION_REQUIRED'}),obligation);const s=r.proposeSubstitution({id:'substitution:consented',exceptionId:'exception:sub',obligationId:obligation.id,originalSpecificationId:obligation.specificationId,substituteSpecificationId:sid('spec:rice-alt'),affectedQuantity:quantity(2,'kg'),equivalenceRuleVersion:'equivalence:v1',equivalenceEvidenceIds:[eid('evidence:equivalence')],consent:'CONSENTED',consentEvidenceIds:[eid('evidence:member-consent')],economicRecomputationEvidenceIds:[eid('evidence:recompute')],proposedAt:'2026-09-07T12:20:00Z'},obligation);r.createRemedy(refund({id:'remedy:replacement',sourceExceptionId:'exception:sub',kind:'REPLACEMENT',substitutionProposalId:s.id}));r.completeRemedy({id:'completion:replacement',remedyObligationId:'remedy:replacement',quantity:quantity(2,'kg'),completedAt:'2026-09-07T12:30:00Z',evidenceIds:[eid('evidence:replacement-accepted')]});assert.equal(r.completion(obligation,quantity(3,'kg')).state,'COMPLETED_WITH_REMEDY');});
+test('remedies cannot exceed affected or original obligation quantity',()=>{const r=remedyLedger();r.recordException(exception(),obligation);r.createRemedy(refund());assert.throws(()=>r.createRemedy(refund({id:'remedy:extra',quantity:quantity(1,'kg')})),/REMEDY_OVERALLOCATION/);});
+test('C6 remedy credit is classified as remedy settlement, not stored-value wallet',()=>{const r=remedyLedger();r.recordException(exception(),obligation);assert.equal(r.createRemedy(refund({id:'remedy:credit',kind:'CREDIT',economicClassification:'REMEDY_CREDIT_NOT_STORED_VALUE'})).economicClassification,'REMEDY_CREDIT_NOT_STORED_VALUE');});
+test('FX-011 refund retry cannot duplicate settlement effect through command idempotency',async()=>{const r=remedyLedger();r.recordException(exception(),obligation);r.createRemedy(refund());const authorities=new InMemoryAuthorityStore();const actor=pid('participant:supervisor'),grant=gid('grant:refund');authorities.put({id:grant,grantorId:pid('participant:board'),actorId:actor,actions:['CompleteRefundRemedy'],targetPrefix:'remedy:',validFrom:'2026-09-01T00:00:00Z'});const bus=new CommandBus(new AuthorityEvaluator(authorities),{idempotencyStore:new InMemoryIdempotencyStore()});let effects=0;bus.register({action:'CompleteRefundRemedy',handle:()=>{effects++;r.completeRemedy({id:'completion:refund',remedyObligationId:'remedy:refund',quantity:quantity(2,'kg'),completedAt:'2026-09-07T12:25:00Z',evidenceIds:[eid('evidence:settlement')]});return ['event:refund-completed'];}});const command={commandId:cid('command:refund'),idempotencyKey:'idem:refund',actorId:actor,action:'CompleteRefundRemedy',targetId:'remedy:refund',authorityGrantIds:[grant],evidenceIds:[eid('evidence:settlement')],policyVersions:['remedy:v1'],requestedAt:'2026-09-07T12:25:00Z',correlationId:'corr:refund',payload:{}};const first=await bus.execute(command),retry=await bus.execute(command);assert.equal(first.status,'ACCEPTED');assert.equal(retry.replayed,true);assert.equal(effects,1);});

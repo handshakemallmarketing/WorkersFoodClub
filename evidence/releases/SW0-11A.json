@@ -1,0 +1,12 @@
+{
+  "slice":"SW0-11A",
+  "title":"Fulfillment Conservation & Cross-Ledger Settlement Integrity",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "reviewOrigin":"external adversarial review after SW0-11 merge",
+  "closedFindings":["double-handover","acceptance-overwrite/overdischarge","beneficiary-bypass","checkout-authorization-reuse","goods-plus-remedy-double-dispensation","savings-lineage-fork"],
+  "proofFiles":["tests/node/sw0-11a.test.mjs","tests/node/sw0-11a-savings.test.mjs"],
+  "affectedInvariants":["INV-004","INV-019","INV-020","INV-024","INV-027"],
+  "limitations":["in-memory resolution registry is not durable transactional persistence","distributed concurrency/serialization remains SW0-12 scope","title/risk transfer remains governed by OPEN-011 policy/legal classification"],
+  "next":"SW0-12 — Adversarial & Durability Conformance Hardening"
+}
