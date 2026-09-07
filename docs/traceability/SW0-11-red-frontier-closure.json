@@ -1,0 +1,13 @@
+{
+  "slice":"SW0-11",
+  "title":"Constitutional RED Frontier Closure",
+  "baseline":"CB-00-v0.1",
+  "mappings":[
+    {"source":"C4/C5 supply and sourcing distinctions","invariants":["INV-005","INV-006"],"proofs":["tests/node/sw0-11.test.mjs"]},
+    {"source":"C5 physical conservation, transformation and lineage","invariants":["INV-007","INV-008","INV-022"],"proofs":["tests/node/sw0-11.test.mjs","FX-007"]},
+    {"source":"C5/C7 reserve and security controls","invariants":["INV-011","INV-017","INV-018"],"proofs":["tests/node/sw0-11.test.mjs","FX-006","FX-018"]},
+    {"source":"C6/C7 bounded future promises and capital constraints","invariants":["INV-015","INV-016"],"proofs":["tests/node/sw0-11.test.mjs","FX-017"]},
+    {"source":"C9 epistemic separation, contradiction and decision reconstruction","invariants":["INV-023","INV-025","INV-026"],"proofs":["tests/node/sw0-11.test.mjs","FX-024"]}
+  ],
+  "not_claimed":["all invariants fully GREEN","durable database enforcement","all FX-001..025 closed","overall SW0 release-candidate conformance"]
+}

@@ -1,0 +1,19 @@
+{
+  "slice":"SW0-11",
+  "status":"PARTIAL_GREEN",
+  "implemented":[
+    "explicit supply facet distinctions and equivalent-alternative sourcing with ABSTAIN",
+    "evidence-backed physical transformation conservation and lot ancestry",
+    "return-to-stock quality gate",
+    "governed reserve designation and release floor",
+    "bounded future price promise envelope",
+    "liquidity/headroom and maturity hard constraints",
+    "security-interest visibility and double-pledge prevention",
+    "epistemic-kind separation and upstream-source independence",
+    "explicit contradiction records",
+    "reconstructible material decision records"
+  ],
+  "invariantsAdvanced":["INV-005","INV-006","INV-007","INV-008","INV-011","INV-015","INV-016","INV-017","INV-018","INV-022","INV-023","INV-025","INV-026"],
+  "fixturesAdvanced":["FX-006","FX-007","FX-017","FX-018","FX-021","FX-023","FX-024"],
+  "not_claimed":["all invariants fully GREEN","all adversarial fixtures GREEN","durable database enforcement","overall SW0 release-candidate conformance"]
+}
