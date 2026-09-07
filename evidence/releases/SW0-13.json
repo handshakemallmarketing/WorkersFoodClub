@@ -1,0 +1,10 @@
+{
+  "release":"SW0-13",
+  "title":"Adversarial RED Frontier Closure",
+  "status":"PARTIAL_GREEN",
+  "delivered":["delivery/member acceptance conflict preservation","refund versus remedy-credit type safety","restricted-prepayment liquidity classification","external-provider anti-corruption semantic mapping","unknown-preserving migration primitives"],
+  "fixturesAdvancedToGreen":["FX-010","FX-012","FX-016","FX-022","FX-025"],
+  "remainingRedFixtures":["FX-001","FX-002","FX-003","FX-004","FX-005"],
+  "limitations":["foundational fixtures FX-001 through FX-005 remain RED until their exact CB-00 scenarios are implemented","overall SW0 GO not claimed"],
+  "next":"Resolve FX-001 through FX-005 from their authoritative CB-00 definitions, refresh cumulative traceability, then enter SW0-RC1 clean-room review."
+}
