@@ -1,0 +1,24 @@
+{
+  "release":"SW0-RC1",
+  "baseline":"CB-00-v0.1",
+  "reviewedMain":"4917bd34f434e9a7313c607d3529d3fd70beb491",
+  "verdict":"GO_BOUNDED_WITH_BLOCKERS",
+  "fixtureFrontier":{"total":25,"green":25,"red":0,"source":"canon/fixtures.json"},
+  "invariantFrontier":{"total":30,"partialGreen":30,"fullGreen":0,"source":"canon/invariants.json"},
+  "verifiedStrengths":[
+    "all 25 CB-00 adversarial fixtures have explicit executable proof references",
+    "all 30 invariants retain conservative PARTIAL_GREEN status rather than being promoted by fixture closure",
+    "live PostgreSQL conformance exists for durable command identity, committed-result persistence, aggregate-version conflict and rollback of partial canonical publication",
+    "canonical event, aggregate version and command result can be committed in one PostgreSQL transaction through PostgresDomainCommitter",
+    "canon/traceability checks bind invariant rule text, priority and status"
+  ],
+  "releaseBlockers":[
+    {"id":"RC1-B01","severity":"P0","invariants":["INV-027","INV-028"],"finding":"Durable PostgreSQL enforcement is not universally wired through domain write paths. SW0-12D explicitly excludes universal domain wiring, so the in-memory allocation, fulfillment, remedy and other ledgers can still be used outside the transactional durability boundary.","required":"Route every consequential first-vertical-slice write through one transactional command/domain boundary or make bypass structurally impossible, then prove concurrent and crash recovery behavior against PostgreSQL."},
+    {"id":"RC1-B02","severity":"P0","invariants":["INV-027","INV-028"],"finding":"PostgresDurableCommandStore ownership is keyed by a caller-supplied owner token without a per-claim fencing generation. A same-owner concurrent claimant can receive CLAIMED, and an expired long-running owner is not fenced by a monotonic generation at domain commit.","required":"Introduce a unique claim/fence token or monotonic generation per acquisition/takeover and require the current fence for every canonical/domain commit; add live PostgreSQL same-owner concurrency and lease-expiry takeover tests."},
+    {"id":"RC1-B03","severity":"P0","invariants":["INV-028"],"finding":"The current cumulative traceability matrix still identifies slice SW0-11 and its INV-027/INV-028 proof entries omit SW0-12C/SW0-12D PostgreSQL evidence. The checker validates status/rule synchronization but does not require the cumulative matrix to include the newest release evidence.","required":"Regenerate the cumulative matrix through SW0-RC1 and strengthen traceability validation so release evidence cannot remain only in supplemental files while the canonical matrix is stale."},
+    {"id":"RC1-B04","severity":"P0","invariants":["INV-019"],"finding":"Title and risk transfer remain intentionally unresolved. The invariant itself requires possession, custody, title, risk, acceptance, settlement and discharge to remain orthogonal, while current proof explicitly states title/risk are pending.","required":"Keep OPEN-011 externalized; before production transactions, define governed transaction-specific title/risk policy and executable proof without inventing a universal delivered_at rule."},
+    {"id":"RC1-B05","severity":"P1","invariants":["INV-008"],"finding":"Physical lineage remains a bounded proof rather than a durable general split/merge/process model; multi-input/per-lot quantity semantics are not a complete durable ancestry model.","required":"Model explicit per-input and per-output lot quantities and persist lineage durably before claiming full provenance conformance."}
+  ],
+  "decision":"The bounded kernel may proceed to the next hardening release, but SW0 is not authorized as a production-complete release candidate and no invariant is promoted to full GREEN. Close RC1-B01 through RC1-B03 before a second release-candidate GO/NO-GO; RC1-B04 must remain a governed legal/contract policy gate for production transactions; RC1-B05 must close before full lineage conformance is claimed.",
+  "next":"SW0-RC1A — transactional boundary and fencing closure, followed by refreshed cumulative traceability and RC1 re-review."
+}
