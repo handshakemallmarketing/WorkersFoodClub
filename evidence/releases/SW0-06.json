@@ -1,0 +1,8 @@
+{
+  "slice":"SW0-06",
+  "status":"PARTIAL_GREEN",
+  "implemented":["traceable lot receipt with evidence, owner, custodian and place","evidence-backed quality state with correction lineage","allocation against accepted lots and open matching obligations","lot and obligation over-allocation rejection"],
+  "invariants":{"INV-007":"PARTIAL_GREEN","INV-008":"PARTIAL_GREEN","INV-009":"PARTIAL_GREEN","INV-010":"PARTIAL_GREEN"},
+  "proofs":["tests/node/sw0-06.test.mjs"],
+  "not_claimed":["durable database inventory","transactional locking under concurrent allocators","fulfillment or transfer","overall SW0 conformance"]
+}
