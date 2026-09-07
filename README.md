@@ -1,27 +1,35 @@
-# Food Club Ghana — SW0-02
-Kernel Types, Authority-Aware Command Boundary, Event/Evidence Contracts & First Executable Conformance Proofs — v0.1.0-alpha.1
+# Food Club Ghana — SW0-03
+Authority & Command Execution Kernel Hardening — v0.2.0-alpha.1
 
 **Baseline:** CB-00 v0.1 / SW0-01 v0.1  
-**Predecessor:** SW0-01A v0.0.1  
-**Status:** PARTIAL GREEN — kernel infrastructure proven; commerce/physical/fulfillment/economics invariants remain deliberately open.
+**Predecessor:** SW0-02 v0.1.0-alpha.1  
+**Status:** PARTIAL GREEN — authority and command-execution semantics hardened; database-backed durability and commerce-domain invariants remain open.
 
 ## What changed
-- Implemented typed representations for all 14 canonical kernel concepts.
-- Added Quantity/Unit and Money/Currency value types; physical subtraction rejects negative truth.
-- Added bounded Authority grants, execution-time evaluation, revocation and quantity limits.
-- Added semantic CommandEnvelope and effect-idempotent CommandBus.
-- Added append-only Event/Evidence contracts and additive correction lineage.
-- Added executable Node test proofs for INV-001, INV-007, INV-024, INV-027 and FX-020.
-- Expanded traceability so all 30 invariant identities now have a machine-readable mapping, with unimplemented items explicitly PENDING rather than silently absent.
+- Added bounded delegated Authority with explicit parent grants and anti-escalation checks for action, target, time and quantity scope.
+- Parent revocation now invalidates delegated authority at execution time.
+- Added explicit STOP/HOLD constraints that outrank otherwise-valid authority grants.
+- Added IdempotencyStore and VersionStore seams rather than binding command semantics to one process-local map.
+- Added expectedVersion stale-command rejection for consequential commands.
+- Added attributed rejected-command evidence with actor, action, target, reason, grant IDs, policy versions and correlation identity.
+- Added AI/service-actor overreach proof: machine actors receive no privilege beyond explicit grants.
+- CI now runs both the Vitest frontier and executable Node kernel proofs.
+- FX-019 and FX-020 are GREEN; INV-001, INV-027 and INV-028 are PARTIAL_GREEN with explicit remaining persistence/concurrency boundaries.
 
-## Local proof without third-party test packages
+## Local proof
 ```bash
-npm run conformance
+pnpm install --frozen-lockfile
+pnpm canon:check
+pnpm traceability:check
+pnpm typecheck
+pnpm test
+pnpm test:kernel
 ```
-The kernel proof uses global/local TypeScript plus Node's built-in test runner. The Vitest frontier remains available after dependency install.
 
 ## Constitutional status
-This slice does **not** claim SW0 conformance. It proves infrastructure-level invariants only. Demand/obligation, inventory allocation, fulfillment, savings, liquidity/security and migration fixtures remain for subsequent slices.
+SW0-03 does **not** claim overall SW0 conformance. It proves the governance/command boundary is materially stronger: authenticated or automated actors cannot self-authorize, delegated authority cannot widen itself, superior stops take precedence, stale versioned commands are rejected, and command retries can share an idempotency authority outside a CommandBus instance.
+
+Database-backed idempotency, serialized transaction/concurrency proof, demand/obligation, physical allocation, fulfillment, economics and migration invariants remain for subsequent slices.
 
 ## Next slice
-**SW0-03 — Authority & Command Execution Kernel hardening**: durable idempotency semantics, expected-version concurrency, constraint/hold evaluation, attributed rejected-command evidence, and authority matrix fixtures including AI/delegated actors.
+**SW0-04 — Membership, Specification, Price Evidence & Member Offer Slice**: establish Participant membership relationships and a governed catalog/offer projection without turning eligibility, SKU, price or forecast conventions into canonical truth.
