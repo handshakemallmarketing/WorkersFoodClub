@@ -1,0 +1,12 @@
+{
+  "baseline":"CB-00-v0.1",
+  "slice":"SW0-03",
+  "mappings":[
+    {"canon":"C7/C10 Authority integrity","invariantId":"INV-001","implementation":["packages/authority/src/index.ts","packages/application/src/index.ts"],"tests":["tests/node/kernel.test.mjs — scoped grant","delegation bounds","parent revocation","STOP/HOLD supremacy"],"evidence":"evidence/releases/SW0-03.json","status":"PARTIAL_GREEN"},
+    {"canon":"C10 idempotent consequence","invariantId":"INV-027","implementation":["packages/application/src/index.ts IdempotencyStore"],"tests":["tests/node/kernel.test.mjs — shared store across CommandBus recreation"],"evidence":"evidence/releases/SW0-03.json","status":"PARTIAL_GREEN","remaining":"database-backed adapter proof"},
+    {"canon":"C10 concurrency safety","invariantId":"INV-028","implementation":["packages/application/src/index.ts VersionStore/expectedVersion"],"tests":["tests/node/kernel.test.mjs — stale expectedVersion rejection"],"evidence":"evidence/releases/SW0-03.json","status":"PARTIAL_GREEN","remaining":"PostgreSQL serialization/locking proof"},
+    {"canon":"C7/C10 AI authority boundary","fixtureId":"FX-019","implementation":["packages/authority/src/index.ts","packages/application/src/index.ts"],"tests":["tests/node/kernel.test.mjs — AI/service actor overreach"],"evidence":"evidence/releases/SW0-03.json","status":"GREEN"},
+    {"canon":"C7 stale/revoked authority","fixtureId":"FX-020","implementation":["packages/authority/src/index.ts"],"tests":["tests/node/kernel.test.mjs — revoked authority rejected at execution"],"evidence":"evidence/releases/SW0-03.json","status":"GREEN"},
+    {"canon":"C10 rejected commands are operational evidence","implementation":["packages/application/src/index.ts RejectionEvidenceSink"],"tests":["tests/node/kernel.test.mjs — attributed rejected command evidence"],"evidence":"evidence/releases/SW0-03.json","status":"GREEN"}
+  ]
+}
