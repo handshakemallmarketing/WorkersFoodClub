@@ -66,6 +66,7 @@ export class InMemoryInventoryLedger {
   if(receipt.lot.specificationId!==obligation.specificationId||input.specificationId!==obligation.specificationId) throw new Error('ALLOCATION_SPECIFICATION_MISMATCH');
   if(input.quantity.amount<=0||input.quantity.unit!==receipt.lot.quantity.unit||input.quantity.unit!==obligation.quantity.unit) throw new Error('ALLOCATION_QUANTITY_INVALID');
   if(!validTime(input.allocatedAt)) throw new Error('ALLOCATION_TIME_INVALID');
+  if(input.evidenceIds.length===0) throw new Error('ALLOCATION_EVIDENCE_REQUIRED');
   const lotAllocated=this.allocatedForLot(input.lotId); if(lotAllocated+input.quantity.amount>receipt.lot.quantity.amount) throw new Error('LOT_OVERALLOCATION');
   const obligationAllocated=this.allocatedForObligation(input.obligationId); if(obligationAllocated+input.quantity.amount>obligation.quantity.amount) throw new Error('OBLIGATION_OVERALLOCATION');
   const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),evidenceIds:[...input.evidenceIds]});

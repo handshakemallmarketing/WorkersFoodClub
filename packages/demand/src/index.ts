@@ -1,6 +1,10 @@
 import type {CommandId,EvidenceId,Money,Obligation,ObligationId,OfferId,ParticipantId,Quantity,SpecificationId} from '../../kernel/src/index.js';
 import type {MembershipRelationship} from '../../membership/src/index.js';
-import type {MemberOffer} from '../../catalog/src/index.js';
+import {isWithinValidity,type MemberOffer} from '../../catalog/src/index.js';
+
+export interface AcceptedCommandVerifier {
+ isAccepted(commandId:string,eventId:string):boolean|Promise<boolean>;
+}
 
 export type DemandSignalKind='FORECAST'|'INTEREST'|'REQUEST';
 
@@ -53,6 +57,7 @@ export class InMemoryDemandCommitmentLedger {
  private readonly commitments=new Map<ObligationId,PurchaseCommitmentRecord>();
  private readonly payments=new Map<EvidenceId,PaymentEvidenceRecord>();
  private readonly providerRefs=new Set<string>();
+ constructor(private readonly commandVerifier?:AcceptedCommandVerifier){}
 
  recordSignal(signal:DemandSignal):DemandSignal{
   if(this.signals.has(signal.id)) throw new Error('DEMAND_SIGNAL_ID_DUPLICATE');
@@ -63,7 +68,7 @@ export class InMemoryDemandCommitmentLedger {
   return frozen;
  }
 
- commitPurchase(input:{
+ async commitPurchase(input:{
   obligationId:ObligationId;
   participantId:ParticipantId;
   membership:MembershipRelationship;
@@ -74,15 +79,16 @@ export class InMemoryDemandCommitmentLedger {
   authorizedEventId:string;
   acceptedAt:string;
   policyVersions:readonly string[];
- }):PurchaseCommitmentRecord{
+ }):Promise<PurchaseCommitmentRecord>{
   if(this.commitments.has(input.obligationId)) throw new Error('OBLIGATION_ID_DUPLICATE');
   if(input.membership.participantId!==input.participantId) throw new Error('MEMBERSHIP_PARTICIPANT_MISMATCH');
   if(input.membership.state!=='ACTIVE') throw new Error('PURCHASE_REQUIRES_ACTIVE_MEMBERSHIP');
   if(input.quantity.amount<=0 || input.quantity.unit!==input.offer.quantity.unit || input.quantity.amount>input.offer.quantity.amount) throw new Error('PURCHASE_QUANTITY_OUT_OF_OFFER');
   if(!validTime(input.acceptedAt)) throw new Error('PURCHASE_TIME_INVALID');
-  const t=Date.parse(input.acceptedAt);
-  if(t<Date.parse(input.offer.validFrom)||t>Date.parse(input.offer.validUntil)) throw new Error('OFFER_NOT_EXECUTABLE');
+  if(!isWithinValidity(input.offer.validFrom,input.offer.validUntil,input.acceptedAt)) throw new Error('OFFER_NOT_EXECUTABLE');
   if(!String(input.authorizedCommandId).trim() || !input.authorizedEventId.trim()) throw new Error('AUTHORIZED_COMMITMENT_EVENT_REQUIRED');
+  if(!this.commandVerifier) throw new Error('COMMAND_VERIFIER_REQUIRED');
+  if(!(await this.commandVerifier.isAccepted(String(input.authorizedCommandId),input.authorizedEventId))) throw new Error('AUTHORIZED_COMMITMENT_NOT_VERIFIED');
   if(input.sourceDemandSignalId){
    const signal=this.signals.get(input.sourceDemandSignalId);
    if(!signal) throw new Error('DEMAND_SIGNAL_UNKNOWN');

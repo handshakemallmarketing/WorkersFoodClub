@@ -1,0 +1,17 @@
+{
+  "slice":"SW0-07B",
+  "status":"PARTIAL_GREEN",
+  "implemented":[
+    "allocation requires evidence",
+    "authority revoke and constraint release are monotonic one-way operations",
+    "expected domain rejections become attributable idempotent command results",
+    "unexpected infrastructure/programming failures are not converted into business rejection",
+    "purchase commitment verifies an ACCEPTED command and resulting event",
+    "offer validity semantics are shared between catalog and demand",
+    "all 30 invariant rules are machine-readable",
+    "canon and cumulative traceability drift checks are executable"
+  ],
+  "invariants":{"INV-004":"PARTIAL_GREEN","INV-010":"PARTIAL_GREEN","INV-027":"PARTIAL_GREEN","INV-030":"PARTIAL_GREEN"},
+  "proofs":["tests/node/sw0-05.test.mjs","tests/node/sw0-07b.test.mjs","scripts/check-canon.mjs","scripts/check-traceability.mjs"],
+  "not_claimed":["durable idempotency persistence","database serialization","all domain errors converted to typed DomainRejection","overall SW0 conformance"]
+}
