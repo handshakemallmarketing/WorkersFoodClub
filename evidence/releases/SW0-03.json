@@ -1,0 +1,29 @@
+{
+  "slice": "SW0-03",
+  "baseline": "CB-00-v0.1",
+  "branch": "sw0-03-authority-command-hardening",
+  "status": "PARTIAL_GREEN",
+  "implemented": [
+    "bounded delegation with no scope escalation",
+    "parent-revocation invalidation of delegated authority",
+    "STOP/HOLD supremacy over otherwise valid grants",
+    "execution-time authority evaluation for human, service and AI actors",
+    "idempotency-store seam reusable across command bus recreation",
+    "expectedVersion stale-command rejection",
+    "attributed rejected-command evidence",
+    "kernel proof execution in CI"
+  ],
+  "proofs": {
+    "INV-001": "tests/node/kernel.test.mjs",
+    "INV-027": "tests/node/kernel.test.mjs",
+    "INV-028": "tests/node/kernel.test.mjs",
+    "FX-019": "tests/node/kernel.test.mjs",
+    "FX-020": "tests/node/kernel.test.mjs"
+  },
+  "not_claimed": [
+    "durable database-backed idempotency",
+    "database serialization/locking proof",
+    "full commerce or fulfillment conformance",
+    "overall SW0 conformance"
+  ]
+}

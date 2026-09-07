@@ -1,189 +1,35 @@
 {
   "baseline": "CB-00-v0.1",
   "invariants": [
-    {
-      "id": "INV-001",
-      "priority": "P0",
-      "status": "PARTIAL_GREEN",
-      "source": "CB-00",
-      "proof": "tests/node/kernel.test.mjs#authority"
-    },
-    {
-      "id": "INV-002",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-003",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-004",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-005",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-006",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-007",
-      "priority": "P0",
-      "status": "PARTIAL_GREEN",
-      "source": "CB-00",
-      "proof": "tests/node/kernel.test.mjs#quantity"
-    },
-    {
-      "id": "INV-008",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-009",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-010",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-011",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-012",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-013",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-014",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-015",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-016",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-017",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-018",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-019",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-020",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-021",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-022",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-023",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-024",
-      "priority": "P0",
-      "status": "PARTIAL_GREEN",
-      "source": "CB-00",
-      "proof": "tests/node/kernel.test.mjs#correction"
-    },
-    {
-      "id": "INV-025",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-026",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-027",
-      "priority": "P0",
-      "status": "PARTIAL_GREEN",
-      "source": "CB-00",
-      "proof": "tests/node/kernel.test.mjs#idempotency"
-    },
-    {
-      "id": "INV-028",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-029",
-      "priority": "P1",
-      "status": "RED",
-      "source": "CB-00"
-    },
-    {
-      "id": "INV-030",
-      "priority": "P0",
-      "status": "RED",
-      "source": "CB-00"
-    }
+    {"id":"INV-001","priority":"P0","status":"PARTIAL_GREEN","source":"CB-00","proof":"tests/node/kernel.test.mjs — scoped grants, delegation bounds, parent revocation, stop/hold supremacy"},
+    {"id":"INV-002","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-003","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-004","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-005","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-006","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-007","priority":"P0","status":"PARTIAL_GREEN","source":"CB-00","proof":"tests/node/kernel.test.mjs — negative physical truth rejected"},
+    {"id":"INV-008","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-009","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-010","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-011","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-012","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-013","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-014","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-015","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-016","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-017","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-018","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-019","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-020","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-021","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-022","priority":"P0","status":"RED","source":"CB-00"},
+    {"id":"INV-023","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-024","priority":"P0","status":"PARTIAL_GREEN","source":"CB-00","proof":"tests/node/kernel.test.mjs — additive evidence correction lineage"},
+    {"id":"INV-025","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-026","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-027","priority":"P0","status":"PARTIAL_GREEN","source":"CB-00","proof":"tests/node/kernel.test.mjs — shared idempotency store survives CommandBus recreation; persistence adapter still pending"},
+    {"id":"INV-028","priority":"P0","status":"PARTIAL_GREEN","source":"CB-00","proof":"tests/node/kernel.test.mjs — expectedVersion stale command rejection; database serialization proof pending"},
+    {"id":"INV-029","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-030","priority":"P0","status":"RED","source":"CB-00"}
   ]
 }
