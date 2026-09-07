@@ -58,7 +58,12 @@ export class InMemoryAuthorityStore {
   }
   this.grants.set(g.id,Object.freeze({...g}));
  }
- revoke(id:AuthorityGrantId,at:string){ const g=this.grants.get(id); if(!g) throw new Error('GRANT_NOT_FOUND'); timeValue(at,'GRANT_TIME_INVALID'); this.grants.set(id,Object.freeze({...g,revokedAt:at})); }
+ revoke(id:AuthorityGrantId,at:string){
+  const g=this.grants.get(id); if(!g) throw new Error('GRANT_NOT_FOUND');
+  timeValue(at,'GRANT_TIME_INVALID');
+  if(g.revokedAt) throw new Error('GRANT_ALREADY_REVOKED');
+  this.grants.set(id,Object.freeze({...g,revokedAt:at}));
+ }
  get(id:AuthorityGrantId){ return this.grants.get(id); }
 }
 
@@ -70,7 +75,12 @@ export class InMemoryConstraintStore {
   if(c.releasedAt) timeValue(c.releasedAt,'CONSTRAINT_TIME_INVALID');
   this.constraints.set(c.id,Object.freeze({...c}));
  }
- release(id:ConstraintId,at:string){ const c=this.constraints.get(id); if(!c) throw new Error('CONSTRAINT_NOT_FOUND'); timeValue(at,'CONSTRAINT_TIME_INVALID'); this.constraints.set(id,Object.freeze({...c,releasedAt:at})); }
+ release(id:ConstraintId,at:string){
+  const c=this.constraints.get(id); if(!c) throw new Error('CONSTRAINT_NOT_FOUND');
+  timeValue(at,'CONSTRAINT_TIME_INVALID');
+  if(c.releasedAt) throw new Error('CONSTRAINT_ALREADY_RELEASED');
+  this.constraints.set(id,Object.freeze({...c,releasedAt:at}));
+ }
  activeFor(r:AuthorityRequest):AuthorityConstraint|undefined{
   const at=Date.parse(r.at); if(Number.isNaN(at)) return undefined;
   let hold:AuthorityConstraint|undefined;
