@@ -1,0 +1,13 @@
+{
+  "slice":"SW0-07B",
+  "title":"Kernel Integrity & Conformance Harness Hardening",
+  "baseline":"CB-00-v0.1",
+  "mappings":[
+    {"source":"C5/C8 allocation evidence discipline","invariants":["INV-010"],"proofs":["tests/node/sw0-07b.test.mjs"]},
+    {"source":"C7 authority history and C9/C10 additive correction doctrine","invariants":["INV-001","INV-024","INV-030"],"proofs":["tests/node/sw0-07b.test.mjs","scripts/check-canon.mjs","scripts/check-traceability.mjs"]},
+    {"source":"C3/C8 authorized obligation creation","invariants":["INV-004"],"proofs":["tests/node/sw0-05.test.mjs","tests/node/sw0-07b.test.mjs"]},
+    {"source":"C10 idempotency and rejection semantics","invariants":["INV-027"],"proofs":["tests/node/sw0-07b.test.mjs"]},
+    {"source":"CB-00 traceability matrix minimum","invariants":["INV-030"],"proofs":["scripts/check-canon.mjs","scripts/check-traceability.mjs","docs/traceability/matrix.json"]}
+  ],
+  "not_claimed":["durable idempotency persistence","database serialization","complete migration of every domain error to typed DomainRejection","overall SW0 conformance"]
+}
