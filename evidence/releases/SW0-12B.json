@@ -1,0 +1,11 @@
+{
+  "slice":"SW0-12B",
+  "title":"PostgreSQL Durable Command Adapter & Crash Recovery Semantics",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "implemented":["PostgreSQL durable_command_execution schema","serializable claim/commit/abandon adapter","persistent worker ownership lease","expired-lease crash recovery","committed result replay","stale former-owner commit rejection","idempotency-key/command identity conflict rejection"],
+  "proofFiles":["tests/node/sw0-12b.test.mjs"],
+  "affectedInvariants":["INV-027","INV-028"],
+  "limitations":["tests use a deterministic PostgreSQL protocol model rather than a live server","domain-state writes are not yet transactionally co-committed with command outcome","cross-aggregate database expectedVersion enforcement remains outstanding"],
+  "next":"SW0-12C — live PostgreSQL integration, transactional domain co-commit and remaining RED fixture closure"
+}
