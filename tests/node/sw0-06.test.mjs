@@ -20,7 +20,8 @@ test('INV-009 quality is governed evidence-backed state, not a mutable lot scala
 
 test('INV-007 allocation cannot make lot availability negative',()=>{
  const l=new InMemoryInventoryLedger(); l.receiveLot(receipt); l.assessQuality(accepted); l.allocate(allocation('a1',60),obligation);
- assert.throws(()=>l.allocate(allocation('a2',50),{...obligation,id:'obl-2',quantity:{amount:60,unit:'kg'}}),/LOT_OVERALLOCATION/); assert.equal(l.availableForLot('lot-1').amount,40);
+ const obligation2={...obligation,id:'obl-2',quantity:{amount:60,unit:'kg'}};
+ assert.throws(()=>l.allocate(allocation('a2',50,'obl-2'),obligation2),/LOT_OVERALLOCATION/); assert.equal(l.availableForLot('lot-1').amount,40);
 });
 
 test('INV-010 allocation cannot exceed the open obligation',()=>{
