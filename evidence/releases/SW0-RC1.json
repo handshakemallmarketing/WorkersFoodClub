@@ -1,0 +1,12 @@
+{
+  "release":"SW0-RC1",
+  "title":"Independent Bounded Kernel Release Review",
+  "reviewedMain":"4917bd34f434e9a7313c607d3529d3fd70beb491",
+  "verdict":"GO_BOUNDED_WITH_BLOCKERS",
+  "fixtureStatus":"25/25 GREEN",
+  "invariantStatus":"30/30 PARTIAL_GREEN; 0 full GREEN",
+  "blockingFindings":["RC1-B01 universal transactional wiring","RC1-B02 fencing/lease ownership","RC1-B03 stale cumulative traceability matrix","RC1-B04 governed title/risk policy before production","RC1-B05 durable per-lot lineage before full provenance claim"],
+  "notAuthorized":["production-complete SW0 release","promotion of any invariant to full GREEN","unbounded exactly-once claim","universal title/risk transfer rule"],
+  "review":"docs/traceability/SW0-RC1-independent-review.json",
+  "next":"SW0-RC1A transactional boundary and fencing closure"
+}
