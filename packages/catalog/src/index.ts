@@ -42,6 +42,13 @@ export interface MemberOffer {
  readonly policyVersions:readonly string[];
 }
 
+export function isWithinValidity(validFrom:string,validUntil:string,at:string):boolean {
+ const from=Date.parse(validFrom), until=Date.parse(validUntil), t=Date.parse(at);
+ if(Number.isNaN(from)||Number.isNaN(until)||until<=from) throw new Error('OFFER_VALIDITY_INVALID');
+ if(Number.isNaN(t)) throw new Error('TIME_INVALID');
+ return t>=from&&t<=until;
+}
+
 export class InMemoryCatalog {
  private specifications=new Map<SpecificationId,Specification>();
  private listings=new Map<string,CatalogListing>();
@@ -64,7 +71,7 @@ export class InMemoryCatalog {
  }
  publishMemberOffer(offer:MemberOffer):MemberOffer{
   if(!this.specifications.has(offer.specificationId)) throw new Error('OFFER_SPECIFICATION_UNKNOWN');
-  if(Number.isNaN(Date.parse(offer.validFrom))||Number.isNaN(Date.parse(offer.validUntil))||Date.parse(offer.validUntil)<=Date.parse(offer.validFrom)) throw new Error('OFFER_VALIDITY_INVALID');
+  isWithinValidity(offer.validFrom,offer.validUntil,offer.validFrom);
   if(!offer.pickupPlace.trim()) throw new Error('OFFER_PLACE_REQUIRED');
   if(offer.quantity.amount<=0 || offer.priceBasis.amount<=0) throw new Error('OFFER_QUANTITY_INVALID');
   if(offer.priceEvidenceIds.length===0) throw new Error('OFFER_PRICE_EVIDENCE_REQUIRED');
@@ -73,7 +80,7 @@ export class InMemoryCatalog {
   const frozen=Object.freeze({...offer,priceEvidenceIds:[...offer.priceEvidenceIds],policyVersions:[...offer.policyVersions]}); this.offers.set(offer.id,frozen); return frozen;
  }
  isOfferExecutable(id:OfferId,at:string):boolean{
-  const o=this.offers.get(id); if(!o) return false; const t=Date.parse(at); if(Number.isNaN(t)) throw new Error('TIME_INVALID'); return t>=Date.parse(o.validFrom)&&t<=Date.parse(o.validUntil);
+  const o=this.offers.get(id); if(!o) return false; return isWithinValidity(o.validFrom,o.validUntil,at);
  }
  getSpecification(id:SpecificationId){ return this.specifications.get(id); }
  getListing(id:string){ return this.listings.get(id); }
