@@ -1,0 +1,22 @@
+{
+  "slice":"SW0-12E",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "purpose":"Close the remaining CB-00 adversarial fixture frontier without promoting bounded invariant proofs beyond their evidence.",
+  "closedFixtures":["FX-001","FX-002","FX-003","FX-004","FX-005","FX-010","FX-012","FX-016","FX-022","FX-025"],
+  "proof":"tests/node/sw0-12e.test.mjs",
+  "supportingImplementation":["packages/conformance/src/index.ts","packages/demand/src/index.ts","packages/inventory/src/index.ts","packages/governance/src/index.ts","packages/projections/src/index.ts","packages/remedy/src/index.ts"],
+  "claims":[
+    "duplicate checkout retry leaves one purchase obligation",
+    "last-unit allocation admits at most one hard allocation in the bounded ledger proof",
+    "forecast cannot become obligation without verified authorization",
+    "supplier offer semantics do not silently become availability",
+    "quality-held inventory projects zero available quantity",
+    "provider-delivered/member-disputed evidence resolves as disputed rather than accepted",
+    "credit cannot masquerade as refund settlement",
+    "member prepayment remains restricted in liquidity projection",
+    "unknown provider statuses remain UNKNOWN until mapped by a versioned anti-corruption map",
+    "nullable migration state preserves UNKNOWN rather than coercing to false/zero"
+  ],
+  "notClaimed":["production multi-node allocation serialization beyond the separately proven PostgreSQL durability seam","universal provider adapter implementation","arbitrary schema migration verification","overall SW0 GO"]
+}
