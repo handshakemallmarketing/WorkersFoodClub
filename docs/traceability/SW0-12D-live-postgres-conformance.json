@@ -1,0 +1,11 @@
+{
+  "slice":"SW0-12D",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "purpose":"Execute the durability boundary against a real PostgreSQL service in CI rather than only protocol doubles.",
+  "mappings":[
+    {"invariantId":"INV-027","proof":"scripts/test-postgres-durability.sh + .github/workflows/conformance.yml","claim":"durable idempotency identity, committed result persistence and duplicate-key rejection are exercised against PostgreSQL"},
+    {"invariantId":"INV-028","proof":"scripts/test-postgres-durability.sh + packages/durability/sql/002_canonical_event_store.sql","claim":"aggregate-version uniqueness, stale-write rejection and rollback of partial canonical effects are exercised against PostgreSQL"}
+  ],
+  "notClaimed":["universal wiring of every domain write through PostgresDomainCommitter","multi-node production load behavior","overall SW0 GO"]
+}
