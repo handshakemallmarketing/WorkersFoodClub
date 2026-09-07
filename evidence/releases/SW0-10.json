@@ -1,0 +1,14 @@
+{
+  "slice":"SW0-10",
+  "status":"PARTIAL_GREEN",
+  "implemented":[
+    "canonical ordered record log for projection inputs",
+    "disposable member, inventory, fulfillment and savings operational projections",
+    "deterministic drop/rebuild equivalence",
+    "projection checkpoint freshness disclosure",
+    "per-row source record lineage",
+    "stale projection detection without canonical mutation"
+  ],
+  "invariants":{"INV-002":"PARTIAL_GREEN","INV-009":"PARTIAL_GREEN","INV-024":"PARTIAL_GREEN","INV-029":"PARTIAL_GREEN"},
+  "not_claimed":["durable database record log","distributed projection workers","checkpoint transaction locking","overall SW0 conformance"]
+}
