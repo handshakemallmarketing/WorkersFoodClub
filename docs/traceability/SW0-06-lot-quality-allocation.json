@@ -1,0 +1,11 @@
+{
+  "slice":"SW0-06",
+  "title":"Lot Receipt, Quality State & Allocation",
+  "baseline":"CB-00-v0.1",
+  "mappings":[
+    {"source":"C5 physical identity and traceability","invariants":["INV-008"],"proofs":["tests/node/sw0-06.test.mjs"]},
+    {"source":"C5 quality is governed state","invariants":["INV-009","INV-024"],"proofs":["tests/node/sw0-06.test.mjs"]},
+    {"source":"C5 conservation and allocation","invariants":["INV-007","INV-010"],"proofs":["tests/node/sw0-06.test.mjs"]}
+  ],
+  "not_claimed":["database transaction serialization","durable inventory persistence","fulfillment transfer","obligation discharge"]
+}
