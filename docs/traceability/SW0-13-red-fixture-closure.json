@@ -1,0 +1,11 @@
+{
+  "slice":"SW0-13",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "purpose":"Close the independently executable RED frontier without manufacturing proof for the five still-unimplemented foundational fixtures.",
+  "advancedFixtures":["FX-010","FX-012","FX-016","FX-022","FX-025"],
+  "remainingRedFixtures":["FX-001","FX-002","FX-003","FX-004","FX-005"],
+  "proof":["tests/node/sw0-13.test.mjs","packages/conformance/src/frontier.ts"],
+  "constitutionalImpact":["INV-002","INV-016","INV-019","INV-023","INV-030"],
+  "notClaimed":["FX-001 through FX-005 closure","full GREEN invariant status","SW0 release-candidate GO"]
+}
