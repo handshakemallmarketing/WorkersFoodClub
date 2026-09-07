@@ -1,0 +1,23 @@
+{
+  "slice": "SW0-12C",
+  "title": "PostgreSQL canonical event and domain co-commit",
+  "status": "PARTIAL_GREEN",
+  "invariants": ["INV-027", "INV-028"],
+  "implementation": [
+    "packages/durability/src/postgres.ts",
+    "packages/durability/sql/001_durable_command_execution.sql",
+    "packages/durability/sql/002_canonical_event_store.sql"
+  ],
+  "proof": [
+    "SERIALIZABLE transaction encloses claim ownership, expected aggregate version, canonical event append, aggregate version advance and command-result commit",
+    "aggregate_id plus aggregate_version is database-unique",
+    "event_id is database-unique",
+    "stale expectedVersion aborts the transaction before canonical mutation",
+    "rollback prevents a failed co-commit from publishing only one side of the economic effect"
+  ],
+  "limitations": [
+    "Live PostgreSQL CI execution is not yet claimed by this artifact",
+    "Domain modules are not yet universally wired through PostgresDomainCommitter",
+    "Overall SW0 release readiness is not claimed"
+  ]
+}
