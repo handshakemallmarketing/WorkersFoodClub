@@ -127,6 +127,7 @@ export class InMemoryEconomicsLedger {
   if(input.availability!=='EXECUTABLE') throw new Error('BENCHMARK_NOT_EXECUTABLE');
   if(input.comparableValue.minor<=0n||!validTime(input.evaluatedAt)||Date.parse(input.evaluatedAt)<Date.parse(method.definedAt)||Date.parse(input.evaluatedAt)<Date.parse(method.validFrom)||Date.parse(input.evaluatedAt)>Date.parse(method.validUntil)) throw new Error('BENCHMARK_VALUATION_INVALID');
   if(input.evidenceIds.length===0) throw new Error('BENCHMARK_VALUATION_EVIDENCE_REQUIRED');
+  const governedEvidence=new Set(method.observationEvidenceIds); if(input.evidenceIds.some(id=>!governedEvidence.has(id))) throw new Error('BENCHMARK_EVIDENCE_OUTSIDE_GOVERNED_SET');
   const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),comparableValue:Object.freeze({...input.comparableValue}),evidenceIds:[...input.evidenceIds]}); this.valuations.set(input.id,frozen); return frozen;
  }
 
