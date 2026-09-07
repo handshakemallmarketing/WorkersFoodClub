@@ -39,8 +39,8 @@ export interface CommandBusOptions {
 export class CommandBus {
  private handlers=new Map<string,CommandHandler<any>>();
  private readonly idempotency:IdempotencyStore;
- private readonly versions?:VersionStore;
- private readonly rejectionEvidence?:RejectionEvidenceSink;
+ private readonly versions:VersionStore|undefined;
+ private readonly rejectionEvidence:RejectionEvidenceSink|undefined;
  constructor(private readonly authority:AuthorityEvaluator, options:CommandBusOptions={}){
   this.idempotency=options.idempotencyStore??new InMemoryIdempotencyStore();
   this.versions=options.versionStore;
