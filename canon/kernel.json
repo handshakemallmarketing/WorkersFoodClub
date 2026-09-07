@@ -1,0 +1,75 @@
+{
+  "baseline": "CB-00-v0.1",
+  "kernel": [
+    {
+      "id": "K-01",
+      "name": "Participant",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-02",
+      "name": "Resource",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-03",
+      "name": "Specification",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-04",
+      "name": "TraceabilityBoundaryLot",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-05",
+      "name": "Obligation",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-06",
+      "name": "Authority",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-07",
+      "name": "Exposure",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-08",
+      "name": "Constraint",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-09",
+      "name": "Event",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-10",
+      "name": "Evidence",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-11",
+      "name": "Lineage",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-12",
+      "name": "Proposition",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-13",
+      "name": "Claim",
+      "status": "CANONICAL"
+    },
+    {
+      "id": "K-14",
+      "name": "Offer",
+      "status": "CANONICAL"
+    }
+  ]
+}

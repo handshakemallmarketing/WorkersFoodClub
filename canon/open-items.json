@@ -1,0 +1,80 @@
+{
+  "baseline": "CB-00-v0.1",
+  "open_items": [
+    {
+      "id": "OPEN-001",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-002",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-003",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-004",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-005",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-006",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-007",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-008",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-009",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-010",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-011",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-012",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-013",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-014",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    },
+    {
+      "id": "OPEN-015",
+      "status": "UNRESOLVED",
+      "rule": "must not be hard-coded as canon"
+    }
+  ]
+}

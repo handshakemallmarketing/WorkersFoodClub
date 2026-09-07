@@ -1,0 +1,308 @@
+{
+  "baseline": "CB-00-v0.1",
+  "softwarePlan": "SW0-01-v0.1",
+  "slice": "SW0-02",
+  "mappings": [
+    {
+      "invariantId": "INV-001",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "tests/node/kernel.test.mjs#authority",
+      "test": "tests/node/kernel.test.mjs#authority",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "PARTIAL_GREEN"
+    },
+    {
+      "invariantId": "INV-002",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-003",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-004",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-005",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-006",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-007",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "tests/node/kernel.test.mjs#quantity",
+      "test": "tests/node/kernel.test.mjs#quantity",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "PARTIAL_GREEN"
+    },
+    {
+      "invariantId": "INV-008",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-009",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-010",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-011",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-012",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-013",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-014",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-015",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-016",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-017",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-018",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-019",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-020",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-021",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-022",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-023",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-024",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "tests/node/kernel.test.mjs#correction",
+      "test": "tests/node/kernel.test.mjs#correction",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "PARTIAL_GREEN"
+    },
+    {
+      "invariantId": "INV-025",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-026",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-027",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "tests/node/kernel.test.mjs#idempotency",
+      "test": "tests/node/kernel.test.mjs#idempotency",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "PARTIAL_GREEN"
+    },
+    {
+      "invariantId": "INV-028",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-029",
+      "priority": "P1",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    },
+    {
+      "invariantId": "INV-030",
+      "priority": "P0",
+      "canon": "CB-00 v0.1",
+      "contract": "packages/kernel|authority|contracts|evidence|application",
+      "implementation": "PENDING_FUTURE_SLICE",
+      "test": "PENDING",
+      "evidence": "evidence/releases/SW0-02.json",
+      "status": "RED"
+    }
+  ],
+  "rule": "Every P0/P1 invariant must map canon -> contract -> code -> test -> evidence before GO."
+}

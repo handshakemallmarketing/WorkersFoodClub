@@ -1,0 +1,1 @@
+{"release":"SW0-02-v0.1.0-alpha.1","baseline":"CB-00-v0.1","claim":"PARTIAL_GREEN","greenInvariants":["INV-001","INV-007","INV-024","INV-027"],"greenFixtures":["FX-020"],"note":"No overall SW0 conformance claim. Remaining invariants are explicitly pending later vertical slices."}

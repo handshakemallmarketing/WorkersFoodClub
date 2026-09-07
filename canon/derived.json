@@ -1,0 +1,75 @@
+{
+  "baseline": "CB-00-v0.1",
+  "derived": [
+    {
+      "id": "D-01",
+      "name": "Member",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-02",
+      "name": "Household",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-03",
+      "name": "Demand",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-04",
+      "name": "Order",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-05",
+      "name": "Supply",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-06",
+      "name": "Inventory",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-07",
+      "name": "Reserve",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-08",
+      "name": "Capital",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-09",
+      "name": "Risk",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-10",
+      "name": "Fulfillment",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-11",
+      "name": "Savings",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-12",
+      "name": "StructuralAdvantage",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-13",
+      "name": "Price",
+      "status": "DERIVED"
+    },
+    {
+      "id": "D-14",
+      "name": "Forecast",
+      "status": "DERIVED"
+    }
+  ]
+}

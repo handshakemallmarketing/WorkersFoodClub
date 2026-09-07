@@ -1,0 +1,131 @@
+{
+  "baseline": "CB-00-v0.1",
+  "fixtures": [
+    {
+      "id": "FX-001",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-002",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-003",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-004",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-005",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-006",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-007",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-008",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-009",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-010",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-011",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-012",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-013",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-014",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-015",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-016",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-017",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-018",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-019",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-020",
+      "status": "GREEN",
+      "required": "implement adversarial proof",
+      "proof": "tests/node/kernel.test.mjs#revoked-authority"
+    },
+    {
+      "id": "FX-021",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-022",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-023",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-024",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    },
+    {
+      "id": "FX-025",
+      "status": "RED",
+      "required": "implement adversarial proof"
+    }
+  ]
+}
