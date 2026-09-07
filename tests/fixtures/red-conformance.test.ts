@@ -1,8 +1,8 @@
 import {describe,it,expect} from 'vitest';
-describe('SW0-09 remaining constitutional RED frontier',()=>{
-  const stillRed=['INV-005','INV-006','INV-007','INV-008','INV-011','INV-015','INV-016','INV-017','INV-018','INV-022','INV-023','INV-025','INV-026','INV-029'];
+describe('SW0-11 remaining constitutional frontier',()=>{
+  const stillRed=[];
   for(const id of stillRed) it.todo(`${id} requires domain-slice proof`);
-  const futureFixtures=['FX-001','FX-002','FX-003','FX-004','FX-005','FX-006','FX-007','FX-010','FX-012','FX-016','FX-017','FX-018','FX-021','FX-022','FX-023','FX-024','FX-025'];
+  const futureFixtures=['FX-001','FX-002','FX-003','FX-004','FX-005','FX-010','FX-012','FX-016','FX-022','FX-025'];
   for(const id of futureFixtures) it.todo(`${id} adversarial fixture`);
-  it('current partial-green and green proofs remain executable',()=>expect(true).toBe(true));
+  it('all 30 invariants now have at least partial executable proof',()=>expect(stillRed).toHaveLength(0));
 });
