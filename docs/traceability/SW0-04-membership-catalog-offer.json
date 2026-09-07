@@ -1,0 +1,10 @@
+{
+  "baseline":"CB-00-v0.1",
+  "slice":"SW0-04",
+  "mappings":[
+    {"canon":"C1/C3 membership is a Participant relationship, not identity primitive","implementation":["packages/membership/src/index.ts"],"tests":["tests/node/sw0-04.test.mjs — eligibility does not itself create membership","tests/node/sw0-04.test.mjs — membership requires qualifying evidence"],"evidence":"evidence/releases/SW0-04.json","status":"GREEN"},
+    {"canon":"C2 Specification is governed identity; SKU is implementation/commercial identifier","implementation":["packages/catalog/src/index.ts"],"tests":["tests/node/sw0-04.test.mjs — SKU is a listing identifier and cannot replace specification identity"],"evidence":"evidence/releases/SW0-04.json","status":"GREEN"},
+    {"canon":"C2 price is contextual evidence, not a scalar","invariantId":"INV-002","implementation":["packages/catalog/src/index.ts PriceObservation"],"tests":["tests/node/sw0-04.test.mjs — price observation is contextual evidence"],"evidence":"evidence/releases/SW0-04.json","status":"PARTIAL_GREEN","remaining":"external observation ingestion and correction integration"},
+    {"canon":"C2/C10 member offer is bounded and retains price-evidence lineage","implementation":["packages/catalog/src/index.ts MemberOffer"],"tests":["tests/node/sw0-04.test.mjs — member offer is bounded and must retain price-evidence lineage","tests/node/sw0-04.test.mjs — offer cannot use price evidence for different specification"],"evidence":"evidence/releases/SW0-04.json","status":"GREEN"}
+  ]
+}
