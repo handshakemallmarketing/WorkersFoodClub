@@ -1,0 +1,11 @@
+{
+  "slice":"SW0-10",
+  "title":"Projection & Rebuild",
+  "baseline":"CB-00-v0.1",
+  "mappings":[
+    {"source":"C10 projections are derived and rebuildable, not canonical authority","invariants":["INV-002","INV-029"],"proofs":["tests/node/sw0-10.test.mjs"]},
+    {"source":"C5 unavailable or unsafe quantity cannot become available through projection","invariants":["INV-009"],"proofs":["tests/node/sw0-10.test.mjs"]},
+    {"source":"C9/C10 correction history remains canonical while read models rebuild","invariants":["INV-024","INV-029"],"proofs":["tests/node/sw0-10.test.mjs"]}
+  ],
+  "not_claimed":["durable database event/record log","cross-process checkpoint locking","projection lag monitoring/alerting","overall SW0 conformance"]
+}
