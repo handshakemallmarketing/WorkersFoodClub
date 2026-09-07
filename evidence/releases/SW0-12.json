@@ -1,0 +1,11 @@
+{
+  "slice":"SW0-12",
+  "title":"Adversarial & Durability Conformance Hardening",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "implemented":["durable command-store interface","atomic execution claim semantics","committed-result replay","idempotency-key/command identity conflict rejection","abandon/retry semantics for uncommitted failure"],
+  "proofFiles":["tests/node/sw0-12.test.mjs"],
+  "affectedInvariants":["INV-027","INV-028"],
+  "limitations":["reference adapter is in-memory","production PostgreSQL transaction adapter remains required","cross-ledger domain writes are not yet transactionally co-committed"],
+  "next":"SW0-12B — PostgreSQL durable adapter and crash/concurrency fixtures"
+}
