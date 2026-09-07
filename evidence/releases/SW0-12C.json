@@ -1,0 +1,19 @@
+{
+  "release": "SW0-12C",
+  "predecessor": "SW0-12C review conservation hardening",
+  "status": "PARTIAL_GREEN",
+  "constitutionalImpact": ["INV-027", "INV-028"],
+  "delivered": [
+    "canonical event PostgreSQL schema",
+    "database aggregate-version serialization boundary",
+    "transactional command-result and canonical-event co-commit",
+    "database-backed expectedVersion rejection"
+  ],
+  "notClaimed": [
+    "live PostgreSQL integration test in CI",
+    "universal production wiring of every domain write",
+    "full GREEN status for INV-027 or INV-028",
+    "SW0 release candidate GO"
+  ],
+  "next": "Add live PostgreSQL integration/concurrency execution and close remaining RED adversarial fixtures before SW0-RC1."
+}
