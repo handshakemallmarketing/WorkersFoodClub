@@ -1,0 +1,18 @@
+{
+  "slice":"SW0-08",
+  "status":"PARTIAL_GREEN",
+  "baseline":"CB-00-v0.1",
+  "implemented":[
+    "rejected acceptance records zero conforming quantity without discharge",
+    "explicit shortfall/rejection/substitution/dispute exception records",
+    "refund/replacement/credit remedy obligations linked to the original obligation",
+    "completion projection separates performed from remedied quantity",
+    "material substitution preserves original specification and requires equivalence evidence, member consent and economic recomputation",
+    "refund retry is effect-idempotent through CommandBus",
+    "remedy credit is explicitly not a stored-value wallet"
+  ],
+  "invariants":{"INV-019":"PARTIAL_GREEN","INV-020":"PARTIAL_GREEN","INV-021":"PARTIAL_GREEN","INV-027":"PARTIAL_GREEN"},
+  "fixtures":{"FX-008":"GREEN","FX-009":"GREEN","FX-011":"GREEN"},
+  "proofs":["tests/node/sw0-08.test.mjs"],
+  "not_claimed":["return-to-stock quality gating under INV-022","durable database remedy persistence","external refund settlement integration","title/risk transfer policy","stored-value or lending product","overall SW0 conformance"]
+}
