@@ -1,0 +1,8 @@
+{
+  "slice":"SW0-07",
+  "status":"PARTIAL_GREEN",
+  "implemented":["allocation-linked pick/pack/ready work history","evidence-backed pickup handover","handover distinct from acceptance","member acceptance/rejection distinct from transfer","accepted quantity projects partial or full obligation discharge"],
+  "invariants":{"INV-016":"PARTIAL_GREEN","INV-017":"PARTIAL_GREEN","INV-018":"PARTIAL_GREEN"},
+  "proofs":["tests/node/sw0-07.test.mjs"],
+  "not_claimed":["legal title/risk transfer policy","exception/remedy completion","durable database fulfillment","overall SW0 conformance"]
+}
