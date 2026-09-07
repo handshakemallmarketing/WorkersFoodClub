@@ -1,0 +1,12 @@
+{
+  "release":"SW0-12E",
+  "title":"Adversarial Fixture Frontier Closure",
+  "status":"PARTIAL_GREEN",
+  "baseline":"CB-00-v0.1",
+  "closedFixtures":["FX-001","FX-002","FX-003","FX-004","FX-005","FX-010","FX-012","FX-016","FX-022","FX-025"],
+  "fixtureRegister":"canon/fixtures.json",
+  "proof":"tests/node/sw0-12e.test.mjs",
+  "delivered":["versioned provider-status anti-corruption mapping","unknown-preserving boolean migration helper","restricted-vs-deployable liquidity projection","delivery evidence dispute resolution","executable adversarial proof for all 25 CB-00 fixtures"],
+  "notClaimed":["full GREEN invariant status","universal production adapter coverage","SW0 release candidate GO"],
+  "next":"SW0-RC1 independent clean-room review of the bounded kernel, durability boundary, fixture register and canon-to-code traceability."
+}
