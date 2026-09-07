@@ -1,0 +1,10 @@
+{
+  "slice":"SW0-12B",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "mappings":[
+    {"invariantId":"INV-027","proof":"packages/durability/src/postgres.ts + packages/durability/sql/001_durable_command_execution.sql + tests/node/sw0-12b.test.mjs","claim":"PostgreSQL adapter uses serializable transactions, unique idempotency identity, persistent in-flight ownership leases, committed-result replay and owner-only completion/abandon semantics"},
+    {"invariantId":"INV-028","proof":"tests/node/sw0-12b.test.mjs","claim":"active competing worker is blocked, expired crashed-worker lease can be taken over, and stale former owner cannot commit after takeover"}
+  ],
+  "notClaimed":["live PostgreSQL integration test in CI","atomic co-commit with domain tables","database-backed expectedVersion write conflicts across all domain aggregates","overall SW0 GO"]
+}
