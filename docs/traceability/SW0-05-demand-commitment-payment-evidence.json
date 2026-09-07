@@ -1,0 +1,10 @@
+{
+  "baseline":"CB-00-v0.1",
+  "slice":"SW0-05",
+  "mappings":[
+    {"canon":"C3/C10 demand distinction","invariantId":"INV-003","implementation":["packages/demand/src/index.ts DemandSignal","packages/demand/src/index.ts InMemoryDemandCommitmentLedger"],"tests":["tests/node/sw0-05.test.mjs — forecast interest and request remain signals","tests/node/sw0-05.test.mjs — signal may inform but cannot substitute for commitment"],"evidence":"evidence/releases/SW0-05.json","status":"PARTIAL_GREEN","remaining":"provider/API persistence and replay proof"},
+    {"canon":"C3/C8 obligation creation","invariantId":"INV-004","implementation":["packages/demand/src/index.ts commitPurchase"],"tests":["tests/node/sw0-05.test.mjs — explicit authorized command/event and active membership required","tests/node/sw0-05.test.mjs — payment does not discharge obligation"],"evidence":"evidence/releases/SW0-05.json","status":"PARTIAL_GREEN","remaining":"persistent command/event transaction proof"},
+    {"canon":"C6/C7 member prepayment restriction","implementation":["packages/demand/src/index.ts PaymentEvidenceRecord","packages/demand/src/index.ts paymentTreatment"],"tests":["tests/node/sw0-05.test.mjs — prepayment remains restricted and unearned"],"evidence":"evidence/releases/SW0-05.json","status":"GREEN_WITHIN_SLICE"},
+    {"canon":"C9 payment-provider messages are evidence","implementation":["packages/demand/src/index.ts recordPaymentEvidence"],"tests":["tests/node/sw0-05.test.mjs — confirmed payment remains evidence and provider reference is effect-unique"],"evidence":"evidence/releases/SW0-05.json","status":"GREEN_WITHIN_SLICE"}
+  ]
+}

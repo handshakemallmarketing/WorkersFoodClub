@@ -1,19 +1,19 @@
-# Food Club Ghana — SW0-04
-Membership, Specification, Price Evidence & Member Offer Slice — v0.3.0-alpha.1
+# Food Club Ghana — SW0-05
+Demand Request, Purchase Commitment & Payment Evidence Slice — v0.4.0-alpha.1
 
 **Baseline:** CB-00 v0.1 / SW0-01 v0.1  
-**Predecessor:** SW0-03 v0.2.0-alpha.1  
-**Status:** PARTIAL GREEN — member/catalog semantics proven; demand commitment, payment, physical allocation, fulfillment and savings remain open.
+**Predecessor:** SW0-04 v0.3.0-alpha.1  
+**Status:** PARTIAL GREEN — demand/commitment/payment-evidence distinctions proven; persistence, physical allocation, fulfillment and savings remain open.
 
 ## What changed
-- Added a policy-driven eligibility decision that remains separate from Membership.
-- Added Membership as a Participant relationship with explicit evidence and policy-version lineage.
-- Added governed Specification publication and separated SKU/listing identifiers from specification identity.
-- Added contextual PriceObservation with specification, money, quantity basis, place, time, transaction level and conditions.
-- Added bounded MemberOffer with validity window, pickup place, quantity, price basis, policy versions and price-evidence lineage.
-- Added rejection of cross-specification price-evidence laundering into an offer.
-- Added executable SW0-04 node:test proofs and release/traceability evidence.
-- Advanced INV-002 to PARTIAL_GREEN without claiming external ingestion/correction completeness.
+- Added DemandSignal records for FORECAST, INTEREST and REQUEST without letting any signal silently become committed demand.
+- Added explicit purchase acceptance into a canonical Obligation only with active Membership, an executable MemberOffer and attributed authorized command/event identity.
+- Preserved the source DemandSignal as optional lineage rather than as authority to create an obligation.
+- Added PaymentEvidenceRecord for provider outcomes without equating provider confirmation with fulfillment, discharge or earned revenue.
+- Classified member prepayment as RESTRICTED_MEMBER_PREPAYMENT with `earnedRevenue=false` and `unrestrictedCapital=false`.
+- Added duplicate provider-reference protection and cross-specification/stale-offer rejection.
+- Added executable SW0-05 proofs, traceability supplement and release evidence.
+- Advanced INV-003 and INV-004 to PARTIAL_GREEN without claiming database-backed atomicity or provider integration.
 
 ## Local proof
 ```bash
@@ -26,9 +26,9 @@ pnpm test:kernel
 ```
 
 ## Constitutional status
-SW0-04 does **not** claim overall SW0 conformance. It proves that launch eligibility does not redefine Participant identity, an eligibility decision does not itself create membership, SKU does not redefine Specification, and a quoted/member price cannot exist in software as an unbounded scalar detached from specification, basis, place, time and evidence.
+SW0-05 does **not** claim overall SW0 conformance. It proves that forecast, interest and request are signals rather than obligations; a purchase obligation exists only after explicit authorized acceptance; and payment-provider confirmation remains evidence linked to an obligation rather than proof of fulfillment or unrestricted capital.
 
-The slice deliberately does not create Demand Commitment, Order, Payment, Inventory Availability, Fulfillment or Savings semantics.
+Database-backed checkout atomicity, provider adapters, allocation, lot control, pickup/acceptance, remedies and savings remain subsequent slices.
 
 ## Next slice
-**SW0-05 — Demand Request, Purchase Commitment & Payment Evidence Slice**: separate requested demand from committed obligations, introduce authorized acceptance into purchase obligations, and ingest payment-provider outcomes as evidence without equating payment with fulfillment or unrestricted capital.
+**SW0-06 — Lot Receipt, Quality State & Allocation Slice**: introduce traceable Lots, receipt evidence, quality state and allocation against open member obligations while proving no negative stock and no double allocation.

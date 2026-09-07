@@ -1,0 +1,29 @@
+{
+  "slice":"SW0-05",
+  "baseline":"CB-00-v0.1",
+  "branch":"sw0-05-demand-commitment-payment-evidence",
+  "status":"PARTIAL_GREEN",
+  "implemented":[
+    "DemandSignal records for forecast, interest and request",
+    "explicit purchase commitment producing canonical Obligation",
+    "active membership and executable offer checks",
+    "authorized command/event attribution for commitment",
+    "payment-provider outcomes recorded as evidence",
+    "member prepayment classified as restricted and unearned",
+    "duplicate provider payment reference rejection"
+  ],
+  "proofs":{
+    "INV-003":"tests/node/sw0-05.test.mjs",
+    "INV-004":"tests/node/sw0-05.test.mjs",
+    "payment-evidence":"tests/node/sw0-05.test.mjs",
+    "restricted-prepayment":"tests/node/sw0-05.test.mjs"
+  },
+  "not_claimed":[
+    "database-backed atomic checkout transaction",
+    "payment provider integration",
+    "allocation or fulfillment",
+    "earned revenue recognition",
+    "stored value or credit products",
+    "overall SW0 conformance"
+  ]
+}
