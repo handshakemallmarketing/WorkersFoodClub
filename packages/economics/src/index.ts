@@ -1,172 +1,19 @@
 import type {Currency,EvidenceId,Money,ObligationId,ParticipantId,Quantity,SpecificationId} from '../../kernel/src/index.js';
-
-export type BenchmarkPurpose='MEMBER_SAVINGS'|'PROCUREMENT_ADVANTAGE'|'PRICE_PROTECTION';
-export type BenchmarkAvailability='EXECUTABLE'|'UNAVAILABLE'|'UNKNOWN';
-export type CostPurpose='FULFILLED_MEMBER_OBLIGATION'|'PROCUREMENT_DECISION'|'RESERVE_RELEASE';
-export type CostKind='ACQUISITION'|'INBOUND_LOGISTICS'|'HANDLING'|'STORAGE'|'FINANCING'|'SHRINK'|'PROCESSING'|'OUTBOUND_LOGISTICS'|'TAX'|'RISK'|'OTHER';
-export type SupportKind='SUBSIDY'|'PROMOTION'|'CROSS_SUBSIDY'|'GRANT';
-
-export interface GovernedBenchmarkMethod {
- readonly id:string;
- readonly version:number;
- readonly purpose:BenchmarkPurpose;
- readonly specificationId:SpecificationId;
- readonly quantity:Quantity;
- readonly place:string;
- readonly serviceLevel:string;
- readonly transactionLevel:'RETAIL'|'WHOLESALE'|'FARMGATE'|'MEMBER';
- readonly validFrom:string;
- readonly validUntil:string;
- readonly normalizationRuleVersion:string;
- readonly availabilityRuleVersion:string;
- readonly observationEvidenceIds:readonly EvidenceId[];
- readonly definedAt:string;
-}
-
-export interface BenchmarkValuation {
- readonly id:string;
- readonly benchmarkId:string;
- readonly benchmarkVersion:number;
- readonly obligationId:ObligationId;
- readonly specificationId:SpecificationId;
- readonly quantity:Quantity;
- readonly place:string;
- readonly serviceLevel:string;
- readonly availability:BenchmarkAvailability;
- readonly comparableValue:Money;
- readonly evaluatedAt:string;
- readonly evidenceIds:readonly EvidenceId[];
-}
-
-export interface FulfilledMemberEconomics {
- readonly id:string;
- readonly obligationId:ObligationId;
- readonly participantId:ParticipantId;
- readonly specificationId:SpecificationId;
- readonly quantity:Quantity;
- readonly place:string;
- readonly serviceLevel:string;
- readonly goodsOutlay:Money;
- readonly mandatoryCharges:Money;
- readonly refundApplied:Money;
- readonly economicEvidenceIds:readonly EvidenceId[];
- readonly realizedAt:string;
- readonly substitutionEvidenceIds:readonly EvidenceId[];
-}
-
-export interface CostComponent {readonly kind:CostKind;readonly amount:Money;readonly evidenceIds:readonly EvidenceId[];}
-export interface NonStructuralSupport {readonly kind:SupportKind;readonly amount:Money;readonly evidenceIds:readonly EvidenceId[];}
-export interface CostBasis {
- readonly id:string;
- readonly obligationId:ObligationId;
- readonly purpose:CostPurpose;
- readonly currency:Currency;
- readonly methodVersion:string;
- readonly components:readonly CostComponent[];
- readonly support:readonly NonStructuralSupport[];
- readonly riskAdjustedCost:Money;
- readonly calculatedAt:string;
-}
-
-export interface SignedMoney {readonly minor:bigint;readonly currency:Currency;}
-export interface SavingsEntry {
- readonly id:string;
- readonly obligationId:ObligationId;
- readonly participantId:ParticipantId;
- readonly benchmarkValuationId:string;
- readonly memberEconomicsId:string;
- readonly benchmarkValue:Money;
- readonly comparableMemberOutlay:Money;
- readonly absoluteSavings:SignedMoney;
- readonly benchmarkRelativeBasisPoints:bigint;
- readonly calculatedAt:string;
- readonly benchmarkEvidenceIds:readonly EvidenceId[];
- readonly memberEconomicEvidenceIds:readonly EvidenceId[];
- readonly supersedes?:string;
-}
-
-export interface StructuralAdvantageAssessment {
- readonly id:string;
- readonly obligationId:ObligationId;
- readonly costBasisId:string;
- readonly alternativeBenchmarkValuationId:string;
- readonly alternativeValue:Money;
- readonly riskAdjustedSystemCost:Money;
- readonly nonStructuralSupport:Money;
- readonly structuralAdvantage:SignedMoney;
- readonly calculatedAt:string;
-}
-
-const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
-const sameCurrency=(a:Money,b:Money)=>{if(a.currency!==b.currency) throw new Error('CURRENCY_MISMATCH');};
-const sameQuantity=(a:Quantity,b:Quantity)=>a.unit===b.unit&&a.amount===b.amount;
-const signed=(minor:bigint,currency:Currency):SignedMoney=>Object.freeze({minor,currency});
-const addMoney=(items:readonly Money[],currency:Currency)=>items.reduce((n,x)=>{if(x.currency!==currency) throw new Error('CURRENCY_MISMATCH');return n+x.minor;},0n);
-
+export type BenchmarkPurpose='MEMBER_SAVINGS'|'PROCUREMENT_ADVANTAGE'|'PRICE_PROTECTION'; export type BenchmarkAvailability='EXECUTABLE'|'UNAVAILABLE'|'UNKNOWN'; export type CostPurpose='FULFILLED_MEMBER_OBLIGATION'|'PROCUREMENT_DECISION'|'RESERVE_RELEASE'; export type CostKind='ACQUISITION'|'INBOUND_LOGISTICS'|'HANDLING'|'STORAGE'|'FINANCING'|'SHRINK'|'PROCESSING'|'OUTBOUND_LOGISTICS'|'TAX'|'RISK'|'OTHER'; export type SupportKind='SUBSIDY'|'PROMOTION'|'CROSS_SUBSIDY'|'GRANT';
+export interface GovernedBenchmarkMethod {readonly id:string;readonly version:number;readonly purpose:BenchmarkPurpose;readonly specificationId:SpecificationId;readonly quantity:Quantity;readonly place:string;readonly serviceLevel:string;readonly transactionLevel:'RETAIL'|'WHOLESALE'|'FARMGATE'|'MEMBER';readonly validFrom:string;readonly validUntil:string;readonly normalizationRuleVersion:string;readonly availabilityRuleVersion:string;readonly observationEvidenceIds:readonly EvidenceId[];readonly definedAt:string;}
+export interface BenchmarkValuation {readonly id:string;readonly benchmarkId:string;readonly benchmarkVersion:number;readonly obligationId:ObligationId;readonly specificationId:SpecificationId;readonly quantity:Quantity;readonly place:string;readonly serviceLevel:string;readonly availability:BenchmarkAvailability;readonly comparableValue:Money;readonly evaluatedAt:string;readonly evidenceIds:readonly EvidenceId[];}
+export interface FulfilledMemberEconomics {readonly id:string;readonly obligationId:ObligationId;readonly participantId:ParticipantId;readonly specificationId:SpecificationId;readonly quantity:Quantity;readonly place:string;readonly serviceLevel:string;readonly goodsOutlay:Money;readonly mandatoryCharges:Money;readonly refundApplied:Money;readonly economicEvidenceIds:readonly EvidenceId[];readonly realizedAt:string;readonly substitutionEvidenceIds:readonly EvidenceId[];}
+export interface CostComponent {readonly kind:CostKind;readonly amount:Money;readonly evidenceIds:readonly EvidenceId[];} export interface NonStructuralSupport {readonly kind:SupportKind;readonly amount:Money;readonly evidenceIds:readonly EvidenceId[];} export interface CostBasis {readonly id:string;readonly obligationId:ObligationId;readonly purpose:CostPurpose;readonly currency:Currency;readonly methodVersion:string;readonly components:readonly CostComponent[];readonly support:readonly NonStructuralSupport[];readonly riskAdjustedCost:Money;readonly calculatedAt:string;}
+export interface SignedMoney {readonly minor:bigint;readonly currency:Currency;} export interface SavingsEntry {readonly id:string;readonly obligationId:ObligationId;readonly participantId:ParticipantId;readonly benchmarkValuationId:string;readonly memberEconomicsId:string;readonly benchmarkValue:Money;readonly comparableMemberOutlay:Money;readonly absoluteSavings:SignedMoney;readonly benchmarkRelativeBasisPoints:bigint;readonly calculatedAt:string;readonly benchmarkEvidenceIds:readonly EvidenceId[];readonly memberEconomicEvidenceIds:readonly EvidenceId[];readonly supersedes?:string;}
+export interface StructuralAdvantageAssessment {readonly id:string;readonly obligationId:ObligationId;readonly costBasisId:string;readonly alternativeBenchmarkValuationId:string;readonly alternativeValue:Money;readonly riskAdjustedSystemCost:Money;readonly nonStructuralSupport:Money;readonly structuralAdvantage:SignedMoney;readonly calculatedAt:string;}
+const validTime=(v:string)=>!Number.isNaN(Date.parse(v)); const sameCurrency=(a:Money,b:Money)=>{if(a.currency!==b.currency) throw new Error('CURRENCY_MISMATCH');}; const sameQuantity=(a:Quantity,b:Quantity)=>a.unit===b.unit&&a.amount===b.amount; const signed=(minor:bigint,currency:Currency):SignedMoney=>Object.freeze({minor,currency}); const addMoney=(items:readonly Money[],currency:Currency)=>items.reduce((n,x)=>{if(x.currency!==currency) throw new Error('CURRENCY_MISMATCH');return n+x.minor;},0n);
 export class InMemoryEconomicsLedger {
- private readonly benchmarks=new Map<string,GovernedBenchmarkMethod>();
- private readonly valuations=new Map<string,BenchmarkValuation>();
- private readonly memberEconomics=new Map<string,FulfilledMemberEconomics>();
- private readonly costBases=new Map<string,CostBasis>();
- private readonly savings=new Map<string,SavingsEntry>();
- private readonly advantages=new Map<string,StructuralAdvantageAssessment>();
-
- defineBenchmark(input:GovernedBenchmarkMethod):GovernedBenchmarkMethod{
-  const key=`${input.id}:v${input.version}`; if(this.benchmarks.has(key)) throw new Error('BENCHMARK_VERSION_DUPLICATE');
-  if(input.version<=0||input.quantity.amount<=0||!input.place.trim()||!input.serviceLevel.trim()) throw new Error('BENCHMARK_SCOPE_INVALID');
-  if(!validTime(input.validFrom)||!validTime(input.validUntil)||Date.parse(input.validUntil)<=Date.parse(input.validFrom)||!validTime(input.definedAt)) throw new Error('BENCHMARK_TIME_INVALID');
-  if(!input.normalizationRuleVersion.trim()||!input.availabilityRuleVersion.trim()||input.observationEvidenceIds.length===0) throw new Error('BENCHMARK_GOVERNANCE_EVIDENCE_REQUIRED');
-  const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),observationEvidenceIds:[...input.observationEvidenceIds]}); this.benchmarks.set(key,frozen); return frozen;
- }
-
- recordBenchmarkValuation(input:BenchmarkValuation):BenchmarkValuation{
-  if(this.valuations.has(input.id)) throw new Error('BENCHMARK_VALUATION_ID_DUPLICATE');
-  const method=this.benchmarks.get(`${input.benchmarkId}:v${input.benchmarkVersion}`); if(!method) throw new Error('BENCHMARK_METHOD_UNKNOWN');
-  if(method.purpose!=='MEMBER_SAVINGS') throw new Error('BENCHMARK_PURPOSE_MISMATCH');
-  if(input.specificationId!==method.specificationId||!sameQuantity(input.quantity,method.quantity)||input.place!==method.place||input.serviceLevel!==method.serviceLevel) throw new Error('BENCHMARK_COMPARABILITY_MISMATCH');
-  if(input.availability!=='EXECUTABLE') throw new Error('BENCHMARK_NOT_EXECUTABLE');
-  if(input.comparableValue.minor<=0n||!validTime(input.evaluatedAt)||Date.parse(input.evaluatedAt)<Date.parse(method.definedAt)||Date.parse(input.evaluatedAt)<Date.parse(method.validFrom)||Date.parse(input.evaluatedAt)>Date.parse(method.validUntil)) throw new Error('BENCHMARK_VALUATION_INVALID');
-  if(input.evidenceIds.length===0) throw new Error('BENCHMARK_VALUATION_EVIDENCE_REQUIRED');
-  const governedEvidence=new Set(method.observationEvidenceIds); if(input.evidenceIds.some(id=>!governedEvidence.has(id))) throw new Error('BENCHMARK_EVIDENCE_OUTSIDE_GOVERNED_SET');
-  const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),comparableValue:Object.freeze({...input.comparableValue}),evidenceIds:[...input.evidenceIds]}); this.valuations.set(input.id,frozen); return frozen;
- }
-
- recordFulfilledMemberEconomics(input:FulfilledMemberEconomics):FulfilledMemberEconomics{
-  if(this.memberEconomics.has(input.id)) throw new Error('MEMBER_ECONOMICS_ID_DUPLICATE');
-  if(input.quantity.amount<=0||!input.place.trim()||!input.serviceLevel.trim()||!validTime(input.realizedAt)||input.economicEvidenceIds.length===0) throw new Error('MEMBER_ECONOMICS_INVALID');
-  sameCurrency(input.goodsOutlay,input.mandatoryCharges); sameCurrency(input.goodsOutlay,input.refundApplied);
-  if(input.refundApplied.minor>input.goodsOutlay.minor+input.mandatoryCharges.minor) throw new Error('REFUND_EXCEEDS_OUTLAY');
-  const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),goodsOutlay:Object.freeze({...input.goodsOutlay}),mandatoryCharges:Object.freeze({...input.mandatoryCharges}),refundApplied:Object.freeze({...input.refundApplied}),economicEvidenceIds:[...input.economicEvidenceIds],substitutionEvidenceIds:[...input.substitutionEvidenceIds]}); this.memberEconomics.set(input.id,frozen); return frozen;
- }
-
- recordCostBasis(input:Omit<CostBasis,'riskAdjustedCost'>):CostBasis{
-  if(this.costBases.has(input.id)) throw new Error('COST_BASIS_ID_DUPLICATE');
-  if(!input.methodVersion.trim()||!validTime(input.calculatedAt)||input.components.length===0) throw new Error('COST_BASIS_INVALID');
-  for(const c of input.components){if(c.amount.currency!==input.currency||c.evidenceIds.length===0) throw new Error('COST_COMPONENT_INVALID');}
-  for(const s of input.support){if(s.amount.currency!==input.currency||s.evidenceIds.length===0) throw new Error('SUPPORT_COMPONENT_INVALID');}
-  const total=addMoney(input.components.map(x=>x.amount),input.currency);
-  const frozen=Object.freeze({...input,components:input.components.map(x=>Object.freeze({...x,amount:Object.freeze({...x.amount}),evidenceIds:[...x.evidenceIds]})),support:input.support.map(x=>Object.freeze({...x,amount:Object.freeze({...x.amount}),evidenceIds:[...x.evidenceIds]})),riskAdjustedCost:Object.freeze({minor:total,currency:input.currency})}); this.costBases.set(input.id,frozen); return frozen;
- }
-
- calculateSavings(input:{id:string;benchmarkValuationId:string;memberEconomicsId:string;calculatedAt:string;supersedes?:string}):SavingsEntry{
-  if(this.savings.has(input.id)) throw new Error('SAVINGS_ID_DUPLICATE');
-  const b=this.valuations.get(input.benchmarkValuationId); const m=this.memberEconomics.get(input.memberEconomicsId); if(!b||!m) throw new Error('SAVINGS_INPUT_UNKNOWN');
-  if(b.obligationId!==m.obligationId||b.specificationId!==m.specificationId||!sameQuantity(b.quantity,m.quantity)||b.place!==m.place||b.serviceLevel!==m.serviceLevel) throw new Error('SAVINGS_COMPARABILITY_MISMATCH');
-  sameCurrency(b.comparableValue,m.goodsOutlay); sameCurrency(m.goodsOutlay,m.mandatoryCharges); sameCurrency(m.goodsOutlay,m.refundApplied);
-  if(!validTime(input.calculatedAt)||Date.parse(input.calculatedAt)<Date.parse(b.evaluatedAt)||Date.parse(input.calculatedAt)<Date.parse(m.realizedAt)) throw new Error('SAVINGS_TIME_INVALID');
-  if(input.supersedes){const prior=this.savings.get(input.supersedes);if(!prior||prior.obligationId!==m.obligationId) throw new Error('SAVINGS_CORRECTION_LINEAGE_INVALID');}
-  const outlay=m.goodsOutlay.minor+m.mandatoryCharges.minor-m.refundApplied.minor;
-  const saving=b.comparableValue.minor-outlay;
-  const frozen=Object.freeze({id:input.id,obligationId:m.obligationId,participantId:m.participantId,benchmarkValuationId:b.id,memberEconomicsId:m.id,benchmarkValue:Object.freeze({...b.comparableValue}),comparableMemberOutlay:Object.freeze({minor:outlay,currency:b.comparableValue.currency}),absoluteSavings:signed(saving,b.comparableValue.currency),benchmarkRelativeBasisPoints:(saving*10000n)/b.comparableValue.minor,calculatedAt:input.calculatedAt,benchmarkEvidenceIds:[...b.evidenceIds],memberEconomicEvidenceIds:[...m.economicEvidenceIds],...(input.supersedes?{supersedes:input.supersedes}:{})}); this.savings.set(input.id,frozen); return frozen;
- }
-
- assessStructuralAdvantage(input:{id:string;costBasisId:string;alternativeBenchmarkValuationId:string;calculatedAt:string}):StructuralAdvantageAssessment{
-  if(this.advantages.has(input.id)) throw new Error('ADVANTAGE_ID_DUPLICATE');
-  const c=this.costBases.get(input.costBasisId); const b=this.valuations.get(input.alternativeBenchmarkValuationId); if(!c||!b||c.obligationId!==b.obligationId) throw new Error('ADVANTAGE_INPUT_MISMATCH');
-  sameCurrency(c.riskAdjustedCost,b.comparableValue); if(!validTime(input.calculatedAt)) throw new Error('ADVANTAGE_TIME_INVALID');
-  const support=addMoney(c.support.map(x=>x.amount),c.currency);
-  const frozen=Object.freeze({id:input.id,obligationId:c.obligationId,costBasisId:c.id,alternativeBenchmarkValuationId:b.id,alternativeValue:Object.freeze({...b.comparableValue}),riskAdjustedSystemCost:Object.freeze({...c.riskAdjustedCost}),nonStructuralSupport:Object.freeze({minor:support,currency:c.currency}),structuralAdvantage:signed(b.comparableValue.minor-c.riskAdjustedCost.minor,c.currency),calculatedAt:input.calculatedAt}); this.advantages.set(input.id,frozen); return frozen;
- }
-
- getSavings(id:string){return this.savings.get(id);} getCostBasis(id:string){return this.costBases.get(id);} getAdvantage(id:string){return this.advantages.get(id);} getBenchmarkValuation(id:string){return this.valuations.get(id);}
+ private readonly benchmarks=new Map<string,GovernedBenchmarkMethod>();private readonly valuations=new Map<string,BenchmarkValuation>();private readonly memberEconomics=new Map<string,FulfilledMemberEconomics>();private readonly costBases=new Map<string,CostBasis>();private readonly savings=new Map<string,SavingsEntry>();private readonly advantages=new Map<string,StructuralAdvantageAssessment>();private readonly latestSavingsByObligation=new Map<ObligationId,string>();
+ defineBenchmark(input:GovernedBenchmarkMethod):GovernedBenchmarkMethod{const key=`${input.id}:v${input.version}`;if(this.benchmarks.has(key)) throw new Error('BENCHMARK_VERSION_DUPLICATE');if(input.version<=0||input.quantity.amount<=0||!input.place.trim()||!input.serviceLevel.trim()) throw new Error('BENCHMARK_SCOPE_INVALID');if(!validTime(input.validFrom)||!validTime(input.validUntil)||Date.parse(input.validUntil)<=Date.parse(input.validFrom)||!validTime(input.definedAt)) throw new Error('BENCHMARK_TIME_INVALID');if(!input.normalizationRuleVersion.trim()||!input.availabilityRuleVersion.trim()||input.observationEvidenceIds.length===0) throw new Error('BENCHMARK_GOVERNANCE_EVIDENCE_REQUIRED');const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),observationEvidenceIds:[...input.observationEvidenceIds]});this.benchmarks.set(key,frozen);return frozen;}
+ recordBenchmarkValuation(input:BenchmarkValuation):BenchmarkValuation{if(this.valuations.has(input.id)) throw new Error('BENCHMARK_VALUATION_ID_DUPLICATE');const method=this.benchmarks.get(`${input.benchmarkId}:v${input.benchmarkVersion}`);if(!method) throw new Error('BENCHMARK_METHOD_UNKNOWN');if(method.purpose!=='MEMBER_SAVINGS') throw new Error('BENCHMARK_PURPOSE_MISMATCH');if(input.specificationId!==method.specificationId||!sameQuantity(input.quantity,method.quantity)||input.place!==method.place||input.serviceLevel!==method.serviceLevel) throw new Error('BENCHMARK_COMPARABILITY_MISMATCH');if(input.availability!=='EXECUTABLE') throw new Error('BENCHMARK_NOT_EXECUTABLE');if(input.comparableValue.minor<=0n||!validTime(input.evaluatedAt)||Date.parse(input.evaluatedAt)<Date.parse(method.definedAt)||Date.parse(input.evaluatedAt)<Date.parse(method.validFrom)||Date.parse(input.evaluatedAt)>Date.parse(method.validUntil)) throw new Error('BENCHMARK_VALUATION_INVALID');if(input.evidenceIds.length===0) throw new Error('BENCHMARK_VALUATION_EVIDENCE_REQUIRED');const governedEvidence=new Set(method.observationEvidenceIds);if(input.evidenceIds.some(id=>!governedEvidence.has(id))) throw new Error('BENCHMARK_EVIDENCE_OUTSIDE_GOVERNED_SET');const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),comparableValue:Object.freeze({...input.comparableValue}),evidenceIds:[...input.evidenceIds]});this.valuations.set(input.id,frozen);return frozen;}
+ recordFulfilledMemberEconomics(input:FulfilledMemberEconomics):FulfilledMemberEconomics{if(this.memberEconomics.has(input.id)) throw new Error('MEMBER_ECONOMICS_ID_DUPLICATE');if(input.quantity.amount<=0||!input.place.trim()||!input.serviceLevel.trim()||!validTime(input.realizedAt)||input.economicEvidenceIds.length===0) throw new Error('MEMBER_ECONOMICS_INVALID');sameCurrency(input.goodsOutlay,input.mandatoryCharges);sameCurrency(input.goodsOutlay,input.refundApplied);if(input.refundApplied.minor>input.goodsOutlay.minor+input.mandatoryCharges.minor) throw new Error('REFUND_EXCEEDS_OUTLAY');const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),goodsOutlay:Object.freeze({...input.goodsOutlay}),mandatoryCharges:Object.freeze({...input.mandatoryCharges}),refundApplied:Object.freeze({...input.refundApplied}),economicEvidenceIds:[...input.economicEvidenceIds],substitutionEvidenceIds:[...input.substitutionEvidenceIds]});this.memberEconomics.set(input.id,frozen);return frozen;}
+ recordCostBasis(input:Omit<CostBasis,'riskAdjustedCost'>):CostBasis{if(this.costBases.has(input.id)) throw new Error('COST_BASIS_ID_DUPLICATE');if(!input.methodVersion.trim()||!validTime(input.calculatedAt)||input.components.length===0) throw new Error('COST_BASIS_INVALID');for(const c of input.components){if(c.amount.currency!==input.currency||c.evidenceIds.length===0) throw new Error('COST_COMPONENT_INVALID');}for(const s of input.support){if(s.amount.currency!==input.currency||s.evidenceIds.length===0) throw new Error('SUPPORT_COMPONENT_INVALID');}const total=addMoney(input.components.map(x=>x.amount),input.currency);const frozen=Object.freeze({...input,components:input.components.map(x=>Object.freeze({...x,amount:Object.freeze({...x.amount}),evidenceIds:[...x.evidenceIds]})),support:input.support.map(x=>Object.freeze({...x,amount:Object.freeze({...x.amount}),evidenceIds:[...x.evidenceIds]})),riskAdjustedCost:Object.freeze({minor:total,currency:input.currency})});this.costBases.set(input.id,frozen);return frozen;}
+ calculateSavings(input:{id:string;benchmarkValuationId:string;memberEconomicsId:string;calculatedAt:string;supersedes?:string}):SavingsEntry{if(this.savings.has(input.id)) throw new Error('SAVINGS_ID_DUPLICATE');const b=this.valuations.get(input.benchmarkValuationId),m=this.memberEconomics.get(input.memberEconomicsId);if(!b||!m) throw new Error('SAVINGS_INPUT_UNKNOWN');if(b.obligationId!==m.obligationId||b.specificationId!==m.specificationId||!sameQuantity(b.quantity,m.quantity)||b.place!==m.place||b.serviceLevel!==m.serviceLevel) throw new Error('SAVINGS_COMPARABILITY_MISMATCH');sameCurrency(b.comparableValue,m.goodsOutlay);sameCurrency(m.goodsOutlay,m.mandatoryCharges);sameCurrency(m.goodsOutlay,m.refundApplied);if(!validTime(input.calculatedAt)||Date.parse(input.calculatedAt)<Date.parse(b.evaluatedAt)||Date.parse(input.calculatedAt)<Date.parse(m.realizedAt)) throw new Error('SAVINGS_TIME_INVALID');const latest=this.latestSavingsByObligation.get(m.obligationId);if(latest){if(input.supersedes!==latest) throw new Error('SAVINGS_CORRECTION_LINEAGE_INVALID');}else if(input.supersedes) throw new Error('SAVINGS_CORRECTION_LINEAGE_INVALID');const outlay=m.goodsOutlay.minor+m.mandatoryCharges.minor-m.refundApplied.minor,saving=b.comparableValue.minor-outlay;const frozen=Object.freeze({id:input.id,obligationId:m.obligationId,participantId:m.participantId,benchmarkValuationId:b.id,memberEconomicsId:m.id,benchmarkValue:Object.freeze({...b.comparableValue}),comparableMemberOutlay:Object.freeze({minor:outlay,currency:b.comparableValue.currency}),absoluteSavings:signed(saving,b.comparableValue.currency),benchmarkRelativeBasisPoints:(saving*10000n)/b.comparableValue.minor,calculatedAt:input.calculatedAt,benchmarkEvidenceIds:[...b.evidenceIds],memberEconomicEvidenceIds:[...m.economicEvidenceIds],...(input.supersedes?{supersedes:input.supersedes}:{})});this.savings.set(input.id,frozen);this.latestSavingsByObligation.set(m.obligationId,input.id);return frozen;}
+ assessStructuralAdvantage(input:{id:string;costBasisId:string;alternativeBenchmarkValuationId:string;calculatedAt:string}):StructuralAdvantageAssessment{if(this.advantages.has(input.id)) throw new Error('ADVANTAGE_ID_DUPLICATE');const c=this.costBases.get(input.costBasisId),b=this.valuations.get(input.alternativeBenchmarkValuationId);if(!c||!b||c.obligationId!==b.obligationId) throw new Error('ADVANTAGE_INPUT_MISMATCH');sameCurrency(c.riskAdjustedCost,b.comparableValue);if(!validTime(input.calculatedAt)) throw new Error('ADVANTAGE_TIME_INVALID');const support=addMoney(c.support.map(x=>x.amount),c.currency);const frozen=Object.freeze({id:input.id,obligationId:c.obligationId,costBasisId:c.id,alternativeBenchmarkValuationId:b.id,alternativeValue:Object.freeze({...b.comparableValue}),riskAdjustedSystemCost:Object.freeze({...c.riskAdjustedCost}),nonStructuralSupport:Object.freeze({minor:support,currency:c.currency}),structuralAdvantage:signed(b.comparableValue.minor-c.riskAdjustedCost.minor,c.currency),calculatedAt:input.calculatedAt});this.advantages.set(input.id,frozen);return frozen;}
+ getSavings(id:string){return this.savings.get(id);}getCostBasis(id:string){return this.costBases.get(id);}getAdvantage(id:string){return this.advantages.get(id);}getBenchmarkValuation(id:string){return this.valuations.get(id);}
 }
