@@ -2,7 +2,7 @@
   "baseline": "CB-00-v0.1",
   "invariants": [
     {"id":"INV-001","priority":"P0","status":"PARTIAL_GREEN","source":"CB-00","proof":"tests/node/kernel.test.mjs — scoped grants, delegation bounds, parent revocation, stop/hold supremacy"},
-    {"id":"INV-002","priority":"P1","status":"RED","source":"CB-00"},
+    {"id":"INV-002","priority":"P1","status":"PARTIAL_GREEN","source":"CB-00","proof":"tests/node/sw0-04.test.mjs — price observation remains contextual evidence and member offer remains derived; external ingestion/correction integration pending"},
     {"id":"INV-003","priority":"P0","status":"RED","source":"CB-00"},
     {"id":"INV-004","priority":"P0","status":"RED","source":"CB-00"},
     {"id":"INV-005","priority":"P1","status":"RED","source":"CB-00"},
