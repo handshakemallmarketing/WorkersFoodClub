@@ -1,21 +1,21 @@
-# Food Club Ghana — SW0-07B
-Kernel Integrity & Conformance Harness Hardening — v0.6.1-alpha.1
+# Food Club Ghana — SW0-08
+Exception, Remedy & Completion Slice — v0.7.0-alpha.1
 
 **Baseline:** CB-00 v0.1 / SW0-01 v0.1  
-**Predecessor:** SW0-07A canon-mapping correction  
-**Status:** PARTIAL GREEN — known kernel-integrity and conformance-harness gaps corrected before SW0-08.
+**Predecessor:** SW0-07B Kernel Integrity & Conformance Harness Hardening  
+**Status:** PARTIAL GREEN — exception/remedy/substitution semantics are executable; returns, savings and durable settlement remain open.
 
 ## What changed
-- Allocation now requires attributable evidence before the write is accepted.
-- Authority revocation and constraint release are one-way operations; repeated calls cannot move historical effective timestamps.
-- CommandBus distinguishes expected `DomainRejection` from unexpected infrastructure/programming failure. Expected domain refusal becomes evidence-backed and idempotently replayable; unexpected failure still propagates.
-- Added `InMemoryCommandExecutionRegistry` so downstream domain code can verify that a cited command was actually ACCEPTED and produced the cited event.
-- Purchase commitment now verifies its authorization command/event semantically rather than accepting arbitrary nonblank identifiers.
-- Catalog and demand now share the same offer-validity predicate.
-- Added the authoritative one-line rule for all INV-001..INV-030 entries to `canon/invariants.json`.
-- Hardened `canon:check` for unique IDs, exact numbering, allowed enums, missing rules and referenced proof-file existence.
-- Replaced the stale SW0-02 cumulative traceability snapshot with SW0-07B status and made `traceability:check` compare baseline, IDs, priorities, statuses and canonical rule text against the canon registry.
-- Preserved prior SW0-06/SW0-07 release evidence rather than rewriting historical claims.
+- Preserved rejected member acceptance as zero conforming performed quantity rather than forcing a false delivery state.
+- Added evidence-backed SHORTFALL, REJECTION, SUBSTITUTION_REQUIRED and DISPUTE exception records.
+- Added refund, replacement and remedy-credit obligations linked to the original purchase obligation and exception.
+- Kept performed quantity separate from remedied quantity in completion projections, so a refund never masquerades as delivery.
+- Added material-substitution controls that preserve the original specification and require equivalence evidence, member consent and economic recomputation before resolution.
+- Added quantity guards against exception overstatement, remedy overallocation, remedy overcompletion and obligation overresolution.
+- Classified remedy credit explicitly as `REMEDY_CREDIT_NOT_STORED_VALUE`; no wallet or lending semantics are introduced.
+- Added effect-idempotent refund retry proof through CommandBus.
+- Advanced INV-021 to PARTIAL_GREEN and strengthened INV-019, INV-020 and INV-027.
+- Advanced adversarial fixtures FX-008, FX-009 and FX-011 to GREEN.
 
 ## Local proof
 ```bash
@@ -28,9 +28,9 @@ pnpm test:kernel
 ```
 
 ## Constitutional status
-SW0-07B does **not** claim overall SW0 conformance. Durable idempotency, database serialization, complete migration of every legacy domain `Error` into typed `DomainRejection`, transformation provenance, liquidity/security/collateral controls, remedies and savings remain open.
+SW0-08 does **not** claim overall SW0 conformance. A completed obligation may now be reconstructed as performed quantity plus separately governed remedy quantity; the system never relabels a refund, replacement or credit as original conforming delivery.
 
-The authoritative CB-00 mappings after SW0-07A remain in force: fulfillment proofs map to INV-019 Transfer and INV-020 Partial Fulfillment; INV-016/017/018 remain RED for Liquidity, Claims/security restrictions and Collateral respectively.
+Still intentionally open: INV-022 returned-goods quality re-entry, durable database remedy persistence, external refund-provider integration, title/risk-transfer policy, stored-value/credit products, and final savings economics.
 
 ## Next slice
-**SW0-08 — Exception, Remedy & Completion Slice**: fix rejected-acceptance semantics, model shortfall/substitution/consent and refund/replacement/credit remedies, and discharge only validly performed or governed-remedied portions.
+**SW0-09 — Actual Fulfilled Economics, Benchmark & Savings Ledger Slice**: compute final member savings only from actual fulfilled/remedied economics against a governed comparable benchmark, preserve zero/negative savings, and prevent promotion/subsidy from masquerading as structural advantage.
