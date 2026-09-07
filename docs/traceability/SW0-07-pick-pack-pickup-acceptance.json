@@ -1,0 +1,11 @@
+{
+  "slice":"SW0-07",
+  "title":"Pick, Pack, Pickup Transfer & Acceptance",
+  "baseline":"CB-00-v0.1",
+  "mappings":[
+    {"source":"C8 fulfillment is obligation-centric and evidence-backed","invariants":["INV-016"],"proofs":["tests/node/sw0-07.test.mjs"]},
+    {"source":"C8 handover/custody transfer is distinct from acceptance","invariants":["INV-017"],"proofs":["tests/node/sw0-07.test.mjs"]},
+    {"source":"C8 acceptance and discharge are distinct governed facts","invariants":["INV-018"],"proofs":["tests/node/sw0-07.test.mjs"]}
+  ],
+  "not_claimed":["title or legal risk transfer policy","exception/remedy completion","durable fulfillment persistence","overall SW0 conformance"]
+}
