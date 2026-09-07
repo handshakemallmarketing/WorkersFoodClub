@@ -1,0 +1,12 @@
+{
+  "slice":"SW0-08",
+  "title":"Exception, Remedy & Completion",
+  "baseline":"CB-00-v0.1",
+  "mappings":[
+    {"source":"C8 transfer/acceptance/settlement/discharge remain orthogonal","invariants":["INV-019"],"proofs":["tests/node/sw0-08.test.mjs"]},
+    {"source":"C8 only actually conforming performed quantity is discharged","invariants":["INV-020"],"proofs":["tests/node/sw0-08.test.mjs","FX-008"]},
+    {"source":"C2/C8 material substitution preserves original promise, equivalence/consent and economic recomputation","invariants":["INV-021"],"proofs":["tests/node/sw0-08.test.mjs","FX-009"]},
+    {"source":"C10 retries cannot duplicate economic effect","invariants":["INV-027"],"proofs":["tests/node/sw0-08.test.mjs","FX-011"]}
+  ],
+  "not_claimed":["return-to-stock quality gating under INV-022","durable database remedy persistence","cash-provider refund integration","title/risk transfer policy","stored-value wallet or credit product","overall SW0 conformance"]
+}
