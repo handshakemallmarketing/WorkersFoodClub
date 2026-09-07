@@ -1,0 +1,137 @@
+import type {EvidenceId,ObligationId,ParticipantId,Quantity,SpecificationId} from '../../kernel/src/index.js';
+
+export type ExceptionKind='SHORTFALL'|'REJECTION'|'SUBSTITUTION_REQUIRED'|'DISPUTE';
+export type ConsentState='PENDING'|'CONSENTED'|'DECLINED';
+export type RemedyKind='REFUND'|'REPLACEMENT'|'CREDIT';
+
+export interface ExceptionRecord {
+ readonly id:string;
+ readonly obligationId:ObligationId;
+ readonly participantId:ParticipantId;
+ readonly kind:ExceptionKind;
+ readonly affectedQuantity:Quantity;
+ readonly occurredAt:string;
+ readonly evidenceIds:readonly EvidenceId[];
+ readonly relatedAcceptanceId?:string;
+}
+
+export interface SubstitutionProposal {
+ readonly id:string;
+ readonly exceptionId:string;
+ readonly obligationId:ObligationId;
+ readonly originalSpecificationId:SpecificationId;
+ readonly substituteSpecificationId:SpecificationId;
+ readonly affectedQuantity:Quantity;
+ readonly equivalenceRuleVersion:string;
+ readonly equivalenceEvidenceIds:readonly EvidenceId[];
+ readonly consent:ConsentState;
+ readonly consentEvidenceIds:readonly EvidenceId[];
+ readonly economicRecomputationEvidenceIds:readonly EvidenceId[];
+ readonly proposedAt:string;
+}
+
+export interface RemedyObligation {
+ readonly id:string;
+ readonly sourceExceptionId:string;
+ readonly originalObligationId:ObligationId;
+ readonly participantId:ParticipantId;
+ readonly kind:RemedyKind;
+ readonly quantity:Quantity;
+ readonly createdAt:string;
+ readonly authorizedEventId:string;
+ readonly evidenceIds:readonly EvidenceId[];
+ readonly substitutionProposalId?:string;
+ readonly economicClassification:'REMEDY_SETTLEMENT'|'REMEDY_CREDIT_NOT_STORED_VALUE';
+}
+
+export interface RemedyCompletion {
+ readonly id:string;
+ readonly remedyObligationId:string;
+ readonly quantity:Quantity;
+ readonly completedAt:string;
+ readonly evidenceIds:readonly EvidenceId[];
+}
+
+export interface CompletionProjection {
+ readonly obligationId:ObligationId;
+ readonly performedQuantity:Quantity;
+ readonly remediedQuantity:Quantity;
+ readonly unresolvedQuantity:Quantity;
+ readonly state:'OPEN'|'PARTIALLY_RESOLVED'|'COMPLETED_AS_PERFORMED'|'COMPLETED_WITH_REMEDY';
+}
+
+const validTime=(value:string)=>!Number.isNaN(Date.parse(value));
+const sameUnit=(a:Quantity,b:Quantity)=>a.unit===b.unit;
+
+export class InMemoryRemedyLedger {
+ private readonly exceptions=new Map<string,ExceptionRecord>();
+ private readonly substitutions=new Map<string,SubstitutionProposal>();
+ private readonly remedies=new Map<string,RemedyObligation>();
+ private readonly completions=new Map<string,RemedyCompletion>();
+
+ recordException(input:ExceptionRecord,obligation:{id:ObligationId;participantId:ParticipantId;specificationId:SpecificationId;quantity:Quantity}):ExceptionRecord{
+  if(this.exceptions.has(input.id)) throw new Error('EXCEPTION_ID_DUPLICATE');
+  if(input.obligationId!==obligation.id||input.participantId!==obligation.participantId) throw new Error('EXCEPTION_OBLIGATION_MISMATCH');
+  if(input.affectedQuantity.amount<=0||!sameUnit(input.affectedQuantity,obligation.quantity)) throw new Error('EXCEPTION_QUANTITY_INVALID');
+  const prior=[...this.exceptions.values()].filter(x=>x.obligationId===input.obligationId).reduce((n,x)=>n+x.affectedQuantity.amount,0);
+  if(prior+input.affectedQuantity.amount>obligation.quantity.amount) throw new Error('EXCEPTION_OVERSTATEMENT');
+  if(!validTime(input.occurredAt)||input.evidenceIds.length===0) throw new Error('EXCEPTION_EVIDENCE_REQUIRED');
+  const frozen=Object.freeze({...input,affectedQuantity:Object.freeze({...input.affectedQuantity}),evidenceIds:[...input.evidenceIds]});
+  this.exceptions.set(input.id,frozen); return frozen;
+ }
+
+ proposeSubstitution(input:SubstitutionProposal,obligation:{id:ObligationId;specificationId:SpecificationId;quantity:Quantity}):SubstitutionProposal{
+  if(this.substitutions.has(input.id)) throw new Error('SUBSTITUTION_ID_DUPLICATE');
+  const exception=this.exceptions.get(input.exceptionId); if(!exception||exception.obligationId!==input.obligationId) throw new Error('SUBSTITUTION_EXCEPTION_UNKNOWN');
+  if(obligation.id!==input.obligationId||input.originalSpecificationId!==obligation.specificationId) throw new Error('SUBSTITUTION_ORIGINAL_PROMISE_MISMATCH');
+  if(input.substituteSpecificationId===input.originalSpecificationId) throw new Error('SUBSTITUTION_MUST_CHANGE_SPECIFICATION');
+  if(input.affectedQuantity.amount<=0||!sameUnit(input.affectedQuantity,exception.affectedQuantity)||input.affectedQuantity.amount>exception.affectedQuantity.amount) throw new Error('SUBSTITUTION_QUANTITY_INVALID');
+  if(!input.equivalenceRuleVersion.trim()||input.equivalenceEvidenceIds.length===0||input.economicRecomputationEvidenceIds.length===0) throw new Error('SUBSTITUTION_EQUIVALENCE_AND_RECOMPUTATION_REQUIRED');
+  if(input.consent!=='PENDING'&&input.consentEvidenceIds.length===0) throw new Error('SUBSTITUTION_CONSENT_EVIDENCE_REQUIRED');
+  if(!validTime(input.proposedAt)) throw new Error('SUBSTITUTION_TIME_INVALID');
+  const frozen=Object.freeze({...input,affectedQuantity:Object.freeze({...input.affectedQuantity}),equivalenceEvidenceIds:[...input.equivalenceEvidenceIds],consentEvidenceIds:[...input.consentEvidenceIds],economicRecomputationEvidenceIds:[...input.economicRecomputationEvidenceIds]});
+  this.substitutions.set(input.id,frozen); return frozen;
+ }
+
+ createRemedy(input:RemedyObligation):RemedyObligation{
+  if(this.remedies.has(input.id)) throw new Error('REMEDY_ID_DUPLICATE');
+  const exception=this.exceptions.get(input.sourceExceptionId); if(!exception||exception.obligationId!==input.originalObligationId||exception.participantId!==input.participantId) throw new Error('REMEDY_EXCEPTION_MISMATCH');
+  if(input.quantity.amount<=0||!sameUnit(input.quantity,exception.affectedQuantity)) throw new Error('REMEDY_QUANTITY_INVALID');
+  const prior=[...this.remedies.values()].filter(x=>x.sourceExceptionId===input.sourceExceptionId).reduce((n,x)=>n+x.quantity.amount,0);
+  if(prior+input.quantity.amount>exception.affectedQuantity.amount) throw new Error('REMEDY_OVERALLOCATION');
+  if(!validTime(input.createdAt)||!input.authorizedEventId.trim()||input.evidenceIds.length===0) throw new Error('REMEDY_AUTHORITY_EVIDENCE_REQUIRED');
+  if(input.substitutionProposalId){
+   const s=this.substitutions.get(input.substitutionProposalId); if(!s||s.exceptionId!==input.sourceExceptionId) throw new Error('REMEDY_SUBSTITUTION_UNKNOWN');
+   if(s.consent!=='CONSENTED'||s.consentEvidenceIds.length===0) throw new Error('SUBSTITUTION_NOT_CONSENTED');
+   if(s.equivalenceEvidenceIds.length===0||s.economicRecomputationEvidenceIds.length===0) throw new Error('SUBSTITUTION_RECOMPUTATION_REQUIRED');
+  }
+  const expected=input.kind==='CREDIT'?'REMEDY_CREDIT_NOT_STORED_VALUE':'REMEDY_SETTLEMENT';
+  if(input.economicClassification!==expected) throw new Error('REMEDY_CLASSIFICATION_INVALID');
+  const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),evidenceIds:[...input.evidenceIds]}); this.remedies.set(input.id,frozen); return frozen;
+ }
+
+ completeRemedy(input:RemedyCompletion):RemedyCompletion{
+  if(this.completions.has(input.id)) throw new Error('REMEDY_COMPLETION_ID_DUPLICATE');
+  const remedy=this.remedies.get(input.remedyObligationId); if(!remedy) throw new Error('REMEDY_UNKNOWN');
+  if(input.quantity.amount<=0||!sameUnit(input.quantity,remedy.quantity)) throw new Error('REMEDY_COMPLETION_QUANTITY_INVALID');
+  const prior=[...this.completions.values()].filter(x=>x.remedyObligationId===input.remedyObligationId).reduce((n,x)=>n+x.quantity.amount,0);
+  if(prior+input.quantity.amount>remedy.quantity.amount) throw new Error('REMEDY_OVERCOMPLETION');
+  if(!validTime(input.completedAt)||input.evidenceIds.length===0) throw new Error('REMEDY_COMPLETION_EVIDENCE_REQUIRED');
+  const frozen=Object.freeze({...input,quantity:Object.freeze({...input.quantity}),evidenceIds:[...input.evidenceIds]}); this.completions.set(input.id,frozen); return frozen;
+ }
+
+ completion(obligation:{id:ObligationId;quantity:Quantity},performedQuantity:Quantity):CompletionProjection{
+  if(!sameUnit(obligation.quantity,performedQuantity)||performedQuantity.amount<0||performedQuantity.amount>obligation.quantity.amount) throw new Error('PERFORMANCE_QUANTITY_INVALID');
+  const remedyIds=new Set([...this.remedies.values()].filter(x=>x.originalObligationId===obligation.id).map(x=>x.id));
+  const remedied=[...this.completions.values()].filter(x=>remedyIds.has(x.remedyObligationId)).reduce((n,x)=>n+x.quantity.amount,0);
+  const resolved=performedQuantity.amount+remedied; if(resolved>obligation.quantity.amount) throw new Error('OBLIGATION_OVERRESOLUTION');
+  const unresolved=obligation.quantity.amount-resolved;
+  const state=resolved===0?'OPEN':resolved<obligation.quantity.amount?'PARTIALLY_RESOLVED':remedied===0?'COMPLETED_AS_PERFORMED':'COMPLETED_WITH_REMEDY';
+  return Object.freeze({obligationId:obligation.id,performedQuantity:Object.freeze({...performedQuantity}),remediedQuantity:Object.freeze({amount:remedied,unit:obligation.quantity.unit}),unresolvedQuantity:Object.freeze({amount:unresolved,unit:obligation.quantity.unit}),state});
+ }
+
+ getException(id:string){return this.exceptions.get(id);}
+ getSubstitution(id:string){return this.substitutions.get(id);}
+ getRemedy(id:string){return this.remedies.get(id);}
+ getCompletion(id:string){return this.completions.get(id);}
+}
