@@ -1,0 +1,12 @@
+{
+  "slice":"SW0-09",
+  "title":"Actual Fulfilled Economics, Benchmark & Savings Ledger",
+  "baseline":"CB-00-v0.1",
+  "mappings":[
+    {"source":"C6 purpose-specific cost basis","invariants":["INV-012"],"proofs":["tests/node/sw0-09.test.mjs"]},
+    {"source":"C2/C6 governed comparable benchmark + actual member economics + negative savings preservation","invariants":["INV-013"],"proofs":["tests/node/sw0-09.test.mjs","FX-013","FX-014"]},
+    {"source":"C2/C6 structural advantage excludes subsidy/promotion/cross-subsidy laundering","invariants":["INV-014"],"proofs":["tests/node/sw0-09.test.mjs","FX-015"]},
+    {"source":"C0/C9/C10 corrections are additive/versioned","invariants":["INV-024"],"proofs":["tests/node/sw0-09.test.mjs"]}
+  ],
+  "not_claimed":["future price-protection promise enforcement under INV-015","basket-wide aggregation across multiple obligations","durable database economics persistence","external benchmark provider integration","overall SW0 conformance"]
+}
