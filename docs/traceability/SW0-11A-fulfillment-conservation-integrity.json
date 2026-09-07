@@ -1,0 +1,14 @@
+{
+  "slice":"SW0-11A",
+  "baseline":"CB-00-v0.1",
+  "supersedesInterpretationOnly":false,
+  "findings":[
+    {"id":"A","invariants":["INV-019","INV-027"],"proof":"tests/node/sw0-11a.test.mjs — one fulfillment work record cannot be handed over twice"},
+    {"id":"B","invariants":["INV-020","INV-027"],"proof":"tests/node/sw0-11a.test.mjs — handover acceptance is single-consumption and accepted quantity is bounded at write time"},
+    {"id":"C","invariants":["INV-019","INV-020"],"proof":"tests/node/sw0-11a.test.mjs — handover recipient and accepting participant must equal the fulfillment obligation beneficiary"},
+    {"id":"D","invariants":["INV-004","INV-027"],"proof":"tests/node/sw0-11a.test.mjs — accepted checkout command/event authorization is consumed exactly once, including concurrent reservation before async verification"},
+    {"id":"E","invariants":["INV-020","INV-027"],"proof":"packages/resolution + tests/node/sw0-11a.test.mjs — fulfillment performance and remedy settlement share a write-side quantity conservation boundary in both effect orderings"},
+    {"id":"SAVINGS-LINEAGE","invariants":["INV-024"],"proof":"tests/node/sw0-11a-savings.test.mjs — savings correction must supersede the current latest entry; forked correction is rejected"}
+  ],
+  "claim":"PARTIAL_GREEN is strengthened for bounded in-memory composition; durable transactional enforcement remains SW0-12 scope."
+}
