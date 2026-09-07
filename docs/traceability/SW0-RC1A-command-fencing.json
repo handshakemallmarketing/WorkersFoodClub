@@ -1,0 +1,17 @@
+{
+  "slice":"SW0-RC1A",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "closes":["RC1-B02"],
+  "mappings":[
+    {"invariantId":"INV-027","proof":"packages/durability/src/postgres.ts + packages/durability/sql/003_command_fencing.sql + scripts/test-postgres-durability.sh","claim":"durable command ownership is fenced by a monotonic generation and stale owners cannot commit after takeover"},
+    {"invariantId":"INV-028","proof":"packages/durability/src/postgres.ts + scripts/test-postgres-durability.sh","claim":"domain co-commit requires the current fence generation in addition to owner identity and expected aggregate version"}
+  ],
+  "notClaimed":[
+    "RC1-B01 universal transactional wiring is closed",
+    "RC1-B03 cumulative matrix freshness is closed",
+    "production-complete exactly-once execution",
+    "full GREEN for INV-027 or INV-028"
+  ],
+  "next":"SW0-RC1B — universal consequential-write transactional routing plus cumulative matrix freshness enforcement"
+}
