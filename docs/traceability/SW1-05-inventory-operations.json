@@ -1,0 +1,25 @@
+{
+  "release":"SW1-05",
+  "title":"Inventory Receiving, Explicit Lineage, Quality and Allocation Operator Workflow",
+  "scope":"Bounded pilot inventory operator boundary over the existing SW0 inventory and explicit lineage kernels.",
+  "proofs":[
+    "packages/pilot-inventory/src/index.ts",
+    "tests/node/sw1-05.test.mjs",
+    "packages/inventory/src/index.ts",
+    "packages/lineage/src/index.ts"
+  ],
+  "invariants":["INV-001","INV-004","INV-007","INV-008","INV-009","INV-010","INV-027","INV-028","INV-030"],
+  "claims":[
+    "inventory receive/quality/transform/derived-receive/allocation actions require real Authority grants",
+    "custody is not inferred from UI role; receiving operator must be the declared custodian in this pilot workflow",
+    "derived lots must match explicit per-lot lineage quantity",
+    "quality gating prevents unaccepted lots from allocation",
+    "lot and obligation over-allocation fail closed"
+  ],
+  "limitations":[
+    "reference workflow remains in-memory in this SW1 product slice; durable lineage primitives already exist from SW0",
+    "no production warehouse UI or device integration",
+    "no production launch authorization"
+  ],
+  "next":"SW1-06 pick/pack/pickup, acceptance and exception workflow"
+}
