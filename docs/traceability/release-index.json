@@ -1,6 +1,6 @@
 {
   "baseline":"CB-00-v0.1",
-  "head":"SW1-00",
+  "head":"SW1-01",
   "evidenceFiles":[
     "SW0-01A-v0.0.1.json",
     "SW0-02.json",
@@ -31,10 +31,11 @@
     "SW0-RC3.json",
     "SW0-RC3A.json",
     "SW0-RC3R.json",
-    "SW1-00.json"
+    "SW1-00.json",
+    "SW1-01.json"
   ],
   "requiredCumulativeProofs":{
-    "INV-001":["tests/node/kernel.test.mjs","tests/node/sw0-rc2b.test.mjs","packages/transfer/src/index.ts","docs/traceability/SW0-RC3R-independent-rereview.json"],
+    "INV-001":["tests/node/kernel.test.mjs","tests/node/sw0-rc2b.test.mjs","packages/transfer/src/index.ts","docs/traceability/SW0-RC3R-independent-rereview.json","packages/identity/src/index.ts","tests/node/sw1-01.test.mjs"],
     "INV-003":["tests/node/sw0-05.test.mjs","tests/node/sw0-rc2c.test.mjs"],
     "INV-004":["tests/node/sw0-05.test.mjs","tests/node/sw0-07b.test.mjs","tests/node/sw0-rc2c.test.mjs"],
     "INV-007":["tests/node/sw0-rc2a.test.mjs","packages/durability/sql/004_physical_lineage.sql","scripts/test-postgres-durability.sh","tests/node/sw0-rc2c.test.mjs"],
