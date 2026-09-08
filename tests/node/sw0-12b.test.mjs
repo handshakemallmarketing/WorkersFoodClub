@@ -10,7 +10,7 @@ class MemoryPgDb {
   if(q.startsWith('BEGIN')||q==='COMMIT'||q==='ROLLBACK') return {rows:[],rowCount:0};
   if(q.startsWith('INSERT INTO durable_command_execution')){
    const [key,commandId,owner,lease,now]=params;
-   if(!this.rows.has(key)) this.rows.set(key,{idempotency_key:key,command_id:commandId,state:'IN_FLIGHT',owner_token:owner,lease_until:lease,result_json:null,created_at:now,updated_at:now});
+   if(!this.rows.has(key)) this.rows.set(key,{idempotency_key:key,command_id:commandId,state:'IN_FLIGHT',owner_token:owner,lease_until:lease,fence_generation:1,result_json:null,created_at:now,updated_at:now});
    return {rows:[],rowCount:0};
   }
   if(q.startsWith('SELECT idempotency_key')){
@@ -18,17 +18,20 @@ class MemoryPgDb {
   }
   if(q.startsWith('UPDATE durable_command_execution SET owner_token=')){
    const [key,owner,lease,now]=params; const row=this.rows.get(key);
-   if(row&&row.state==='IN_FLIGHT'&&Date.parse(row.lease_until)<=Date.parse(now)){row.owner_token=owner;row.lease_until=lease;row.updated_at=now;return {rows:[],rowCount:1};}
+   if(row&&row.state==='IN_FLIGHT'&&Date.parse(row.lease_until)<=Date.parse(now)){
+    row.owner_token=owner;row.lease_until=lease;row.fence_generation=(row.fence_generation??1)+1;row.updated_at=now;
+    return {rows:[structuredClone(row)],rowCount:1};
+   }
    return {rows:[],rowCount:0};
   }
   if(q.startsWith("UPDATE durable_command_execution SET state='COMMITTED'")){
-   const [key,commandId,owner,result,now]=params; const row=this.rows.get(key);
-   if(row&&row.command_id===commandId&&row.state==='IN_FLIGHT'&&row.owner_token===owner){row.state='COMMITTED';row.result_json=structuredClone(result);row.updated_at=now;return {rows:[structuredClone(row)],rowCount:1};}
+   const [key,commandId,owner,fence,result,now]=params; const row=this.rows.get(key);
+   if(row&&row.command_id===commandId&&row.state==='IN_FLIGHT'&&row.owner_token===owner&&row.fence_generation===fence){row.state='COMMITTED';row.result_json=structuredClone(result);row.updated_at=now;return {rows:[structuredClone(row)],rowCount:1};}
    return {rows:[],rowCount:0};
   }
   if(q.startsWith('DELETE FROM durable_command_execution')){
-   const [key,commandId,owner]=params; const row=this.rows.get(key);
-   if(row&&row.command_id===commandId&&row.state==='IN_FLIGHT'&&row.owner_token===owner){this.rows.delete(key);return {rows:[],rowCount:1};}
+   const [key,commandId,owner,fence]=params; const row=this.rows.get(key);
+   if(row&&row.command_id===commandId&&row.state==='IN_FLIGHT'&&row.owner_token===owner&&row.fence_generation===fence){this.rows.delete(key);return {rows:[],rowCount:1};}
    return {rows:[],rowCount:0};
   }
   throw new Error(`UNSUPPORTED_SQL:${q}`);
@@ -57,7 +60,7 @@ test('crashed worker lease expires and a new worker can take ownership',async()=
  assert.equal(await early.claim('idem:crash','cmd:crash'),'IN_FLIGHT');
  const recovered=new PostgresDurableCommandStore(db.pool(),'worker:recovery',30000,at('2026-09-07T14:00:31Z'));
  assert.equal(await recovered.claim('idem:crash','cmd:crash'),'CLAIMED');
- await assert.rejects(()=>crashed.commit('idem:crash','cmd:crash',result),/DURABLE_CLAIM_NOT_OWNED/);
+ await assert.rejects(()=>crashed.commit('idem:crash','cmd:crash',result),/DURABLE_FENCE_NOT_OWNED/);
  assert.deepEqual(await recovered.commit('idem:crash','cmd:crash',result),result);
 });
 
