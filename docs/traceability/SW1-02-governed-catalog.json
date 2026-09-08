@@ -1,0 +1,13 @@
+{
+  "slice":"SW1-02",
+  "previous":"SW1-01",
+  "scope":"governed catalog, member offers, benchmark display and sales-window configuration",
+  "mappings":[
+    {"invariantId":"INV-001","status":"PARTIAL_GREEN","proof":["packages/sales/src/index.ts","tests/node/sw1-02.test.mjs"],"claim":"sales-window configuration requires evaluated canonical authority"},
+    {"invariantId":"INV-002","status":"PARTIAL_GREEN","proof":["packages/catalog/src/index.ts","packages/economics/src/index.ts","packages/sales/src/index.ts","tests/node/sw1-02.test.mjs"],"claim":"member-facing catalog state remains subordinate to governed specifications, evidence and executable conditions"},
+    {"invariantId":"INV-013","status":"PARTIAL_GREEN","proof":["packages/economics/src/index.ts","packages/sales/src/index.ts","tests/node/sw1-02.test.mjs"],"claim":"benchmark display uses a governed comparable valuation rather than an arbitrary retail scalar"},
+    {"invariantId":"INV-015","status":"PARTIAL_GREEN","proof":["packages/catalog/src/index.ts","packages/sales/src/index.ts","tests/node/sw1-02.test.mjs"],"claim":"member offer and sales window are bounded by quantity, place and time"},
+    {"invariantId":"INV-030","status":"PARTIAL_GREEN","proof":["docs/traceability/release-index.json","docs/traceability/matrix.json"],"claim":"SW1 product semantics map back to existing canon rather than redefining it"}
+  ],
+  "productionAuthorization":false
+}
