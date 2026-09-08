@@ -1,0 +1,23 @@
+{
+  "release":"SW0-RC3A",
+  "title":"RC3 blocker remediation — exclusive durable claims and verified transfer authority",
+  "baseline":"CB-00-v0.1",
+  "addresses":["RC3-B01","RC3-B02"],
+  "claims":[
+    "an unexpired durable command claim is exclusive even when two process instances share the same owner token",
+    "takeover after lease expiry remains monotonic through fence_generation",
+    "transfer-policy ratification is authorized only by a real AuthorityEvaluator decision over a stored grant",
+    "caller-shaped TransferPolicyAuthorization objects cannot create authority"
+  ],
+  "proof":[
+    "packages/durability/src/postgres.ts",
+    "tests/node/sw0-12b.test.mjs",
+    "packages/transfer/src/index.ts",
+    "tests/node/sw0-rc2b.test.mjs",
+    "tests/node/sw0-rc2c.test.mjs",
+    "scripts/test-postgres-durability.sh"
+  ],
+  "invariants":["INV-001","INV-027","INV-028"],
+  "status":"REMEDIATION_CANDIDATE_PENDING_CI_AND_INDEPENDENT_REREVIEW",
+  "boundary":"No invariant is promoted to full GREEN. This slice does not freeze SW0_KERNEL_BASELINE_v1.0; RC3R must independently falsify these fixes after merge."
+}
