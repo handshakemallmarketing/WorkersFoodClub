@@ -1,0 +1,1 @@
+{"attacks":["cart-without-accepted-command","repeat-cart-checkout","inactive-member-cart","quantity-over-offer"],"proof":"tests/node/sw1-03.test.mjs"}
