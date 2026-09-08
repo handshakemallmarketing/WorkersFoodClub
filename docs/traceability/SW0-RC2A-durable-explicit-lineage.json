@@ -1,0 +1,17 @@
+{
+  "slice":"SW0-RC2A",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "closes":["RC1-B05"],
+  "mappings":[
+    {"invariantId":"INV-007","proof":"packages/lineage/src/index.ts + packages/durability/sql/004_physical_lineage.sql + packages/durability/src/lineage.ts + tests/node/sw0-rc2a.test.mjs + scripts/test-postgres-durability.sh","claim":"every physical transform carries explicit per-input and per-output quantities, enforces conservation and cumulative input capacity, and the durable PostgreSQL function applies the transform atomically"},
+    {"invariantId":"INV-008","proof":"packages/lineage/src/index.ts + packages/durability/sql/004_physical_lineage.sql + packages/durability/src/lineage.ts + tests/node/sw0-rc2a.test.mjs + scripts/test-postgres-durability.sh","claim":"multi-input/multi-output ancestry is represented as normalized durable transform input/output rows with exact lot quantities; no equal-output inference is used"}
+  ],
+  "boundary":"RC1-B05 is closed for the new explicit lineage boundary. The older PhysicalLineageLedger in packages/governance remains a bounded historical reference implementation and is not the production lineage authority.",
+  "notClaimed":[
+    "INV-007 or INV-008 full GREEN across every future transformation policy",
+    "transaction-specific title/risk policy RC1-B04 is resolved",
+    "the legacy governance PhysicalLineageLedger is a production persistence boundary"
+  ],
+  "next":"SW0-RC2 re-review of lineage closure, then freeze the bounded SW0 kernel baseline while RC1-B04 remains an external production policy gate"
+}
