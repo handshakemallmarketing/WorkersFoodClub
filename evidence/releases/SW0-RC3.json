@@ -1,0 +1,17 @@
+{
+  "release":"SW0-RC3",
+  "title":"Independent SW0 release-gate falsification review",
+  "status":"NO_GO",
+  "reviewedMain":"8a54789695509c0b85be03979c8d2a90f14e398d",
+  "freezeAuthorized":false,
+  "productionAuthorized":false,
+  "openBlockers":[
+    "RC3-B01 same-owner concurrent durable claimants can share CLAIMED/fence generation",
+    "RC3-B02 transfer-policy ratification does not verify authority against source of truth"
+  ],
+  "affectedInvariants":["INV-001","INV-027","INV-028"],
+  "observedGreenSuite":{"kernel":"121/121","typecheck":"clean"},
+  "importantQualification":"Passing tests do not constitute release sufficiency where an untested adversarial concurrency path and an unverified authority-attestation path have been independently reproduced or demonstrated by inspection.",
+  "requiredNext":"Remediate both blockers with executable adversarial proofs and perform a fresh independent RC3 re-review before SW0_KERNEL_BASELINE_v1.0 freeze.",
+  "traceability":"docs/traceability/SW0-RC3-independent-review.json"
+}
