@@ -1,0 +1,14 @@
+{
+  "release":"SW1-03",
+  "title":"Cart, Preorder and Authorized Checkout Commitment",
+  "baseMerge":"c9fb0ef7542321465fef2cdbe56cb935aea21f9a",
+  "claims":[
+    "Cart state is non-binding and creates no purchase obligation.",
+    "Only a verified accepted checkout command may create the purchase obligation.",
+    "Inactive membership, wrong cart owner, rejected authorization and duplicate checkout fail closed.",
+    "Existing SW0 demand authorization-consumption semantics are reused rather than duplicated."
+  ],
+  "proof":["packages/pilot-checkout/src/index.ts","tests/node/sw1-03.test.mjs","packages/demand/src/index.ts"],
+  "productionAuthorization":false,
+  "next":"SW1-04"
+}
