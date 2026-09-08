@@ -1,6 +1,6 @@
 {
-  "baseline":"CB-00-v0.1","softwarePlan":"SW0-01-v0.1","slice":"SW0-RC2A","mappings":[
-    {"invariantId":"INV-001","priority":"P0","status":"PARTIAL_GREEN","rule":"No consequential action is authorized merely by UI access, job title or model recommendation.","proof":"tests/node/kernel.test.mjs"},
+  "baseline":"CB-00-v0.1","softwarePlan":"SW0-01-v0.1","slice":"SW0-RC2B","mappings":[
+    {"invariantId":"INV-001","priority":"P0","status":"PARTIAL_GREEN","rule":"No consequential action is authorized merely by UI access, job title or model recommendation.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-rc2b.test.mjs + packages/transfer/src/index.ts"},
     {"invariantId":"INV-002","priority":"P1","status":"PARTIAL_GREEN","rule":"Database/projection state does not outrank lawful reality or qualifying evidence.","proof":"tests/node/sw0-04.test.mjs + tests/node/sw0-10.test.mjs"},
     {"invariantId":"INV-003","priority":"P0","status":"PARTIAL_GREEN","rule":"Forecast, interest and history cannot silently become committed demand.","proof":"tests/node/sw0-05.test.mjs"},
     {"invariantId":"INV-004","priority":"P0","status":"PARTIAL_GREEN","rule":"No payment, allocation or fulfillment obligation is created without an authorized event/relationship.","proof":"tests/node/sw0-05.test.mjs + tests/node/sw0-07b.test.mjs"},
@@ -18,12 +18,12 @@
     {"invariantId":"INV-016","priority":"P0","status":"PARTIAL_GREEN","rule":"Positive expected return cannot justify an action that violates hard liquidity/solvency constraints.","proof":"tests/node/sw0-11.test.mjs"},
     {"invariantId":"INV-017","priority":"P0","status":"PARTIAL_GREEN","rule":"Security interests/restrictions remain visible to any disposition/availability decision.","proof":"tests/node/sw0-11.test.mjs"},
     {"invariantId":"INV-018","priority":"P0","status":"PARTIAL_GREEN","rule":"No unauthorized double pledge or double representation of unencumbered collateral capacity.","proof":"tests/node/sw0-11.test.mjs"},
-    {"invariantId":"INV-019","priority":"P0","status":"PARTIAL_GREEN","rule":"Possession, custody, title, risk, acceptance, settlement and discharge are orthogonal.","proof":"tests/node/sw0-07.test.mjs + tests/node/sw0-08.test.mjs"},
+    {"invariantId":"INV-019","priority":"P0","status":"PARTIAL_GREEN","rule":"Possession, custody, title, risk, acceptance, settlement and discharge are orthogonal.","proof":"tests/node/sw0-07.test.mjs + tests/node/sw0-08.test.mjs + tests/node/sw0-rc2b.test.mjs + packages/transfer/src/index.ts"},
     {"invariantId":"INV-020","priority":"P0","status":"PARTIAL_GREEN","rule":"Only actually conforming performed quantity is discharged.","proof":"tests/node/sw0-07.test.mjs + tests/node/sw0-08.test.mjs"},
     {"invariantId":"INV-021","priority":"P0","status":"PARTIAL_GREEN","rule":"Material substitution preserves original promise, equivalence/consent and economic recomputation.","proof":"tests/node/sw0-08.test.mjs"},
     {"invariantId":"INV-022","priority":"P0","status":"PARTIAL_GREEN","rule":"Returned goods do not re-enter availability without governed quality-state determination.","proof":"tests/node/sw0-11.test.mjs"},
     {"invariantId":"INV-023","priority":"P1","status":"PARTIAL_GREEN","rule":"Observation/assertion/inference/model output remain distinguishable.","proof":"tests/node/sw0-11.test.mjs"},
-    {"invariantId":"INV-024","priority":"P0","status":"PARTIAL_GREEN","rule":"Corrections/reversals/restatements are additive/versioned; history is not silently rewritten.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-09.test.mjs + tests/node/sw0-10.test.mjs"},
+    {"invariantId":"INV-024","priority":"P0","status":"PARTIAL_GREEN","rule":"Corrections/reversals/restatements are additive/versioned; history is not silently rewritten.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-09.test.mjs + tests/node/sw0-10.test.mjs + tests/node/sw0-rc2b.test.mjs + packages/transfer/src/index.ts"},
     {"invariantId":"INV-025","priority":"P1","status":"PARTIAL_GREEN","rule":"Material contradictory evidence is preserved and surfaced until governed resolution.","proof":"tests/node/sw0-11.test.mjs"},
     {"invariantId":"INV-026","priority":"P1","status":"PARTIAL_GREEN","rule":"Material decisions preserve model version, inputs, assumptions and authority envelope.","proof":"tests/node/sw0-11.test.mjs"},
     {"invariantId":"INV-027","priority":"P0","status":"PARTIAL_GREEN","rule":"Retries cannot duplicate economic/physical effect.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-07b.test.mjs + tests/node/sw0-08.test.mjs + tests/node/sw0-12.test.mjs + tests/node/sw0-12b.test.mjs + packages/durability/src/postgres.ts + scripts/test-postgres-durability.sh + tests/node/sw0-rc1b.test.mjs"},
