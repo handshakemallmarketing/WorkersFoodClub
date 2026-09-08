@@ -1,0 +1,1 @@
+Standing workflow: open PR automatically when slice is implementation-complete.
