@@ -1,0 +1,50 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {asId,quantity,money} from '../../dist/packages/kernel/src/index.js';
+import {InMemoryDemandCommitmentLedger} from '../../dist/packages/demand/src/index.js';
+import {InMemoryPilotCartStore,PilotCheckoutService} from '../../dist/packages/pilot-checkout/src/index.js';
+
+const pid=x=>asId(x),oid=x=>asId(x),sid=x=>asId(x),cid=x=>asId(x);
+const member=pid('participant:member');
+const club=pid('participant:food-club');
+const membership=(state='ACTIVE')=>({id:'membership:1',participantId:member,state,establishedAt:'2026-09-08T12:00:00Z',eligibilityPolicyVersion:'founding-worker-v1',eligibilityEvidenceIds:[asId('evidence:employment')]});
+const offer=(id='offer:rice')=>({id:oid(id),offerorId:club,specificationId:sid('spec:rice'),quantity:quantity(5,'kg'),memberPrice:money(45000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'Hospital Pickup A',validFrom:'2026-09-08T12:00:00Z',validUntil:'2026-09-09T12:00:00Z',priceEvidenceIds:[asId('evidence:price')],policyVersions:['member-price-v1']});
+
+function setup(accepted=true){
+ const ledger=new InMemoryDemandCommitmentLedger({isAccepted:async()=>accepted});
+ const carts=new InMemoryPilotCartStore();
+ const checkout=new PilotCheckoutService(carts,ledger);
+ carts.create({id:'cart:1',participantId:member,at:'2026-09-08T12:10:00Z'});
+ carts.setSingleLine({cartId:'cart:1',participantId:member,offer:offer(),quantity:quantity(5,'kg'),at:'2026-09-08T12:11:00Z'});
+ return {ledger,carts,checkout};
+}
+
+test('SW1-03 cart is non-binding and creates no purchase obligation',()=>{
+ const {ledger,carts}=setup();
+ assert.equal(carts.get('cart:1').state,'OPEN');
+ assert.equal(ledger.getCommitment(oid('obligation:1')),undefined);
+});
+
+test('SW1-03 only verified authorized checkout creates the purchase obligation',async()=>{
+ const {ledger,carts,checkout}=setup();
+ const commitment=await checkout.checkout({cartId:'cart:1',participantId:member,membership:membership(),offer:offer(),obligationId:oid('obligation:1'),authorizedCommandId:cid('command:checkout:1'),authorizedEventId:'event:checkout:accepted:1',acceptedAt:'2026-09-08T12:20:00Z',policyVersions:['checkout-v1']});
+ assert.equal(commitment.obligation.state,'OPEN');
+ assert.equal(commitment.obligation.obligor,member);
+ assert.equal(carts.get('cart:1').state,'CHECKED_OUT');
+ assert.equal(ledger.getCommitment(oid('obligation:1')).offerId,oid('offer:rice'));
+});
+
+test('SW1-03 rejected authorization cannot bind the cart or create an obligation',async()=>{
+ const {ledger,carts,checkout}=setup(false);
+ await assert.rejects(()=>checkout.checkout({cartId:'cart:1',participantId:member,membership:membership(),offer:offer(),obligationId:oid('obligation:2'),authorizedCommandId:cid('command:checkout:2'),authorizedEventId:'event:checkout:rejected:2',acceptedAt:'2026-09-08T12:20:00Z',policyVersions:['checkout-v1']}),/AUTHORIZED_COMMITMENT_NOT_VERIFIED/);
+ assert.equal(carts.get('cart:1').state,'OPEN');
+ assert.equal(ledger.getCommitment(oid('obligation:2')),undefined);
+});
+
+test('SW1-03 inactive membership, wrong cart owner, and duplicate checkout fail closed',async()=>{
+ const {carts,checkout}=setup();
+ await assert.rejects(()=>checkout.checkout({cartId:'cart:1',participantId:member,membership:membership('SUSPENDED'),offer:offer(),obligationId:oid('obligation:3'),authorizedCommandId:cid('command:checkout:3'),authorizedEventId:'event:checkout:3',acceptedAt:'2026-09-08T12:20:00Z',policyVersions:['checkout-v1']}),/PURCHASE_REQUIRES_ACTIVE_MEMBERSHIP/);
+ assert.throws(()=>carts.setSingleLine({cartId:'cart:1',participantId:pid('participant:other'),offer:offer(),quantity:quantity(1,'kg'),at:'2026-09-08T12:21:00Z'}),/CART_PARTICIPANT_MISMATCH/);
+ await checkout.checkout({cartId:'cart:1',participantId:member,membership:membership(),offer:offer(),obligationId:oid('obligation:4'),authorizedCommandId:cid('command:checkout:4'),authorizedEventId:'event:checkout:4',acceptedAt:'2026-09-08T12:22:00Z',policyVersions:['checkout-v1']});
+ await assert.rejects(()=>checkout.checkout({cartId:'cart:1',participantId:member,membership:membership(),offer:offer(),obligationId:oid('obligation:5'),authorizedCommandId:cid('command:checkout:5'),authorizedEventId:'event:checkout:5',acceptedAt:'2026-09-08T12:23:00Z',policyVersions:['checkout-v1']}),/CART_NOT_OPEN/);
+});

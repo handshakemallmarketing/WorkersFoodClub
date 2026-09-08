@@ -1,0 +1,17 @@
+{
+  "release":"SW1-03",
+  "baseline":"CB-00-v0.1",
+  "sw0Baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "purpose":"Prove that cart/preorder state remains non-binding and only a verified authorized checkout command can create a purchase obligation.",
+  "implementation":["packages/pilot-checkout/src/index.ts","packages/demand/src/index.ts"],
+  "tests":["tests/node/sw1-03.test.mjs","tests/node/sw0-05.test.mjs","tests/node/sw0-07b.test.mjs"],
+  "invariants":[
+    {"id":"INV-001","status":"PARTIAL_GREEN","proof":"checkout depends on verified accepted command semantics rather than UI/cart state"},
+    {"id":"INV-003","status":"PARTIAL_GREEN","proof":"cart is non-binding and does not silently become committed demand"},
+    {"id":"INV-004","status":"PARTIAL_GREEN","proof":"purchase obligation is created only through verified authorized checkout"},
+    {"id":"INV-027","status":"PARTIAL_GREEN","proof":"completed cart cannot be checked out twice; demand authorization consumption remains one-time"},
+    {"id":"INV-030","status":"PARTIAL_GREEN","proof":"cart state is explicitly non-canonical/non-binding and does not redefine obligation semantics"}
+  ],
+  "productionAuthorization":false,
+  "next":"SW1-04 payment-provider seam, sandbox payment, webhook evidence and reconciliation"
+}
