@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {asId,money,quantity} from '../../dist/packages/kernel/src/index.js';
+import {InMemoryAuthorityStore,AuthorityEvaluator} from '../../dist/packages/authority/src/index.js';
 import {InMemoryDemandCommitmentLedger} from '../../dist/packages/demand/src/index.js';
 import {InMemoryInventoryLedger} from '../../dist/packages/inventory/src/index.js';
 import {InMemoryFulfillmentLedger} from '../../dist/packages/fulfillment/src/index.js';
@@ -11,7 +12,7 @@ import {ExplicitPhysicalLineageLedger} from '../../dist/packages/lineage/src/ind
 import {GovernedTransferEvaluator,GovernedTransferPolicyRegistry} from '../../dist/packages/transfer/src/index.js';
 import {CanonicalRecordLog,RebuildableProjection,fulfillmentProjection,savingsProjection,snapshotDigest,assertFresh} from '../../dist/packages/projections/src/index.js';
 
-const pid=x=>asId(x),sid=x=>asId(x),oid=x=>asId(x),ofid=x=>asId(x),eid=x=>asId(x),cid=x=>asId(x);
+const pid=x=>asId(x),sid=x=>asId(x),oid=x=>asId(x),ofid=x=>asId(x),eid=x=>asId(x),cid=x=>asId(x),gid=x=>asId(x);
 const member={id:'membership:rc2c',participantId:pid('participant:member'),state:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('evidence:eligibility')]};
 const spec=sid('spec:rice-5kg');
 const offer={id:ofid('offer:rc2c'),offerorId:pid('participant:food-club'),specificationId:spec,quantity:quantity(5,'kg'),memberPrice:money(45000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'hospital:korle-bu',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',priceEvidenceIds:[eid('evidence:price')],policyVersions:['pricing:v1']};
@@ -32,8 +33,6 @@ function recordReadyFulfillment(resolution,obligation){
 test('SW0-RC2C canonical vertical slice survives partial fulfillment, remedy, transfer and rebuild',async()=>{
  const demand=new InMemoryDemandCommitmentLedger(verifier);
  const commitment=await demand.commitPurchase({obligationId,participantId:member.participantId,membership:member,offer,quantity:quantity(5,'kg'),authorizedCommandId:cid('command:checkout-rc2c'),authorizedEventId:'event:purchase-accepted-rc2c',acceptedAt:'2026-09-08T04:00:00Z',policyVersions:['checkout:v1']});
- // Purchase and fulfillment are different semantic views. The purchase obligation keeps its original
- // obligor/beneficiary semantics; fulfillment/remedy uses an explicit member-facing service obligation.
  const obligation={id:commitment.obligation.id,participantId:commitment.participantId,beneficiary:commitment.participantId,specificationId:commitment.obligation.specificationId,quantity:commitment.obligation.quantity,state:'OPEN'};
  demand.recordPaymentEvidence({evidenceId:eid('evidence:payment-rc2c'),obligationId,provider:'MTN_MOMO',providerReference:'RC2C-TXN-1',amount:money(45000n,'GHS'),status:'CONFIRMED',observedAt:'2026-09-08T04:01:00Z',recordedAt:'2026-09-08T04:01:02Z'});
  assert.equal(commitment.obligation.state,'OPEN');
@@ -63,8 +62,10 @@ test('SW0-RC2C canonical vertical slice survives partial fulfillment, remedy, tr
  remedies.completeRemedy({id:'completion:rc2c',remedyObligationId:'remedy:rc2c',quantity:quantity(1,'kg'),completedAt:'2026-09-08T04:23:00Z',evidenceIds:[eid('evidence:refund-settled')]});
  assert.equal(remedies.completion(obligation,quantity(4,'kg')).state,'COMPLETED_WITH_REMEDY');
 
- const registry=new GovernedTransferPolicyRegistry();
- registry.ratify({id:'policy:pickup-rc2c',version:1,transactionType:'PILOT_PICKUP',title:{dimension:'TITLE',trigger:'ACCEPTANCE'},risk:{dimension:'RISK',trigger:'HANDOVER'},effectiveFrom:'2026-09-08T04:00:00Z',authorizedBy:pid('participant:board'),authorityGrantId:'grant:transfer',evidenceIds:[eid('evidence:policy-ratification')],status:'RATIFIED'},{participantId:pid('participant:board'),authorityGrantId:'grant:transfer',scope:'TRANSFER_POLICY_GOVERNANCE',validFrom:'2026-09-01T00:00:00Z'});
+ const authorityStore=new InMemoryAuthorityStore();
+ authorityStore.put({id:gid('grant:transfer'),grantorId:pid('participant:founder'),actorId:pid('participant:board'),actions:['RatifyTransferPolicy'],targetPrefix:'policy:',validFrom:'2026-09-01T00:00:00Z'});
+ const registry=new GovernedTransferPolicyRegistry(new AuthorityEvaluator(authorityStore));
+ registry.ratify({id:'policy:pickup-rc2c',version:1,transactionType:'PILOT_PICKUP',title:{dimension:'TITLE',trigger:'ACCEPTANCE'},risk:{dimension:'RISK',trigger:'HANDOVER'},effectiveFrom:'2026-09-08T04:00:00Z',authorizedBy:pid('participant:board'),authorityGrantId:'grant:transfer',evidenceIds:[eid('evidence:policy-ratification')],status:'RATIFIED'});
  const evaluator=new GovernedTransferEvaluator(registry);
  const beforeAcceptance=evaluator.evaluate({transactionId:'tx:rc2c',transactionType:'PILOT_PICKUP',policyId:'policy:pickup-rc2c',policyVersion:1,events:[{id:'handover:rc2c',transactionId:'tx:rc2c',type:'HANDOVER',occurredAt:'2026-09-08T04:15:00Z',evidenceIds:[eid('evidence:handover')]}]});
  assert.equal(beforeAcceptance.riskTransferred,true);assert.equal(beforeAcceptance.titleTransferred,false);
