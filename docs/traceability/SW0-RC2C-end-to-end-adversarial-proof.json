@@ -1,0 +1,42 @@
+{
+  "slice":"SW0-RC2C",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "purpose":"Prove one executable cross-module canonical vertical slice, then attack the seams that historically failed in isolated slices.",
+  "verticalSlice":["Participant/Membership","Governed Offer","Authorized Purchase Obligation","Payment Evidence","Explicit Physical Lineage","Lot Receipt/Quality","Allocation","Pick/Pack/Ready","Pickup Handover","Partial Acceptance","Exception","Refund Remedy","Transaction-Specific Title/Risk Transfer","Governed Benchmark","Final Savings","Projection/Rebuild"],
+  "primaryProof":"tests/node/sw0-rc2c.test.mjs",
+  "constituentAttackProofs":[
+    {"attack":"retry/idempotency","proof":["tests/node/kernel.test.mjs","tests/node/sw0-08.test.mjs","tests/node/sw0-12.test.mjs","tests/node/sw0-12b.test.mjs","tests/node/sw0-rc1b.test.mjs"]},
+    {"attack":"stale authority / revoked execution","proof":["tests/node/kernel.test.mjs","tests/node/sw0-07b.test.mjs","tests/node/sw0-rc2b.test.mjs"]},
+    {"attack":"concurrency/fencing","proof":["tests/node/sw0-12b.test.mjs","tests/node/sw0-rc1a.test.mjs","tests/node/sw0-rc1b.test.mjs","scripts/test-postgres-durability.sh"]},
+    {"attack":"overallocation / quantity conservation","proof":["tests/node/sw0-06.test.mjs","tests/node/sw0-rc2a.test.mjs","tests/node/sw0-rc2c.test.mjs"]},
+    {"attack":"partial fulfillment / overdischarge","proof":["tests/node/sw0-08.test.mjs","tests/node/sw0-11a.test.mjs","tests/node/sw0-rc2c.test.mjs"]},
+    {"attack":"unconsented substitution","proof":["tests/node/sw0-08.test.mjs"]},
+    {"attack":"refund duplication","proof":["tests/node/sw0-08.test.mjs"]},
+    {"attack":"bad benchmark / negative savings","proof":["tests/node/sw0-09.test.mjs"]},
+    {"attack":"contradictory evidence","proof":["tests/node/sw0-11.test.mjs"]},
+    {"attack":"return quality gate","proof":["tests/node/sw0-11.test.mjs"]},
+    {"attack":"lineage conservation","proof":["tests/node/sw0-rc2a.test.mjs","packages/durability/sql/004_physical_lineage.sql","tests/node/sw0-rc2c.test.mjs"]},
+    {"attack":"title-risk orthogonality","proof":["tests/node/sw0-rc2b.test.mjs","tests/node/sw0-rc2c.test.mjs"]},
+    {"attack":"projection staleness/rebuild","proof":["tests/node/sw0-10.test.mjs","tests/node/sw0-rc2c.test.mjs"]}
+  ],
+  "mappings":[
+    {"invariantId":"INV-003","claim":"The end-to-end purchase begins only from an explicitly authorized commitment, not a demand signal."},
+    {"invariantId":"INV-004","claim":"The vertical slice carries the authorized command/event link into the purchase obligation."},
+    {"invariantId":"INV-007","claim":"The allocated member pack is produced by explicit conserved lineage before inventory receipt."},
+    {"invariantId":"INV-008","claim":"The member pack preserves explicit source-lot lineage."},
+    {"invariantId":"INV-009","claim":"Allocation follows evidence-backed accepted quality."},
+    {"invariantId":"INV-019","claim":"Risk transfers at handover while title remains false until the separately governed acceptance trigger."},
+    {"invariantId":"INV-020","claim":"Four kilograms accepted from a five-kilogram obligation remains only partially discharged until the one-kilogram remedy is completed."},
+    {"invariantId":"INV-013","claim":"Final savings are calculated from the governed comparable benchmark and actual economics including the refund."},
+    {"invariantId":"INV-024","claim":"Savings correction is additive and superseding rather than destructive."},
+    {"invariantId":"INV-029","claim":"Projection staleness is detected and deterministic rebuild restores current state."}
+  ],
+  "notClaimed":[
+    "all 30 invariants are fully GREEN in every future product path",
+    "production legal terms have been supplied merely because the transfer-policy mechanism exists",
+    "the in-memory vertical slice substitutes for existing PostgreSQL durability proofs",
+    "SW0 is frozen before independent RC3 falsification review"
+  ],
+  "next":"SW0-RC3 independent exit review; freeze SW0_KERNEL_BASELINE_v1.0 only if RC3 finds no genuine SW0 blocker."
+}
