@@ -1,4 +1,5 @@
-import type {EvidenceId,ParticipantId} from '../../kernel/src/index.js';
+import type {AuthorityGrantId,EvidenceId,ParticipantId} from '../../kernel/src/index.js';
+import type {AuthorityEvaluator} from '../../authority/src/index.js';
 
 export type TransferDimension='TITLE'|'RISK';
 export type TransferTrigger='HANDOVER'|'ACCEPTANCE'|'SETTLEMENT'|'REMEDY_COMPLETION'|'NAMED_EVENT';
@@ -31,6 +32,7 @@ export interface TransactionTransferPolicy {
   readonly status:'RATIFIED';
 }
 
+/** @deprecated Caller-shaped authorization is not an authority source and is ignored by ratification. */
 export interface TransferPolicyAuthorization {
   readonly participantId:ParticipantId;
   readonly authorityGrantId:string;
@@ -73,16 +75,15 @@ function triggerType(rule:TransferRule):string{
 
 export class GovernedTransferPolicyRegistry {
   private readonly versions=new Map<string,Map<number,TransactionTransferPolicy>>();
+  constructor(private readonly authority:Pick<AuthorityEvaluator,'evaluate'>){}
 
-  ratify(policy:TransactionTransferPolicy,authorization:TransferPolicyAuthorization):TransactionTransferPolicy{
+  ratify(policy:TransactionTransferPolicy,_untrustedAuthorization?:TransferPolicyAuthorization):TransactionTransferPolicy{
     if(!policy.id.trim()||policy.version<1||!Number.isInteger(policy.version)||!policy.transactionType.trim()) throw new Error('TRANSFER_POLICY_IDENTITY_INVALID');
     if(policy.status!=='RATIFIED') throw new Error('TRANSFER_POLICY_NOT_RATIFIED');
     if(!validTime(policy.effectiveFrom)||policy.evidenceIds.length===0) throw new Error('TRANSFER_POLICY_EVIDENCE_REQUIRED');
     validateRule(policy.title);validateRule(policy.risk);
-    if(authorization.scope!=='TRANSFER_POLICY_GOVERNANCE'||authorization.participantId!==policy.authorizedBy||authorization.authorityGrantId!==policy.authorityGrantId) throw new Error('TRANSFER_POLICY_UNAUTHORIZED');
-    if(!validTime(authorization.validFrom)||at(policy.effectiveFrom)<at(authorization.validFrom)) throw new Error('TRANSFER_POLICY_AUTHORITY_NOT_EFFECTIVE');
-    if(authorization.validUntil!==undefined&&(!validTime(authorization.validUntil)||at(policy.effectiveFrom)>at(authorization.validUntil))) throw new Error('TRANSFER_POLICY_AUTHORITY_EXPIRED');
-    if(authorization.revokedAt!==undefined&&(!validTime(authorization.revokedAt)||at(policy.effectiveFrom)>=at(authorization.revokedAt))) throw new Error('TRANSFER_POLICY_AUTHORITY_REVOKED');
+    const decision=this.authority.evaluate({actorId:policy.authorizedBy,action:'RatifyTransferPolicy',targetId:policy.id,at:policy.effectiveFrom,grantIds:[policy.authorityGrantId as AuthorityGrantId]});
+    if(!decision.allowed||decision.grantId!==policy.authorityGrantId) throw new Error('TRANSFER_POLICY_UNAUTHORIZED');
     const byVersion=this.versions.get(policy.id)??new Map<number,TransactionTransferPolicy>();
     if(byVersion.has(policy.version)) throw new Error('TRANSFER_POLICY_VERSION_DUPLICATE');
     const prior=[...byVersion.keys()].sort((a,b)=>a-b).at(-1);
