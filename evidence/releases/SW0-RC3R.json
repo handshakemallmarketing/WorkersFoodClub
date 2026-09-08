@@ -1,0 +1,22 @@
+{
+  "release":"SW0-RC3R",
+  "title":"Independent SW0 re-review — GO for bounded kernel baseline freeze",
+  "baseline":"CB-00-v0.1",
+  "reviewedMain":"5939fb6b3b05126484008fc6f695517ee42abd47",
+  "verdict":"GO",
+  "retested":["RC3-B01","RC3-B02","RC1-B01"],
+  "observed":{
+    "tests":"123/123 green",
+    "typecheck":"clean",
+    "conformance":"pass"
+  },
+  "claims":[
+    "same-owner concurrent durable claims no longer produce duplicate CLAIMED grants",
+    "expired-lease takeover remains exclusively fenced with monotonic generation",
+    "transfer-policy ratification cannot be authorized by a fabricated caller-shaped object",
+    "declared-consequential actions remain structurally barred from the legacy handler path",
+    "traceability drift checks remain active"
+  ],
+  "status":"GO_BASELINE_FREEZE_AUTHORIZED",
+  "boundary":"This is authorization to freeze SW0_KERNEL_BASELINE_v1.0 as a bounded kernel baseline only. It is not production authorization. Transaction-specific legal title/risk policy content remains an external governed gate, and the deprecated governance.PhysicalLineageLedger is not production lineage authority."
+}

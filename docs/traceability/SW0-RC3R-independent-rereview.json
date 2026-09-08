@@ -1,0 +1,49 @@
+{
+  "release":"SW0-RC3R",
+  "baseline":"CB-00-v0.1",
+  "reviewedMain":"5939fb6b3b05126484008fc6f695517ee42abd47",
+  "verdict":"GO",
+  "releaseDecision":"AUTHORIZE_SW0_KERNEL_BASELINE_V1_0_FREEZE",
+  "testState":{"kernelTests":123,"kernelPassed":123,"typecheck":"CLEAN","conformance":"PASS"},
+  "retestedBlockers":[
+    {
+      "id":"RC3-B01",
+      "priority":"P0",
+      "mapsTo":["RC1-B02","INV-027","INV-028"],
+      "disposition":"CLOSED_BOUNDED",
+      "basis":[
+        "fresh-key same-owner two-instance reproduction yields exactly one CLAIMED",
+        "five concurrent same-owner instances racing a fresh key yield exactly one CLAIMED and four IN_FLIGHT",
+        "three same-owner instances racing an expired-lease takeover yield exactly one takeover with incremented fence generation",
+        "same instance re-claiming an active claim returns IN_FLIGHT rather than silently re-granting"
+      ],
+      "conclusion":"The prior same-owner concurrent execution hole is no longer reproducible. CLAIMED is granted only by a winning insert or expired-lease takeover; the old same-owner unexpired-lease re-grant branch is absent."
+    },
+    {
+      "id":"RC3-B02",
+      "priority":"P1",
+      "mapsTo":["INV-001","SW0-RC2B"],
+      "disposition":"CLOSED_BOUNDED",
+      "basis":[
+        "wrong action scope rejected",
+        "wrong actor rejected",
+        "wrong target prefix rejected",
+        "not-yet-valid grant rejected",
+        "nonexistent grant rejected",
+        "forged legacy authorization object against an empty authority store rejected",
+        "prefix-scoped grant reuse across policy ids behaves according to intended prefix authority semantics"
+      ],
+      "conclusion":"Transfer-policy ratification now depends on the authority source of truth through AuthorityEvaluator; caller-shaped authorization cannot manufacture authority."
+    }
+  ],
+  "reverifiedSound":[
+    "RC1-B01 consequential-action routing remains structurally enforced at the command-bus boundary: legacy registration for declared-consequential actions is rejected and construction without a transactional executor is rejected.",
+    "RC1-B03 traceability freshness enforcement remains sound; matrix, invariant and release-index drift is detected.",
+    "PostgresDomainCommitter remains fenced transactionally by owner and fence generation before canonical event writes.",
+    "SW0-RC2A explicit per-input/per-output lineage remains the governed bounded lineage implementation; deprecated governance.PhysicalLineageLedger is not promoted as production lineage authority.",
+    "RC1-B04 remains an external governed legal/contract content gate: software proves the transaction-specific title/risk policy mechanism but does not supply Ghana legal terms."
+  ],
+  "scope":"GO authorizes freezing the bounded SW0 kernel baseline, not production launch. All 30 invariants remain PARTIAL_GREEN within explicitly proven scope; no invariant is promoted to full GREEN by this review.",
+  "decision":"Freeze the repository state represented by this reviewed main lineage as SW0_KERNEL_BASELINE_v1.0 after this RC3R review artifact is merged. Then begin SW1 against that frozen kernel, preserving the external production policy gates and bounded-scope disclosures.",
+  "next":"Merge SW0-RC3R review evidence, freeze SW0_KERNEL_BASELINE_v1.0, then begin SW1 product implementation."
+}
