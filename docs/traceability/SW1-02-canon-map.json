@@ -1,0 +1,11 @@
+{
+  "slice":"SW1-02",
+  "terms":{
+    "product":"derived member-facing composition of Specification + CatalogListing + MemberOffer; not a new primitive",
+    "salesWindow":"bounded pilot policy record controlling operational exposure; not committed demand",
+    "memberPrice":"bounded offer term; not universal price truth",
+    "benchmarkDisplay":"presentation of governed comparable valuation; not realized savings",
+    "sku":"listing identifier; not Specification identity",
+    "availability":"not established by this slice; offer/window executability is distinct from physical available-to-promise"
+  }
+}
