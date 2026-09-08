@@ -1,0 +1,10 @@
+{
+  "slice":"SW1-02",
+  "residualRisks":[
+    "SalesWindowRegistry is in-memory reference implementation; durable production policy persistence is not claimed.",
+    "No live web/API endpoint is wired yet; caller identity derivation remains a later application boundary.",
+    "Catalog view does not promise inventory availability; allocation/ATP remains separate.",
+    "Benchmark transparency UX is not yet designed; canonical evidence lineage is preserved server-side.",
+    "Checkout must revalidate all executable conditions rather than trust a previously rendered view."
+  ]
+}
