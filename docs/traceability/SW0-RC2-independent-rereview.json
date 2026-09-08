@@ -1,0 +1,23 @@
+{
+  "release":"SW0-RC2",
+  "baseline":"CB-00-v0.1",
+  "reviewedMain":"7798bae250996025b82b739f06e3f806d556444a",
+  "verdict":"GO_BOUNDED_KERNEL_WITH_PRODUCTION_GATES",
+  "fixtureFrontier":{"total":25,"green":25,"red":0,"source":"canon/fixtures.json"},
+  "invariantFrontier":{"total":30,"partialGreen":30,"fullGreen":0,"source":"canon/invariants.json"},
+  "priorBlockerDisposition":[
+    {"id":"RC1-B01","status":"CLOSED_BOUNDED","basis":"SW0-RC1B makes explicitly classified consequential actions structurally transactional at the application command boundary and bars legacy mutable handler registration for those actions."},
+    {"id":"RC1-B02","status":"CLOSED_BOUNDED","basis":"SW0-RC1A adds monotonic fence_generation, fenced takeover/commit/abandon and fence validation in PostgresDomainCommitter with live PostgreSQL proof."},
+    {"id":"RC1-B03","status":"CLOSED","basis":"SW0-RC1B couples the cumulative matrix to release-index head and indexed release evidence, with mandatory cumulative proof tokens checked by scripts/check-traceability.mjs."},
+    {"id":"RC1-B04","status":"OPEN_PRODUCTION_POLICY_GATE","basis":"Fulfillment still records custody handover and acceptance without transaction-specific title/risk-transfer semantics. OPEN-011 remains intentionally externalized; no universal delivered_at rule is authorized."},
+    {"id":"RC1-B05","status":"OPEN_CONFORMANCE_GATE","basis":"PhysicalLineageLedger still accepts only one input lot per transform and derives equal output capacities from aggregate output quantity; it is not a durable general multi-input/multi-output ancestry model."}
+  ],
+  "verifiedBoundaryFacts":[
+    "PR #23 head 2e980cfbaef50f7423666eeaeec7b84e29a6382d completed constitutional-conformance successfully before merge.",
+    "main is the verified PR #23 merge commit 7798bae250996025b82b739f06e3f806d556444a.",
+    "Consequential routing is structurally enforced only for actions declared consequential in production composition; direct domain-library calls remain available for unit tests and non-production composition.",
+    "No invariant is promoted to full GREEN by this review."
+  ],
+  "decision":"The SW0 bounded kernel has cleared the three engineering blockers that prevented the prior release-candidate re-review and may proceed to the next bounded implementation phase. This is not production authorization. Production transactions remain blocked on governed transaction-specific title/risk policy (RC1-B04). Full provenance conformance remains blocked on durable explicit per-input/per-output lot lineage (RC1-B05).",
+  "next":"SW0-RC2A — durable explicit multi-input/multi-output lot lineage closure for RC1-B05; keep RC1-B04 as a separate governed legal/contract policy gate rather than inventing software semantics."
+}
