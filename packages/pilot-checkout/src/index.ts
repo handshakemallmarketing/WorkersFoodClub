@@ -8,7 +8,6 @@ export interface CartLine {readonly offerId:OfferId;readonly quantity:Quantity;}
 export interface PilotCart {readonly id:string;readonly participantId:ParticipantId;readonly state:CartState;readonly lines:readonly CartLine[];readonly createdAt:string;readonly updatedAt:string;readonly checkoutObligationId?:ObligationId;}
 
 const validTime=(value:string)=>{if(Number.isNaN(Date.parse(value))) throw new Error('CART_TIME_INVALID');};
-const sameQuantity=(a:Quantity,b:Quantity)=>a.unit===b.unit&&a.amount===b.amount;
 
 export class InMemoryPilotCartStore {
  private readonly carts=new Map<string,PilotCart>();
@@ -35,5 +34,4 @@ export class PilotCheckoutService {
   const commitment=await this.commitments.commitPurchase({obligationId:input.obligationId,participantId:input.participantId,membership:input.membership,offer:input.offer,quantity:line.quantity,authorizedCommandId:input.authorizedCommandId,authorizedEventId:input.authorizedEventId,acceptedAt:input.acceptedAt,policyVersions:input.policyVersions});
   this.carts.markCheckedOut({cartId:input.cartId,participantId:input.participantId,obligationId:input.obligationId,at:input.acceptedAt});return commitment;
  }
- assertCartStillMatchesOffer(input:{cartId:string;participantId:ParticipantId;offer:MemberOffer}){const cart=this.carts.get(input.cartId);if(!cart||cart.participantId!==input.participantId||cart.state!=='OPEN'||cart.lines.length!==1) throw new Error('CART_NOT_CHECKOUT_READY');const line=cart.lines[0]!;if(line.offerId!==input.offer.id||!sameQuantity(line.quantity,line.quantity)) throw new Error('CART_OFFER_MISMATCH');return true;}
 }
