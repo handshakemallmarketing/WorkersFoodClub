@@ -1,0 +1,1 @@
+{"slice":"SW1-02","status":"READY_FOR_PR","newPackage":"@foodclub/sales","primaryProof":"tests/node/sw1-02.test.mjs","traceabilityHead":"SW1-02","productionAuthorization":false,"next":"SW1-03"}
