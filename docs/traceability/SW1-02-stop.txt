@@ -1,0 +1,1 @@
+STOP: SW1-02 boundary reached. Checkout belongs to SW1-03.
