@@ -1,0 +1,13 @@
+{
+  "release":"SW0-RC2",
+  "title":"Post-RC1B bounded-kernel release re-review",
+  "reviewedMain":"7798bae250996025b82b739f06e3f806d556444a",
+  "verdict":"GO_BOUNDED_KERNEL_WITH_PRODUCTION_GATES",
+  "closedPriorBlockers":["RC1-B01","RC1-B02","RC1-B03"],
+  "openGates":["RC1-B04 transaction-specific title/risk production policy","RC1-B05 durable explicit per-input/per-output lot lineage"],
+  "fixtureStatus":"25/25 GREEN",
+  "invariantStatus":"30/30 PARTIAL_GREEN; 0 full GREEN",
+  "notAuthorized":["production transaction launch","full provenance conformance","promotion of any invariant to full GREEN","universal title/risk transfer rule"],
+  "review":"docs/traceability/SW0-RC2-independent-rereview.json",
+  "next":"SW0-RC2A"
+}
