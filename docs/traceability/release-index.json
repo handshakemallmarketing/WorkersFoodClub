@@ -1,6 +1,6 @@
 {
   "baseline":"CB-00-v0.1",
-  "head":"SW1-01",
+  "head":"SW1-02",
   "evidenceFiles":[
     "SW0-01A-v0.0.1.json",
     "SW0-02.json",
@@ -32,7 +32,8 @@
     "SW0-RC3A.json",
     "SW0-RC3R.json",
     "SW1-00.json",
-    "SW1-01.json"
+    "SW1-01.json",
+    "SW1-02.json"
   ],
   "requiredCumulativeProofs":{
     "INV-001":["tests/node/kernel.test.mjs","tests/node/sw0-rc2b.test.mjs","packages/transfer/src/index.ts","docs/traceability/SW0-RC3R-independent-rereview.json","packages/identity/src/index.ts","tests/node/sw1-01.test.mjs"],
