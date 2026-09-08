@@ -1,6 +1,6 @@
 {
   "baseline":"CB-00-v0.1",
-  "head":"SW1-03",
+  "head":"SW1-04",
   "evidenceFiles":[
     "SW0-01A-v0.0.1.json",
     "SW0-02.json",
@@ -34,22 +34,23 @@
     "SW1-00.json",
     "SW1-01.json",
     "SW1-02.json",
-    "SW1-03.json"
+    "SW1-03.json",
+    "SW1-04.json"
   ],
   "requiredCumulativeProofs":{
     "INV-001":["tests/node/kernel.test.mjs","tests/node/sw0-rc2b.test.mjs","packages/transfer/src/index.ts","docs/traceability/SW0-RC3R-independent-rereview.json","packages/identity/src/index.ts","tests/node/sw1-01.test.mjs","packages/pilot-checkout/src/index.ts","tests/node/sw1-03.test.mjs"],
     "INV-003":["tests/node/sw0-05.test.mjs","tests/node/sw0-rc2c.test.mjs","packages/pilot-checkout/src/index.ts","tests/node/sw1-03.test.mjs"],
-    "INV-004":["tests/node/sw0-05.test.mjs","tests/node/sw0-07b.test.mjs","tests/node/sw0-rc2c.test.mjs","packages/pilot-checkout/src/index.ts","tests/node/sw1-03.test.mjs"],
+    "INV-004":["tests/node/sw0-05.test.mjs","tests/node/sw0-07b.test.mjs","tests/node/sw0-rc2c.test.mjs","packages/pilot-checkout/src/index.ts","tests/node/sw1-03.test.mjs","packages/pilot-payments/src/index.ts","tests/node/sw1-04.test.mjs"],
     "INV-007":["tests/node/sw0-rc2a.test.mjs","packages/durability/sql/004_physical_lineage.sql","scripts/test-postgres-durability.sh","tests/node/sw0-rc2c.test.mjs"],
     "INV-008":["tests/node/sw0-rc2a.test.mjs","packages/durability/sql/004_physical_lineage.sql","scripts/test-postgres-durability.sh","tests/node/sw0-rc2c.test.mjs"],
     "INV-009":["tests/node/sw0-06.test.mjs","tests/node/sw0-10.test.mjs","tests/node/sw0-rc2c.test.mjs"],
     "INV-013":["tests/node/sw0-09.test.mjs","tests/node/sw0-rc2c.test.mjs"],
     "INV-019":["tests/node/sw0-rc2b.test.mjs","packages/transfer/src/index.ts","tests/node/sw0-rc2c.test.mjs"],
     "INV-020":["tests/node/sw0-07.test.mjs","tests/node/sw0-08.test.mjs","tests/node/sw0-rc2c.test.mjs"],
-    "INV-024":["tests/node/sw0-rc2b.test.mjs","packages/transfer/src/index.ts","tests/node/sw0-09.test.mjs","tests/node/sw0-10.test.mjs","tests/node/sw0-rc2c.test.mjs"],
-    "INV-027":["tests/node/sw0-rc1b.test.mjs","tests/node/sw0-12b.test.mjs","packages/durability/src/postgres.ts","scripts/test-postgres-durability.sh","docs/traceability/SW0-RC3R-independent-rereview.json","packages/pilot-checkout/src/index.ts","tests/node/sw1-03.test.mjs"],
-    "INV-028":["tests/node/sw0-rc1b.test.mjs","tests/node/sw0-12b.test.mjs","packages/durability/src/postgres.ts","scripts/test-postgres-durability.sh","docs/traceability/SW0-RC3R-independent-rereview.json"],
+    "INV-024":["tests/node/sw0-rc2b.test.mjs","packages/transfer/src/index.ts","tests/node/sw0-09.test.mjs","tests/node/sw0-10.test.mjs","tests/node/sw0-rc2c.test.mjs","packages/pilot-payments/src/index.ts","tests/node/sw1-04.test.mjs"],
+    "INV-027":["tests/node/sw0-rc1b.test.mjs","tests/node/sw0-12b.test.mjs","packages/durability/src/postgres.ts","scripts/test-postgres-durability.sh","docs/traceability/SW0-RC3R-independent-rereview.json","packages/pilot-checkout/src/index.ts","tests/node/sw1-03.test.mjs","packages/pilot-payments/src/index.ts","tests/node/sw1-04.test.mjs"],
+    "INV-028":["tests/node/sw0-rc1b.test.mjs","tests/node/sw0-12b.test.mjs","packages/durability/src/postgres.ts","scripts/test-postgres-durability.sh","docs/traceability/SW0-RC3R-independent-rereview.json","packages/pilot-payments/src/index.ts","tests/node/sw1-04.test.mjs"],
     "INV-029":["tests/node/sw0-10.test.mjs","tests/node/sw0-rc2c.test.mjs"],
-    "INV-030":["scripts/check-traceability.mjs","docs/traceability/release-index.json","docs/traceability/SW1-03-cart-preorder-checkout.json"]
+    "INV-030":["scripts/check-traceability.mjs","docs/traceability/release-index.json","docs/traceability/SW1-03-cart-preorder-checkout.json","docs/traceability/SW1-04-sandbox-payments.json"]
   }
 }
