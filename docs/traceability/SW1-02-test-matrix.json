@@ -1,0 +1,1 @@
+{"slice":"SW1-02","cases":[{"case":"authorized open-window comparable catalog view","expected":"PASS"},{"case":"no canonical window authority","expected":"REJECT"},{"case":"window closed while offer valid","expected":"REJECT"},{"case":"unknown/non-comparable benchmark","expected":"REJECT"}],"cumulativeSuiteRequired":true}
