@@ -1,0 +1,3 @@
+# SW0-RC2B review notes
+
+RC2B implements the executable title/risk policy boundary required by RC1-B04. It does not supply or infer production legal terms. Review should falsify the following claims: (1) a transaction cannot evaluate title/risk without an exact ratified policy version, (2) title and risk remain orthogonal, (3) handover/payment/acceptance/settlement/delivered-like fields have no implicit transfer semantics, (4) policy ratification is authority-bounded and versioned, and (5) test fixture policy content cannot be mistaken for production policy. RC3 must separately determine whether OPEN-011 production policy content is sufficiently ratified for pilot GO.
