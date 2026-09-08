@@ -1,0 +1,17 @@
+{
+  "release":"SW1-02",
+  "title":"Governed catalog, member offers, benchmark display and sales windows",
+  "baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "previous":"SW1-01",
+  "claims":[
+    "Sales-window configuration requires canonical authority, not UI/admin access.",
+    "Member catalog views require an active listing, executable bounded offer and open governed sales window.",
+    "Displayed benchmark values retain governed benchmark version and evidence lineage and must be comparable to the offered specification, quantity and place.",
+    "Underlying offer validity does not silently override a closed sales window."
+  ],
+  "proof":["packages/sales/src/index.ts","tests/node/sw1-02.test.mjs","packages/catalog/src/index.ts","packages/economics/src/index.ts"],
+  "invariantsStrengthened":["INV-001","INV-002","INV-013","INV-015","INV-030"],
+  "invariantPromotion":false,
+  "productionAuthorization":false,
+  "next":"SW1-03 preorder/checkout and durable purchase-obligation creation"
+}
