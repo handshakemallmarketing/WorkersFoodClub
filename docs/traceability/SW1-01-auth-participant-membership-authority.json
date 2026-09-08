@@ -1,0 +1,32 @@
+{
+  "release":"SW1-01",
+  "title":"Authentication, Participant Binding, Membership Verification and Operator Authority",
+  "baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "productEntry":"SW1-00",
+  "scope":[
+    "external authenticated identity remains distinct from canonical Participant identity",
+    "provider identity may bind to a Participant only through explicit authorized action",
+    "membership verification requires real delegated authority",
+    "active member access requires both authenticated binding and active membership",
+    "provider evidence mismatch fails closed"
+  ],
+  "invariants":{
+    "INV-001":"PARTIAL_GREEN strengthened at SW1 product boundary: UI/auth-provider access is not authority; identity.bind and membership.verify require AuthorityEvaluator approval.",
+    "INV-002":"No promotion. External provider principal/evidence remains typed input and cannot outrank canonical Participant or membership records.",
+    "INV-030":"No promotion. Authentication subject is explicitly prevented from silently becoming Participant identity by implementation convention."
+  },
+  "proof":[
+    "packages/identity/src/index.ts",
+    "tests/node/sw1-01.test.mjs"
+  ],
+  "negativePaths":[
+    "unbound authenticated principal rejected",
+    "missing authority rejected",
+    "duplicate provider identity rebinding rejected",
+    "revoked membership-verification grant rejected",
+    "suspended membership rejected",
+    "provider evidence mismatch rejected"
+  ],
+  "productionAuthorization":false,
+  "next":"SW1-02 governed catalog, offers, benchmark display and sales-window configuration"
+}
