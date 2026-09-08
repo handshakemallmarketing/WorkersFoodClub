@@ -1,6 +1,6 @@
 {
-  "baseline":"CB-00-v0.1","softwarePlan":"SW0-01-v0.1","slice":"SW1-00","mappings":[
-    {"invariantId":"INV-001","priority":"P0","status":"PARTIAL_GREEN","rule":"No consequential action is authorized merely by UI access, job title or model recommendation.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-rc2b.test.mjs + packages/transfer/src/index.ts + docs/traceability/SW0-RC3R-independent-rereview.json"},
+  "baseline":"CB-00-v0.1","softwarePlan":"SW0-01-v0.1","slice":"SW1-01","mappings":[
+    {"invariantId":"INV-001","priority":"P0","status":"PARTIAL_GREEN","rule":"No consequential action is authorized merely by UI access, job title or model recommendation.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-rc2b.test.mjs + packages/transfer/src/index.ts + docs/traceability/SW0-RC3R-independent-rereview.json + packages/identity/src/index.ts + tests/node/sw1-01.test.mjs"},
     {"invariantId":"INV-002","priority":"P1","status":"PARTIAL_GREEN","rule":"Database/projection state does not outrank lawful reality or qualifying evidence.","proof":"tests/node/sw0-04.test.mjs + tests/node/sw0-10.test.mjs"},
     {"invariantId":"INV-003","priority":"P0","status":"PARTIAL_GREEN","rule":"Forecast, interest and history cannot silently become committed demand.","proof":"tests/node/sw0-05.test.mjs + tests/node/sw0-rc2c.test.mjs"},
     {"invariantId":"INV-004","priority":"P0","status":"PARTIAL_GREEN","rule":"No payment, allocation or fulfillment obligation is created without an authorized event/relationship.","proof":"tests/node/sw0-05.test.mjs + tests/node/sw0-07b.test.mjs + tests/node/sw0-rc2c.test.mjs"},
