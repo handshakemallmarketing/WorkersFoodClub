@@ -1,0 +1,15 @@
+{
+  "slice":"SW0-RC2B",
+  "exitCriteria":[
+    "missing or wrong transfer policy version is rejected",
+    "policy ratification requires effective non-revoked transfer-policy governance authority",
+    "title and risk are independently evaluated",
+    "handover/payment/acceptance/settlement/delivered-like timestamps have no implicit transfer semantics",
+    "named-event policies are supported",
+    "policy versions are immutable and sequential",
+    "transfer-triggering events require evidence",
+    "cumulative traceability head and proofs are refreshed",
+    "full repository conformance suite passes"
+  ],
+  "productionCaveat":"The executable mechanism does not substitute for externally ratified Ghana legal/contract policy content under OPEN-011. Production GO still requires a ratified policy for each production transaction type and RC3 review."
+}
