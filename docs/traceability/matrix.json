@@ -1,5 +1,5 @@
 {
-  "baseline":"CB-00-v0.1","softwarePlan":"SW0-01-v0.1","slice":"SW0-11","mappings":[
+  "baseline":"CB-00-v0.1","softwarePlan":"SW0-01-v0.1","slice":"SW0-RC1B","mappings":[
     {"invariantId":"INV-001","priority":"P0","status":"PARTIAL_GREEN","rule":"No consequential action is authorized merely by UI access, job title or model recommendation.","proof":"tests/node/kernel.test.mjs"},
     {"invariantId":"INV-002","priority":"P1","status":"PARTIAL_GREEN","rule":"Database/projection state does not outrank lawful reality or qualifying evidence.","proof":"tests/node/sw0-04.test.mjs + tests/node/sw0-10.test.mjs"},
     {"invariantId":"INV-003","priority":"P0","status":"PARTIAL_GREEN","rule":"Forecast, interest and history cannot silently become committed demand.","proof":"tests/node/sw0-05.test.mjs"},
@@ -26,9 +26,9 @@
     {"invariantId":"INV-024","priority":"P0","status":"PARTIAL_GREEN","rule":"Corrections/reversals/restatements are additive/versioned; history is not silently rewritten.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-09.test.mjs + tests/node/sw0-10.test.mjs"},
     {"invariantId":"INV-025","priority":"P1","status":"PARTIAL_GREEN","rule":"Material contradictory evidence is preserved and surfaced until governed resolution.","proof":"tests/node/sw0-11.test.mjs"},
     {"invariantId":"INV-026","priority":"P1","status":"PARTIAL_GREEN","rule":"Material decisions preserve model version, inputs, assumptions and authority envelope.","proof":"tests/node/sw0-11.test.mjs"},
-    {"invariantId":"INV-027","priority":"P0","status":"PARTIAL_GREEN","rule":"Retries cannot duplicate economic/physical effect.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-07b.test.mjs + tests/node/sw0-08.test.mjs"},
-    {"invariantId":"INV-028","priority":"P0","status":"PARTIAL_GREEN","rule":"Stale concurrent commands cannot silently violate allocation, quantity, authority or exposure limits.","proof":"tests/node/kernel.test.mjs"},
+    {"invariantId":"INV-027","priority":"P0","status":"PARTIAL_GREEN","rule":"Retries cannot duplicate economic/physical effect.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-07b.test.mjs + tests/node/sw0-08.test.mjs + tests/node/sw0-12.test.mjs + tests/node/sw0-12b.test.mjs + packages/durability/src/postgres.ts + scripts/test-postgres-durability.sh + tests/node/sw0-rc1b.test.mjs"},
+    {"invariantId":"INV-028","priority":"P0","status":"PARTIAL_GREEN","rule":"Stale concurrent commands cannot silently violate allocation, quantity, authority or exposure limits.","proof":"tests/node/kernel.test.mjs + tests/node/sw0-12b.test.mjs + packages/durability/src/postgres.ts + scripts/test-postgres-durability.sh + tests/node/sw0-rc1b.test.mjs"},
     {"invariantId":"INV-029","priority":"P1","status":"PARTIAL_GREEN","rule":"Read-model failure/staleness cannot corrupt canonical history; material views disclose freshness/lineage.","proof":"tests/node/sw0-10.test.mjs"},
-    {"invariantId":"INV-030","priority":"P0","status":"PARTIAL_GREEN","rule":"Implementation cannot amend canon by schema, default, status field or repeated practice.","proof":"scripts/check-canon.mjs + scripts/check-traceability.mjs"}
+    {"invariantId":"INV-030","priority":"P0","status":"PARTIAL_GREEN","rule":"Implementation cannot amend canon by schema, default, status field or repeated practice.","proof":"scripts/check-canon.mjs + scripts/check-traceability.mjs + docs/traceability/release-index.json"}
   ],"rule":"Every P0/P1 invariant must map canon -> contract -> code -> test -> evidence before GO."
 }
