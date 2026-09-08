@@ -1,0 +1,11 @@
+{
+  "release":"SW0-RC1B",
+  "title":"Consequential transactional routing and cumulative traceability freshness",
+  "status":"PARTIAL_GREEN",
+  "closedBlockers":["RC1-B01","RC1-B03"],
+  "affectedInvariants":["INV-027","INV-028","INV-030"],
+  "delivered":["transactional-only routing for explicitly classified consequential commands","legacy mutable handler registration blocked for consequential actions","legacy in-memory idempotency/version path bypassed for consequential execution","release-evidence index and cumulative matrix freshness enforcement"],
+  "remainingRC1Blockers":["RC1-B04 production title/risk policy gate","RC1-B05 durable general lineage"],
+  "notAuthorized":["full GREEN for INV-027/028/030","production-complete SW0","universal title/risk rule"],
+  "traceability":"docs/traceability/SW0-RC1B-transactional-routing-and-freshness.json"
+}
