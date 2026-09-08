@@ -1,0 +1,33 @@
+{
+  "baseline":"CB-00-v0.1",
+  "head":"SW0-RC1B",
+  "evidenceFiles":[
+    "SW0-01A-v0.0.1.json",
+    "SW0-02.json",
+    "SW0-03.json",
+    "SW0-04.json",
+    "SW0-05.json",
+    "SW0-06.json",
+    "SW0-07.json",
+    "SW0-07A.json",
+    "SW0-07B.json",
+    "SW0-08.json",
+    "SW0-09.json",
+    "SW0-10.json",
+    "SW0-11.json",
+    "SW0-11A.json",
+    "SW0-12.json",
+    "SW0-12B.json",
+    "SW0-12C.json",
+    "SW0-12D.json",
+    "SW0-12E.json",
+    "SW0-RC1.json",
+    "SW0-RC1A.json",
+    "SW0-RC1B.json"
+  ],
+  "requiredCumulativeProofs":{
+    "INV-027":["tests/node/sw0-rc1b.test.mjs","packages/durability/src/postgres.ts","scripts/test-postgres-durability.sh"],
+    "INV-028":["tests/node/sw0-rc1b.test.mjs","packages/durability/src/postgres.ts","scripts/test-postgres-durability.sh"],
+    "INV-030":["scripts/check-traceability.mjs","docs/traceability/release-index.json"]
+  }
+}
