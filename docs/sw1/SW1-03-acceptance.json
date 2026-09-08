@@ -1,0 +1,1 @@
+{"slice":"SW1-03","commandContract":"accepted command/event required to create purchase obligation","negativePaths":["inactive membership","non-executable offer","quantity outside offer","unverified accepted command","repeat checkout"],"externalSideEffects":[],"productionReady":false}
