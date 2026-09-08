@@ -1,0 +1,23 @@
+{
+  "release":"SW0-RC2B",
+  "title":"Governed transaction-specific title and risk transfer policy boundary",
+  "status":"PARTIAL_GREEN",
+  "addressesBlockers":["RC1-B04"],
+  "affectedInvariants":["INV-001","INV-019","INV-024"],
+  "delivered":[
+    "ratified versioned transaction transfer policy",
+    "independent title and risk trigger rules",
+    "explicit named-event support without universal delivered_at semantics",
+    "authority validity and revocation checks for policy ratification",
+    "event evidence requirements",
+    "immutable sequential policy versions",
+    "adversarial proof that title and risk can transfer at different events"
+  ],
+  "remainingReleaseCondition":["OPEN-011 production legal/policy content must be externally ratified for each production transaction type and independently reviewed before production GO"],
+  "notAuthorized":[
+    "universal title/risk transfer semantics",
+    "production launch based solely on the conformance fixture policy",
+    "full GREEN for INV-019 or INV-024"
+  ],
+  "traceability":"docs/traceability/SW0-RC2B-title-risk-policy.json"
+}
