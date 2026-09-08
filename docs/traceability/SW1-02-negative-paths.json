@@ -1,0 +1,9 @@
+{
+  "slice":"SW1-02",
+  "negativePaths":[
+    {"id":"SW1-02-N01","attack":"configure sales window with UI/admin status but no canonical authority","expected":"SALES_WINDOW_UNAUTHORIZED"},
+    {"id":"SW1-02-N02","attack":"render offer after sales window closes while offer itself remains valid","expected":"SALES_WINDOW_CLOSED"},
+    {"id":"SW1-02-N03","attack":"render listing and offer with different canonical specification identity","expected":"LISTING_OFFER_SPEC_MISMATCH"},
+    {"id":"SW1-02-N04","attack":"render unknown or non-comparable benchmark valuation as member savings context","expected":"BENCHMARK_VALUATION_UNKNOWN or BENCHMARK_DISPLAY_NOT_COMPARABLE"}
+  ]
+}
