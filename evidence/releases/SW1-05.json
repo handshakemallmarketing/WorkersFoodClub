@@ -1,0 +1,9 @@
+{
+  "release":"SW1-05",
+  "status":"BOUNDED_GREEN",
+  "scope":"Pilot inventory receiving, explicit lineage, quality and allocation operator workflow",
+  "evidence":["packages/pilot-inventory/src/index.ts","tests/node/sw1-05.test.mjs","docs/traceability/SW1-05-inventory-operations.json"],
+  "productionAuthorization":false,
+  "invariantStatusPromotion":false,
+  "next":"SW1-06"
+}
