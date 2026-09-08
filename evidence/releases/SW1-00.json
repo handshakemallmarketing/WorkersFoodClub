@@ -1,0 +1,31 @@
+{
+  "release": "SW1-00",
+  "title": "Pilot Product Boundary, Architecture and Acceptance Contract",
+  "sw0Baseline": "SW0_KERNEL_BASELINE_v1.0",
+  "baselineMerge": "f0229cf5a63b6c372696be83d90c01b989f22afe",
+  "purpose": "Authorize bounded SW1 product implementation while preserving the SW0 constitutional kernel and keeping production launch separately gated.",
+  "firstVerticalSlice": "verified member -> governed rice offer -> 5kg preorder -> sandbox prepayment -> traceable lot allocation -> pickup -> deliberate 1kg shortfall -> authorized refund remedy -> valid discharge -> governed signed savings",
+  "explicitExclusions": [
+    "CAGD payroll deduction as a binding SW1 launch payment rail",
+    "credit/lending/BNPL",
+    "unclassified stored-value wallet products",
+    "insurance/guarantee/deposit-taking representations",
+    "autonomous AI consequential authority",
+    "software-invented Ghana-law title/risk rules",
+    "direct production writes bypassing the SW0 consequential transaction boundary"
+  ],
+  "acceptance": [
+    "canon mapping",
+    "typed command and authority contract",
+    "durable transaction boundary",
+    "typed attributable evidence",
+    "rebuildable projections",
+    "negative-path proof",
+    "adversarial executable test",
+    "cumulative traceability",
+    "external-side-effect recovery semantics",
+    "no canon drift"
+  ],
+  "productionAuthorization": false,
+  "next": "SW1-01 authentication, Participant binding, membership verification and operator authority"
+}
