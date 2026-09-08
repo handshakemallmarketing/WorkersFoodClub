@@ -1,0 +1,1 @@
+{"slice":"SW1-02","implementation":["packages/sales/src/index.ts"],"tests":["tests/node/sw1-02.test.mjs"],"canonicalDependencies":["packages/catalog/src/index.ts","packages/economics/src/index.ts","packages/authority/src/index.ts"],"evidence":"evidence/releases/SW1-02.json"}
