@@ -10,7 +10,7 @@ class MemoryPgDb {
   if(q.startsWith('BEGIN')||q==='COMMIT'||q==='ROLLBACK') return {rows:[],rowCount:0};
   if(q.startsWith('INSERT INTO durable_command_execution')){
    const [key,commandId,owner,lease,now]=params;
-   if(!this.rows.has(key)) this.rows.set(key,{idempotency_key:key,command_id:commandId,state:'IN_FLIGHT',owner_token:owner,lease_until:lease,fence_generation:1,result_json:null,created_at:now,updated_at:now});
+   if(!this.rows.has(key)){const row={idempotency_key:key,command_id:commandId,state:'IN_FLIGHT',owner_token:owner,lease_until:lease,fence_generation:1,result_json:null,created_at:now,updated_at:now};this.rows.set(key,row);return {rows:[structuredClone(row)],rowCount:1};}
    return {rows:[],rowCount:0};
   }
   if(q.startsWith('SELECT idempotency_key')){
@@ -50,6 +50,17 @@ test('INV-027 PostgreSQL adapter gives one active lease owner and replays commit
  assert.deepEqual(await a.commit('idem:1','cmd:1',result),result);
  const replay=await b.claim('idem:1','cmd:1');
  assert.equal(replay.status,'ACCEPTED');assert.equal(replay.replayed,true);assert.deepEqual(replay.eventIds,['event:purchase']);
+});
+
+test('RC3-B01 same-owner concurrent claimants cannot both execute under one active lease',async()=>{
+ const db=new MemoryPgDb();
+ const a=new PostgresDurableCommandStore(db.pool(),'worker:shared',30000,at('2026-09-07T14:00:00Z'));
+ const b=new PostgresDurableCommandStore(db.pool(),'worker:shared',30000,at('2026-09-07T14:00:01Z'));
+ const first=await a.claimFenced('idem:same-owner','cmd:same-owner');
+ assert.equal(first.state,'CLAIMED');assert.equal(first.fenceGeneration,1);
+ assert.equal(await b.claimFenced('idem:same-owner','cmd:same-owner'),'IN_FLIGHT');
+ assert.deepEqual(await a.commitFenced('idem:same-owner','cmd:same-owner',first.fenceGeneration,result),result);
+ const replay=await b.claimFenced('idem:same-owner','cmd:same-owner');assert.equal(replay.replayed,true);
 });
 
 test('crashed worker lease expires and a new worker can take ownership',async()=>{
