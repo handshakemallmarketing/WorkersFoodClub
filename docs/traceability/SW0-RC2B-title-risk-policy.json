@@ -1,0 +1,19 @@
+{
+  "slice":"SW0-RC2B",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "addresses":["RC1-B04"],
+  "mappings":[
+    {"invariantId":"INV-019","proof":"packages/transfer/src/index.ts + tests/node/sw0-rc2b.test.mjs","claim":"title and risk are evaluated independently from a ratified, versioned, transaction-specific policy; handover, acceptance, settlement and arbitrary delivered-like events cannot imply transfer unless the governed rule explicitly names them"},
+    {"invariantId":"INV-024","proof":"packages/transfer/src/index.ts + tests/node/sw0-rc2b.test.mjs","claim":"transfer policy versions are immutable and sequential; older policy meaning remains retrievable after a new version is ratified"},
+    {"invariantId":"INV-001","proof":"packages/transfer/src/index.ts + tests/node/sw0-rc2b.test.mjs","claim":"a transfer policy cannot be ratified without explicit TRANSFER_POLICY_GOVERNANCE authority that is effective and not revoked"}
+  ],
+  "boundary":"RC2B supplies the executable governance mechanism required by RC1-B04. It intentionally does not invent Ghana legal terms or a universal transfer event. A production transaction type must be bound to an externally ratified policy version before transfer can be evaluated.",
+  "notClaimed":[
+    "a universal delivered_at title or risk rule",
+    "that handover, payment, settlement, acceptance or discharge are equivalent",
+    "that OPEN-011 legal/policy content has been supplied for every production transaction type",
+    "full GREEN for INV-019 or INV-024 across every future transfer policy"
+  ],
+  "exitCondition":"Independent RC3 review must verify whether the executable policy mechanism plus externally ratified production policy content is sufficient to close RC1-B04 for the pilot."
+}
