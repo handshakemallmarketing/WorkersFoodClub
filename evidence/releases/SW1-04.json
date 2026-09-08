@@ -1,0 +1,10 @@
+{
+  "release":"SW1-04",
+  "title":"Sandbox payment provider seam, webhook evidence and reconciliation",
+  "baseMerge":"aee9d8691a373f5db974bbbae0081237e4d3caf4",
+  "proof":["packages/pilot-payments/src/index.ts","tests/node/sw1-04.test.mjs","docs/traceability/SW1-04-sandbox-payments.json"],
+  "boundedClaims":["idempotent sandbox payment intent","verified webhook boundary","amount mismatch rejection","restricted member prepayment treatment","provider-reference duplicate protection"],
+  "productionAuthorization":false,
+  "liveFundsAuthorization":false,
+  "next":"SW1-05 inventory receiving, explicit lineage, quality and allocation operator workflow"
+}
