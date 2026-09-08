@@ -1,0 +1,21 @@
+{
+  "release":"SW1-02",
+  "title":"Governed catalog, offers, benchmark display and sales-window configuration",
+  "baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "mapsTo":["INV-001","INV-002","INV-013","INV-015","INV-024","INV-030"],
+  "proofs":[
+    "packages/pilot-catalog/src/index.ts",
+    "tests/node/sw1-02.test.mjs",
+    "packages/catalog/src/index.ts",
+    "packages/authority/src/index.ts"
+  ],
+  "claims":[
+    "catalog publication is authority-gated",
+    "sales windows bound offer time and pickup place",
+    "displayed benchmark reference preserves price-evidence lineage and is explicitly not final savings",
+    "offers cannot silently detach from displayed benchmark evidence"
+  ],
+  "status":"PARTIAL_GREEN",
+  "productionAuthorization":false,
+  "next":"SW1-03 cart/preorder and authorized checkout commitment"
+}
