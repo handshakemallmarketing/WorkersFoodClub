@@ -1,0 +1,42 @@
+{
+  "release":"SW0-RC3",
+  "baseline":"CB-00-v0.1",
+  "reviewedMain":"8a54789695509c0b85be03979c8d2a90f14e398d",
+  "verdict":"NO_GO",
+  "releaseDecision":"DO_NOT_FREEZE_SW0_KERNEL_BASELINE_V1_0",
+  "testState":{"kernelTests":121,"kernelPassed":121,"typecheck":"CLEAN","note":"Passing suite is accepted as observed evidence but does not override falsified release claims."},
+  "blockers":[
+    {
+      "id":"RC3-B01",
+      "priority":"P0",
+      "mapsTo":["RC1-B02","INV-027","INV-028"],
+      "title":"Same-owner concurrent durable claimants can both receive CLAIMED with the same fence generation",
+      "finding":"The PostgreSQL claim path increments fence_generation on lease-expiry takeover but not on every successful claim grant. Two distinct processes sharing the same ownerToken can each hold an empty in-process activeFences map and both receive CLAIMED for the same idempotency key/command with the same durable fence generation while the lease remains active.",
+      "impact":"Two domain executions can run concurrently while each believes it owns the same command effect. This can duplicate consequential side effects before one eventual durable commit loses.",
+      "requiredFix":"Issue a fresh database-backed unique fencing generation or claim identity on every successful CLAIMED grant, and add a live PostgreSQL adversarial test with two independent claimants sharing one owner token. The fix must prove only one claimant can execute for a given command effect at a time.",
+      "disposition":"OPEN_RELEASE_BLOCKER"
+    },
+    {
+      "id":"RC3-B02",
+      "priority":"P1",
+      "mapsTo":["INV-001","SW0-RC2B"],
+      "title":"Transfer-policy ratification trusts caller-shaped authorization instead of the authority source of truth",
+      "finding":"GovernedTransferPolicyRegistry.ratify validates a supplied TransferPolicyAuthorization object for internal consistency but does not verify the referenced grant through the canonical authority store/evaluator. A fabricated internally-consistent authorization object can therefore satisfy ratification checks.",
+      "impact":"The transfer-policy boundary overstates its INV-001 enforcement claim and repeats the unverified-attestation class previously removed from purchase commitment.",
+      "requiredFix":"Replace bare authorization trust with a verifier/evaluator backed by the authority source of truth, and add adversarial tests showing fabricated, revoked, expired, wrong-scope and mismatched grants cannot ratify policy.",
+      "disposition":"OPEN_RELEASE_BLOCKER"
+    }
+  ],
+  "reverifiedSound":[
+    "RC1-B01 bounded consequential-action routing remains structurally enforced at the application command boundary.",
+    "RC1-B03 cumulative traceability freshness enforcement remains sound.",
+    "The takeover-after-expiry half of RC1-B02 is fenced by generation checks.",
+    "PostgresDomainCommitter rechecks owner and fence generation under FOR UPDATE in the same transaction before event writes.",
+    "SW0-RC2A explicit physical lineage preserves per-lot capacity, cumulative consumption and explicit multi-input/multi-output ancestry within its bounded scope.",
+    "GovernedTransferEvaluator trigger semantics remain sound once supplied trustworthy policy authority and evidence.",
+    "No universal delivered_at title/risk rule is authorized."
+  ],
+  "invariantInterpretation":"Existing PARTIAL_GREEN invariant mappings remain historical bounded proofs only. RC3 falsifies the sufficiency of the current INV-027/INV-028 durability boundary for release and falsifies the transfer package's claimed INV-001 authority verification. No invariant is promoted to full GREEN.",
+  "decision":"SW0 must not be frozen as SW0_KERNEL_BASELINE_v1.0. Preserve this NO-GO as release evidence, remediate RC3-B01 and RC3-B02 with executable adversarial proofs, then run a fresh independent RC3 re-review before any SW0 baseline freeze or SW1 start.",
+  "next":"SW0-RC3A remediation: close RC3-B01 and RC3-B02; then SW0-RC3R independent re-review."
+}
