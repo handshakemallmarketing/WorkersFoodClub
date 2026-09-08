@@ -1,0 +1,1 @@
+Cart creation is non-binding. Purchase obligation creation requires AcceptedCommandVerifier confirmation of the supplied command/event pair.
