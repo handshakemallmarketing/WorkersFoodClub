@@ -30,15 +30,17 @@ function recordReadyFulfillment(resolution,obligation){
 }
 
 test('SW0-RC2C canonical vertical slice survives partial fulfillment, remedy, transfer and rebuild',async()=>{
- // Participant/membership -> offer -> authorized obligation -> payment evidence.
  const demand=new InMemoryDemandCommitmentLedger(verifier);
  const commitment=await demand.commitPurchase({obligationId,participantId:member.participantId,membership:member,offer,quantity:quantity(5,'kg'),authorizedCommandId:cid('command:checkout-rc2c'),authorizedEventId:'event:purchase-accepted-rc2c',acceptedAt:'2026-09-08T04:00:00Z',policyVersions:['checkout:v1']});
- const obligation={...commitment.obligation,beneficiary:member.participantId};
+ // Purchase and fulfillment are different semantic views. The purchase obligation keeps its original
+ // obligor/beneficiary semantics; fulfillment/remedy uses an explicit member-facing service obligation.
+ const obligation={id:commitment.obligation.id,participantId:commitment.participantId,beneficiary:commitment.participantId,specificationId:commitment.obligation.specificationId,quantity:commitment.obligation.quantity,state:'OPEN'};
  demand.recordPaymentEvidence({evidenceId:eid('evidence:payment-rc2c'),obligationId,provider:'MTN_MOMO',providerReference:'RC2C-TXN-1',amount:money(45000n,'GHS'),status:'CONFIRMED',observedAt:'2026-09-08T04:01:00Z',recordedAt:'2026-09-08T04:01:02Z'});
  assert.equal(commitment.obligation.state,'OPEN');
+ assert.equal(commitment.obligation.obligor,member.participantId);
+ assert.equal(commitment.obligation.beneficiary,offer.offerorId);
  assert.throws(()=>demand.recordPaymentEvidence({evidenceId:eid('evidence:payment-duplicate'),obligationId,provider:'MTN_MOMO',providerReference:'RC2C-TXN-1',amount:money(45000n,'GHS'),status:'CONFIRMED',observedAt:'2026-09-08T04:01:00Z',recordedAt:'2026-09-08T04:01:02Z'}),/PAYMENT_PROVIDER_REFERENCE_DUPLICATE/);
 
- // Explicit physical provenance -> governed inventory -> allocation.
  const lineage=new ExplicitPhysicalLineageLedger();
  lineage.registerLot('lot:bulk',quantity(5,'kg'));
  lineage.transform({id:'transform:member-pack',kind:'REPACK',inputs:[{lotId:'lot:bulk',quantity:quantity(5,'kg')}],outputs:[{lotId:'lot:member-pack',quantity:quantity(5,'kg')}],lossQuantity:quantity(0,'kg'),occurredAt:'2026-09-08T04:02:00Z',evidenceIds:[eid('evidence:repack')]});
@@ -49,21 +51,18 @@ test('SW0-RC2C canonical vertical slice survives partial fulfillment, remedy, tr
  inventory.allocate({id:'allocation:rc2c',lotId:'lot:member-pack',obligationId,specificationId:spec,quantity:quantity(5,'kg'),allocatedAt:'2026-09-08T04:05:00Z',evidenceIds:['evidence:allocation']},obligation);
  assert.equal(inventory.availableForLot('lot:member-pack').amount,0);
 
- // Handover does not equal full performance: member accepts only 4kg.
  const resolution=new InMemoryObligationResolutionLedger();
  const fulfillment=recordReadyFulfillment(resolution,obligation);
  assert.throws(()=>fulfillment.handover({id:'handover:duplicate',fulfillmentWorkId:'ready:rc2c',obligationId,fromCustodianId:pid('participant:club'),toParticipantId:member.participantId,placeId:'hospital:korle-bu',handedOverAt:'2026-09-08T04:16:00Z',evidenceIds:[eid('evidence:duplicate')]},obligation),/HANDOVER_ALREADY_RECORDED/);
  fulfillment.accept({id:'acceptance:rc2c',handoverId:'handover:rc2c',obligationId,participantId:member.participantId,state:'PARTIALLY_ACCEPTED',quantity:quantity(4,'kg'),acceptedAt:'2026-09-08T04:20:00Z',evidenceIds:[eid('evidence:acceptance')]},obligation);
  assert.equal(fulfillment.performance(obligation).state,'PARTIALLY_DISCHARGED');
 
- // One kilogram shortfall is resolved by explicit refund, never disguised as delivery.
  const remedies=new InMemoryRemedyLedger(resolution);
  remedies.recordException({id:'exception:rc2c',obligationId,participantId:member.participantId,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-08T04:21:00Z',evidenceIds:[eid('evidence:shortfall')]},obligation);
  remedies.createRemedy({id:'remedy:rc2c',sourceExceptionId:'exception:rc2c',originalObligationId:obligationId,participantId:member.participantId,kind:'REFUND',quantity:quantity(1,'kg'),createdAt:'2026-09-08T04:22:00Z',authorizedEventId:'event:refund-authorized-rc2c',evidenceIds:[eid('evidence:refund-authorized')],economicClassification:'REMEDY_SETTLEMENT'});
  remedies.completeRemedy({id:'completion:rc2c',remedyObligationId:'remedy:rc2c',quantity:quantity(1,'kg'),completedAt:'2026-09-08T04:23:00Z',evidenceIds:[eid('evidence:refund-settled')]});
  assert.equal(remedies.completion(obligation,quantity(4,'kg')).state,'COMPLETED_WITH_REMEDY');
 
- // Governed transaction-specific title/risk policy: risk at handover, title at acceptance.
  const registry=new GovernedTransferPolicyRegistry();
  registry.ratify({id:'policy:pickup-rc2c',version:1,transactionType:'PILOT_PICKUP',title:{dimension:'TITLE',trigger:'ACCEPTANCE'},risk:{dimension:'RISK',trigger:'HANDOVER'},effectiveFrom:'2026-09-08T04:00:00Z',authorizedBy:pid('participant:board'),authorityGrantId:'grant:transfer',evidenceIds:[eid('evidence:policy-ratification')],status:'RATIFIED'},{participantId:pid('participant:board'),authorityGrantId:'grant:transfer',scope:'TRANSFER_POLICY_GOVERNANCE',validFrom:'2026-09-01T00:00:00Z'});
  const evaluator=new GovernedTransferEvaluator(registry);
@@ -72,7 +71,6 @@ test('SW0-RC2C canonical vertical slice survives partial fulfillment, remedy, tr
  const afterAcceptance=evaluator.evaluate({transactionId:'tx:rc2c',transactionType:'PILOT_PICKUP',policyId:'policy:pickup-rc2c',policyVersion:1,events:[{id:'handover:rc2c',transactionId:'tx:rc2c',type:'HANDOVER',occurredAt:'2026-09-08T04:15:00Z',evidenceIds:[eid('evidence:handover')]},{id:'acceptance:rc2c',transactionId:'tx:rc2c',type:'ACCEPTANCE',occurredAt:'2026-09-08T04:20:00Z',evidenceIds:[eid('evidence:acceptance')]}]});
  assert.equal(afterAcceptance.titleTransferred,true);assert.equal(afterAcceptance.riskTransferred,true);
 
- // Final economics preserves governed benchmark and remedy effect.
  const economics=new InMemoryEconomicsLedger();
  economics.defineBenchmark({id:'benchmark:rc2c',version:1,purpose:'MEMBER_SAVINGS',specificationId:spec,quantity:quantity(5,'kg'),place:'hospital:korle-bu',serviceLevel:'PICKUP',transactionLevel:'RETAIL',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',normalizationRuleVersion:'norm:v1',availabilityRuleVersion:'availability:v1',observationEvidenceIds:[eid('evidence:market-normal')],definedAt:'2026-09-01T00:00:00Z'});
  economics.recordBenchmarkValuation({id:'valuation:rc2c',benchmarkId:'benchmark:rc2c',benchmarkVersion:1,obligationId,specificationId:spec,quantity:quantity(5,'kg'),place:'hospital:korle-bu',serviceLevel:'PICKUP',availability:'EXECUTABLE',comparableValue:money(50000n,'GHS'),evaluatedAt:'2026-09-08T04:24:00Z',evidenceIds:[eid('evidence:market-normal')]});
@@ -80,7 +78,6 @@ test('SW0-RC2C canonical vertical slice survives partial fulfillment, remedy, tr
  const savings=economics.calculateSavings({id:'savings:rc2c',benchmarkValuationId:'valuation:rc2c',memberEconomicsId:'member-econ:rc2c',calculatedAt:'2026-09-08T04:26:00Z'});
  assert.equal(savings.absoluteSavings.minor,14000n);
 
- // Canonical history -> disposable projections -> deterministic rebuild; stale view is visible.
  const log=new CanonicalRecordLog();const at='2026-09-08T04:30:00Z';
  const rec=(stream,sequence,recordId,payload)=>({stream,sequence,recordId,occurredAt:at,payload});
  log.append(rec('fulfillment',1,'obligation:rc2c',{kind:'OBLIGATION_OPENED',obligationId:'obligation:rc2c',quantity:5}));
@@ -97,6 +94,5 @@ test('SW0-RC2C canonical vertical slice survives partial fulfillment, remedy, tr
 test('SW0-RC2C attack register remains executable, not a narrative completion claim',()=>{
  const attacks=['retry/idempotency','stale authority','concurrency/fencing','overallocation','partial fulfillment','unconsented substitution','refund duplication','bad benchmark','negative savings','contradictory evidence','return quality gate','lineage conservation','title-risk orthogonality','projection staleness'];
  assert.equal(attacks.length,14);
- // Each attack is already bound to executable constituent proofs; this slice adds the cross-module chain above.
  assert.ok(attacks.includes('title-risk orthogonality')&&attacks.includes('lineage conservation')&&attacks.includes('projection staleness'));
 });
