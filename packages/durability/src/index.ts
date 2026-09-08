@@ -1,8 +1,10 @@
 import type {CommandResult} from '../../contracts/src/index.js';
 
 /**
- * Persistence boundary required before SW0 can claim durable idempotency.
- * A production adapter must implement claim+commit in one serializable transaction.
+ * Durable ownership/idempotency lifecycle boundary.
+ * claim() and commit() are separate lifecycle operations; a database adapter must
+ * make each transition serializable and durable. Atomic domain/event/result
+ * co-commit is a stronger boundary provided separately by PostgresDomainCommitter.
  */
 export interface DurableCommandStore {
  claim(idempotencyKey:string,commandId:string):Promise<'CLAIMED'|'IN_FLIGHT'|CommandResult>;
