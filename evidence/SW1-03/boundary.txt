@@ -1,0 +1,1 @@
+The cart/checkout application composition is not itself a production authorization and does not process live funds.
