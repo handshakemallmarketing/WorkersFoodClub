@@ -1,0 +1,6 @@
+{
+  "slice":"SW1-02",
+  "inScope":["governed sales-window configuration","member-facing composition of governed listing/offer","governed comparable benchmark display","adversarial fail-closed product tests"],
+  "outOfScope":["checkout or purchase-obligation creation","payment initiation/capture","inventory availability promise","production identity provider","production launch authorization","Ghana legal title/risk policy content"],
+  "next":"SW1-03"
+}
