@@ -1,0 +1,19 @@
+{
+  "slice":"SW0-RC1B",
+  "baseline":"CB-00-v0.1",
+  "status":"PARTIAL_GREEN",
+  "closes":["RC1-B01","RC1-B03"],
+  "mappings":[
+    {"invariantId":"INV-027","proof":"packages/application/src/index.ts + tests/node/sw0-rc1b.test.mjs + packages/durability/src/postgres.ts + scripts/test-postgres-durability.sh","claim":"actions explicitly classified as consequential cannot use the legacy mutable handler/idempotency path and must be executed by a transactional executor"},
+    {"invariantId":"INV-028","proof":"packages/application/src/index.ts + tests/node/sw0-rc1b.test.mjs + packages/durability/src/postgres.ts + scripts/test-postgres-durability.sh","claim":"expected-version enforcement for classified consequential commands is delegated to the durable transactional execution boundary rather than a pre-write in-memory check"},
+    {"invariantId":"INV-030","proof":"scripts/check-traceability.mjs + docs/traceability/release-index.json + docs/traceability/matrix.json","claim":"the cumulative traceability matrix is mechanically coupled to the complete release-evidence file set and declared release head"}
+  ],
+  "scope":"RC1-B01 is closed at the application command boundary: any action declared consequential is structurally barred from legacy CommandBus handlers and requires TransactionalCommandExecutor. Domain model classes remain directly unit-testable; production composition must classify every consequential action.",
+  "notClaimed":[
+    "all 30 invariants are full GREEN",
+    "title/risk policy RC1-B04 is resolved",
+    "general durable multi-input/multi-output lineage RC1-B05 is resolved",
+    "arbitrary code outside the application command boundary cannot call a domain class in a test or library context"
+  ],
+  "next":"SW0-RC1 re-review after RC1-B01/B02/B03 closure; retain B04/B05 as explicit remaining gates"
+}
