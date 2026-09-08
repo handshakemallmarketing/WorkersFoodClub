@@ -1,0 +1,14 @@
+{
+  "slice":"SW1-02",
+  "acceptance":[
+    "sales-window configuration is authority-evaluated",
+    "catalog listing and offer specification identities agree",
+    "offer remains independently time/place/quantity bounded",
+    "sales-window closure fails closed even if offer remains valid",
+    "member benchmark display comes only from governed executable valuation",
+    "benchmark display preserves method/version/evidence lineage",
+    "no invariant promoted beyond PARTIAL_GREEN",
+    "no production authorization"
+  ],
+  "tests":["tests/node/sw1-02.test.mjs"]
+}
