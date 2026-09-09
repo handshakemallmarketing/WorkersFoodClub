@@ -1,0 +1,50 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {asId,quantity,money} from '../../dist/packages/kernel/src/index.js';
+import {InMemoryAuthorityStore,AuthorityEvaluator} from '../../dist/packages/authority/src/index.js';
+import {InMemoryDemandCommitmentLedger} from '../../dist/packages/demand/src/index.js';
+import {InMemoryInventoryLedger} from '../../dist/packages/inventory/src/index.js';
+import {InMemoryFulfillmentLedger} from '../../dist/packages/fulfillment/src/index.js';
+import {InMemoryRemedyLedger} from '../../dist/packages/remedy/src/index.js';
+import {InMemoryObligationResolutionLedger} from '../../dist/packages/resolution/src/index.js';
+import {GovernedPilotFulfillmentService} from '../../dist/packages/pilot-fulfillment/src/index.js';
+
+const pid=x=>asId(x),oid=x=>asId(x),sid=x=>asId(x),off=x=>asId(x),eid=x=>asId(x),gid=x=>asId(x),cid=x=>asId(x),lot=x=>asId(x);
+const member=pid('participant:member');
+const warehouse=pid('participant:warehouse');
+const club=pid('participant:food-club');
+const spec=sid('spec:rice');
+const obligationId=oid('obligation:sw1-06');
+const at='2026-09-09T02:00:00Z';
+const offer={id:off('offer:rice'),offerorId:club,specificationId:spec,quantity:quantity(5,'kg'),memberPrice:money(45000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'pickup:A',validFrom:'2026-09-08T00:00:00Z',validUntil:'2026-09-10T00:00:00Z',priceEvidenceIds:[eid('evidence:price')],policyVersions:['price-v1']};
+
+async function setup(){
+ const demand=new InMemoryDemandCommitmentLedger({isAccepted:async()=>true});
+ await demand.commitPurchase({obligationId,participantId:member,membership:{id:'membership:1',participantId:member,state:'ACTIVE',establishedAt:'2026-09-08T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('evidence:eligibility')]},offer,quantity:quantity(5,'kg'),authorizedCommandId:cid('command:checkout'),authorizedEventId:'event:checkout',acceptedAt:'2026-09-09T01:00:00Z',policyVersions:['checkout-v1']});
+ const inventory=new InMemoryInventoryLedger();const riceLot=lot('lot:pack');
+ inventory.receiveLot({lot:{id:riceLot,specificationId:spec,quantity:quantity(5,'kg')},ownerId:club,custodianId:warehouse,placeId:'warehouse:A',receivedAt:'2026-09-09T01:05:00Z',receiptEvidenceIds:[eid('evidence:receipt')]});
+ inventory.assessQuality({id:'quality:1',lotId:riceLot,state:'ACCEPTED',assessedAt:'2026-09-09T01:06:00Z',evidenceIds:[eid('evidence:quality')]});
+ inventory.allocate({id:'allocation:1',lotId:riceLot,obligationId,specificationId:spec,quantity:quantity(5,'kg'),allocatedAt:'2026-09-09T01:07:00Z',evidenceIds:[eid('evidence:allocation')]},{id:obligationId,specificationId:spec,quantity:quantity(5,'kg'),state:'OPEN'});
+ const authorityStore=new InMemoryAuthorityStore();
+ const warehouseGrant=gid('grant:warehouse');const memberGrant=gid('grant:member');
+ authorityStore.put({id:warehouseGrant,grantorId:club,actorId:warehouse,actions:['fulfillment.pick','fulfillment.pack','fulfillment.ready','fulfillment.handover'],targetPrefix:'',maxQuantity:5,validFrom:'2026-09-08T00:00:00Z'});
+ authorityStore.put({id:memberGrant,grantorId:club,actorId:member,actions:['fulfillment.accept','fulfillment.exception'],targetPrefix:'',maxQuantity:5,validFrom:'2026-09-08T00:00:00Z'});
+ const resolution=new InMemoryObligationResolutionLedger();const fulfillment=new InMemoryFulfillmentLedger(resolution);const remedies=new InMemoryRemedyLedger(resolution);
+ const service=new GovernedPilotFulfillmentService(new AuthorityEvaluator(authorityStore),inventory,demand,fulfillment,remedies);
+ return {service,remedies,warehouseGrant,memberGrant,riceLot};
+}
+
+function work(state,id,supersedes,riceLot){return {id,allocationId:'allocation:1',lotId:riceLot,obligationId,specificationId:spec,quantity:quantity(5,'kg'),state,operatorId:warehouse,placeId:'pickup:A',occurredAt:'2026-09-09T01:20:00Z',evidenceIds:[eid(`evidence:${id}`)],...(supersedes?{supersedes}:{})};}
+async function ready(){const x=await setup();const ctx={actorId:warehouse,grantIds:[x.warehouseGrant],at};x.service.recordWork(ctx,work('PICKED','pick:1',undefined,x.riceLot));x.service.recordWork(ctx,work('PACKED','pack:1','pick:1',x.riceLot));x.service.recordWork(ctx,work('READY_FOR_PICKUP','ready:1','pack:1',x.riceLot));return x;}
+
+const handover=()=>({id:'handover:1',fulfillmentWorkId:'ready:1',obligationId,fromCustodianId:warehouse,toParticipantId:member,placeId:'pickup:A',handedOverAt:'2026-09-09T01:30:00Z',evidenceIds:[eid('evidence:handover')]});
+
+test('SW1-06 pick/pack/ready require bounded authority and canonical allocation lineage',async()=>{const {service,warehouseGrant,riceLot}=await setup();assert.throws(()=>service.recordWork({actorId:warehouse,grantIds:[],at},work('PICKED','pick:x',undefined,riceLot)),/FULFILLMENT_UNAUTHORIZED:NO_GRANT/);assert.throws(()=>service.recordWork({actorId:warehouse,grantIds:[warehouseGrant],at},{...work('PICKED','pick:y',undefined,riceLot),allocationId:'allocation:forged'}),/FULFILLMENT_ALLOCATION_UNKNOWN/);service.recordWork({actorId:warehouse,grantIds:[warehouseGrant],at},work('PICKED','pick:ok',undefined,riceLot));});
+
+test('SW1-06 pickup handover remains distinct from member acceptance and discharge',async()=>{const {service,warehouseGrant}=await ready();service.handover({actorId:warehouse,grantIds:[warehouseGrant],at},handover());assert.equal(service.performance(obligationId).state,'OPEN');});
+
+test('SW1-06 only the member may accept and wrong participant fails closed',async()=>{const {service,warehouseGrant,memberGrant}=await ready();service.handover({actorId:warehouse,grantIds:[warehouseGrant],at},handover());const acceptance={id:'acceptance:1',handoverId:'handover:1',obligationId,participantId:member,state:'ACCEPTED',quantity:quantity(5,'kg'),acceptedAt:'2026-09-09T01:31:00Z',evidenceIds:[eid('evidence:acceptance')]};assert.throws(()=>service.accept({actorId:pid('participant:other'),grantIds:[memberGrant],at},{...acceptance,participantId:pid('participant:other')}),/FULFILLMENT_UNAUTHORIZED:ACTOR_MISMATCH/);service.accept({actorId:member,grantIds:[memberGrant],at},acceptance);assert.equal(service.performance(obligationId).state,'DISCHARGED');});
+
+test('SW1-06 partial acceptance preserves unresolved quantity and records shortfall without auto-remedy',async()=>{const {service,remedies,warehouseGrant,memberGrant}=await ready();service.handover({actorId:warehouse,grantIds:[warehouseGrant],at},handover());service.accept({actorId:member,grantIds:[memberGrant],at},{id:'acceptance:partial',handoverId:'handover:1',obligationId,participantId:member,state:'PARTIALLY_ACCEPTED',quantity:quantity(4,'kg'),acceptedAt:'2026-09-09T01:31:00Z',evidenceIds:[eid('evidence:acceptance-partial')]});assert.equal(service.performance(obligationId).state,'PARTIALLY_DISCHARGED');const exception=service.recordException({actorId:member,grantIds:[memberGrant],at},{id:'exception:shortfall',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-09T01:32:00Z',evidenceIds:[eid('evidence:shortfall')],relatedAcceptanceId:'acceptance:partial'});assert.equal(exception.affectedQuantity.amount,1);assert.equal(remedies.getRemedy('remedy:auto'),undefined);assert.equal(service.performance(obligationId).state,'PARTIALLY_DISCHARGED');});
+
+test('SW1-06 shortfall cannot exceed unresolved quantity or detach from acceptance evidence',async()=>{const {service,warehouseGrant,memberGrant}=await ready();service.handover({actorId:warehouse,grantIds:[warehouseGrant],at},handover());service.accept({actorId:member,grantIds:[memberGrant],at},{id:'acceptance:partial2',handoverId:'handover:1',obligationId,participantId:member,state:'PARTIALLY_ACCEPTED',quantity:quantity(4,'kg'),acceptedAt:'2026-09-09T01:31:00Z',evidenceIds:[eid('evidence:acceptance-partial2')]});assert.throws(()=>service.recordException({actorId:member,grantIds:[memberGrant],at},{id:'exception:missing-link',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-09T01:32:00Z',evidenceIds:[eid('evidence:shortfall')]}),/EXCEPTION_ACCEPTANCE_LINK_REQUIRED/);assert.throws(()=>service.recordException({actorId:member,grantIds:[memberGrant],at},{id:'exception:too-large',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(2,'kg'),occurredAt:'2026-09-09T01:32:00Z',evidenceIds:[eid('evidence:shortfall2')],relatedAcceptanceId:'acceptance:partial2'}),/EXCEPTION_EXCEEDS_UNRESOLVED_QUANTITY/);});
