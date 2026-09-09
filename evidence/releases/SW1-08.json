@@ -1,0 +1,19 @@
+{
+  "slice":"SW1-08",
+  "status":"PARTIAL_GREEN",
+  "implemented":[
+    "member economics bound to actual performed quantity",
+    "signed savings preserving positive, zero and negative outcomes",
+    "explicit correction lineage for savings restatements",
+    "member order-history projection with source lineage",
+    "drop/rebuild equivalence and freshness detection"
+  ],
+  "invariants":{
+    "INV-013":"PARTIAL_GREEN",
+    "INV-024":"PARTIAL_GREEN",
+    "INV-029":"PARTIAL_GREEN",
+    "INV-030":"PARTIAL_GREEN"
+  },
+  "proofs":["packages/pilot-member-economics/src/index.ts","packages/economics/src/index.ts","packages/projections/src/index.ts","tests/node/sw1-08.test.mjs"],
+  "not_claimed":["production analytics durability","warehouse/BI authority","production launch","complete historical migration certification"]
+}
