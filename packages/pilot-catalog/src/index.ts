@@ -43,7 +43,8 @@ export class GovernedPilotCatalogService {
  constructor(private readonly authority:AuthorityEvaluator,private readonly catalog:InMemoryCatalog){}
 
  private authorize(ctx:CatalogPublicationContext,action:string,targetId:string,quantity?:number){
-  const decision=this.authority.evaluate({actorId:ctx.actorId,action,targetId,at:ctx.at,grantIds:ctx.grantIds,quantity});
+  const request={actorId:ctx.actorId,action,targetId,at:ctx.at,grantIds:ctx.grantIds,...(quantity===undefined?{}:{quantity})};
+  const decision=this.authority.evaluate(request);
   if(!decision.allowed) throw new Error(`CATALOG_UNAUTHORIZED:${decision.reason}`);
   return decision;
  }
