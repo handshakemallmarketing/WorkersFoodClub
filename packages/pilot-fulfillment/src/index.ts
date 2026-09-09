@@ -17,6 +17,7 @@ type FulfillmentObligationView={
  readonly beneficiary:ParticipantId;
  readonly specificationId:SpecificationId;
  readonly quantity:Quantity;
+ readonly pickupPlace:string;
  readonly state:'OPEN';
 };
 
@@ -42,12 +43,14 @@ export class GovernedPilotFulfillmentService {
  private order(obligationId:ObligationId):FulfillmentObligationView{
   const commitment=this.demand.getCommitment(obligationId);
   if(!commitment) throw new Error('FULFILLMENT_OBLIGATION_UNKNOWN');
+  if(!commitment.committedPickupPlace.trim()) throw new Error('FULFILLMENT_COMMITTED_PICKUP_PLACE_MISSING');
   return Object.freeze({
    id:commitment.obligation.id,
    participantId:commitment.participantId,
    beneficiary:commitment.participantId,
    specificationId:commitment.obligation.specificationId,
    quantity:commitment.obligation.quantity,
+   pickupPlace:commitment.committedPickupPlace,
    state:'OPEN' as const
   });
  }
@@ -66,6 +69,7 @@ export class GovernedPilotFulfillmentService {
   if(!quality||quality.state!=='ACCEPTED'||Date.parse(quality.assessedAt)>Date.parse(ctx.at)) throw new Error('FULFILLMENT_LOT_NOT_CURRENTLY_ACCEPTED');
   const order=this.order(allocation.obligationId);
   if(order.id!==allocation.obligationId) throw new Error('FULFILLMENT_OBLIGATION_MISMATCH');
+  if(input.placeId!==order.pickupPlace) throw new Error('FULFILLMENT_COMMITTED_PICKUP_PLACE_MISMATCH');
   const action=input.state==='PICKED'?'fulfillment.pick':input.state==='PACKED'?'fulfillment.pack':'fulfillment.ready';
   this.authorize(ctx,action,String(allocation.lotId),input.quantity.amount);
   return this.fulfillment.recordWork(input,{allocationId:allocation.id,lotId:allocation.lotId,obligationId:allocation.obligationId,specificationId:allocation.specificationId,quantity:allocation.quantity,allocatedAt:allocation.allocatedAt});
@@ -79,6 +83,7 @@ export class GovernedPilotFulfillmentService {
   const quality=this.inventory.currentQuality(work.lotId);
   if(!quality||quality.state!=='ACCEPTED'||Date.parse(quality.assessedAt)>Date.parse(ctx.at)) throw new Error('HANDOVER_LOT_NOT_CURRENTLY_ACCEPTED');
   const order=this.order(input.obligationId);
+  if(work.placeId!==order.pickupPlace||input.placeId!==order.pickupPlace) throw new Error('HANDOVER_COMMITTED_PICKUP_PLACE_MISMATCH');
   this.authorize(ctx,'fulfillment.handover',String(input.obligationId),work.quantity.amount);
   return this.fulfillment.handover(input,order);
  }

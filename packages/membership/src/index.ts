@@ -26,6 +26,27 @@ export interface EligibilityPolicy {
  evaluate(input:{participantId:ParticipantId;evidenceIds:readonly EvidenceId[];at:string;attributes:Readonly<Record<string,string|number|boolean>>}):EligibilityDecision;
 }
 
+const eligibilityKey=(decision:EligibilityDecision)=>JSON.stringify({participantId:String(decision.participantId),eligible:decision.eligible,policyVersion:decision.policyVersion,evidenceIds:[...decision.evidenceIds].map(String),evaluatedAt:decision.evaluatedAt,reason:decision.reason});
+
+export class GovernedEligibilityDecisionStore {
+ private readonly decisions=new Map<string,EligibilityDecision>();
+ record(policy:EligibilityPolicy,input:{participantId:ParticipantId;evidenceIds:readonly EvidenceId[];at:string;attributes:Readonly<Record<string,string|number|boolean>>}):EligibilityDecision{
+  if(input.evidenceIds.length===0) throw new Error('ELIGIBILITY_EVIDENCE_REQUIRED');
+  if(input.evidenceIds.some(x=>!String(x).trim())) throw new Error('ELIGIBILITY_EVIDENCE_INVALID');
+  if(Number.isNaN(Date.parse(input.at))) throw new Error('ELIGIBILITY_TIME_INVALID');
+  const decision=policy.evaluate({...input,evidenceIds:Object.freeze([...input.evidenceIds])});
+  if(decision.policyVersion!==policy.version) throw new Error('ELIGIBILITY_POLICY_VERSION_MISMATCH');
+  const frozen:EligibilityDecision=Object.freeze({...decision,evidenceIds:Object.freeze([...decision.evidenceIds])});
+  this.decisions.set(eligibilityKey(frozen),frozen);
+  return frozen;
+ }
+ requireGoverned(decision:EligibilityDecision):EligibilityDecision{
+  const governed=this.decisions.get(eligibilityKey(decision));
+  if(!governed) throw new Error('ELIGIBILITY_DECISION_NOT_GOVERNED');
+  return governed;
+ }
+}
+
 export class FoundingWorkerEligibilityPolicy implements EligibilityPolicy {
  readonly version:string;
  constructor(version='founding-worker-v1'){ this.version=version; }

@@ -79,7 +79,7 @@ External providers are anti-corruption boundaries. Provider payloads become type
 
 ## 6. First SW1 vertical slice
 
-A verified pilot member signs in, sees a governed rice offer for a specific pickup window, commits to 5 kg, prepays through a test/sandbox payment adapter, receives an allocation from a qualifying traceable lot, and picks up the order. The scenario deliberately injects a 1 kg shortfall. The system preserves partial performance, creates an authorized refund remedy, discharges only the validly performed/remedied quantity, and shows final signed savings against the governed benchmark.
+A verified pilot member signs in, sees a governed rice offer for a specific pickup window, commits to 5 kg, prepays through a test/sandbox payment adapter, receives an allocation from a qualifying traceable lot, and picks up the order. The scenario deliberately injects a 1 kg shortfall. The system preserves partial performance, creates an authorized refund remedy, discharges only the 4 kg of actually conforming performance, resolves the remaining 1 kg through the separately recorded remedy, and shows final signed savings against the governed benchmark. Remedy completion does not convert the remedied quantity into performed or discharged quantity.
 
 The first implementation should use a payment-provider interface with a deterministic test adapter before enabling a live Mobile Money provider.
 
@@ -92,7 +92,7 @@ A SW1 slice cannot be called complete merely because its UI works. For each cons
 3. Transaction boundary — canonical economic/physical effects commit atomically through the approved durable path.
 4. Evidence contract — external/user/operator observations are typed and attributable; assertions are not silently promoted to truth.
 5. Projection contract — UI state is derived/rebuildable and exposes material freshness/lineage.
-6. Negative-path proof — unauthorized, duplicate, stale, conflicting and malformed commands fail closed.
+6. Negative-path proof — unauthorized, conflicting, malformed and stale commands fail closed. Duplicate-command handling follows INV-027: an identical retry with the same idempotency key and canonical payload replays the previously committed result without another effect; reuse of that key with a different payload fails closed as an idempotency conflict.
 7. Adversarial test — at least one executable test attempts the principal constitutional failure mode of the slice.
 8. Traceability — code/test/evidence mapping is added to the cumulative release record.
 9. Operational recovery — retry/reconciliation behavior is explicit for external side effects.
@@ -104,7 +104,7 @@ SW1 must preserve all INV-001..INV-030. The following deserve explicit product-l
 
 - UI role/access cannot substitute for Authority (INV-001).
 - Forecast/cart activity cannot become committed demand without authorized checkout (INV-003/004).
-- Payment-provider success cannot duplicate or fabricate economic effect (INV-024/027/028).
+- Payment-provider success cannot create an obligation or economic effect without the authorized checkout relationship (INV-004), and cannot duplicate or corrupt an authorized economic effect under correction, replay, or concurrency (INV-024/027/028).
 - Inventory availability must remain quality/control/allocation aware (INV-007..010).
 - Fulfillment must preserve transfer orthogonality and partial-performance conservation (INV-019..021).
 - Returns cannot re-enter availability without governed quality determination (INV-022).
@@ -118,7 +118,7 @@ Collect only data necessary for membership, transaction, fulfillment, support an
 
 ## 10. Payment boundary
 
-SW1 payment integration must be provider-neutral at the canonical layer. A provider adapter may create payment observations/evidence; canonical payment state changes only through an authorized/idempotent command path. Provider transaction/reference IDs must be uniqueness-protected. Webhook replay, reordered callbacks, timeout-after-provider-success and refund retry must be tested before live funds.
+SW1 payment integration must be provider-neutral at the canonical layer. A provider adapter may create payment observations/evidence; canonical payment state changes only through an authorized/idempotent command path. A provider callback without an authorized checkout relationship must not fabricate an obligation, payment effect, allocation, or fulfillment entitlement. Provider transaction/reference IDs must be uniqueness-protected. Webhook replay, reordered callbacks, timeout-after-provider-success and refund retry must be tested before live funds.
 
 ## 11. Deployment boundary
 

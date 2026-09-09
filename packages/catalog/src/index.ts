@@ -1,88 +1,23 @@
 import type {EvidenceId,Money,OfferId,ParticipantId,Quantity,Specification,SpecificationId} from '../../kernel/src/index.js';
 
 export type TransactionLevel='FARMGATE'|'WHOLESALE'|'RETAIL'|'MEMBER';
+export interface PriceObservation {readonly evidenceId:EvidenceId;readonly specificationId:SpecificationId;readonly price:Money;readonly basis:Quantity;readonly place:string;readonly observedAt:string;readonly transactionLevel:TransactionLevel;readonly conditions:readonly string[];}
+export function priceObservation(input:PriceObservation):PriceObservation{if(!input.place.trim())throw new Error('PRICE_PLACE_REQUIRED');if(Number.isNaN(Date.parse(input.observedAt)))throw new Error('PRICE_TIME_INVALID');if(input.basis.amount<=0)throw new Error('PRICE_BASIS_INVALID');return Object.freeze({...input,price:Object.freeze({...input.price}),basis:Object.freeze({...input.basis}),conditions:Object.freeze([...input.conditions])});}
+export interface CatalogListing{readonly listingId:string;readonly sku:string;readonly specificationId:SpecificationId;readonly displayName:string;readonly active:boolean;}
+export interface MemberOffer{readonly id:OfferId;readonly offerorId:ParticipantId;readonly specificationId:SpecificationId;readonly quantity:Quantity;readonly memberPrice:Money;readonly priceBasis:Quantity;readonly pickupPlace:string;readonly validFrom:string;readonly validUntil:string;readonly priceEvidenceIds:readonly EvidenceId[];readonly policyVersions:readonly string[];}
+export function isWithinValidity(validFrom:string,validUntil:string,at:string):boolean{const from=Date.parse(validFrom),until=Date.parse(validUntil),t=Date.parse(at);if(Number.isNaN(from)||Number.isNaN(until)||until<=from)throw new Error('OFFER_VALIDITY_INVALID');if(Number.isNaN(t))throw new Error('TIME_INVALID');return t>=from&&t<=until;}
 
-export interface PriceObservation {
- readonly evidenceId:EvidenceId;
- readonly specificationId:SpecificationId;
- readonly price:Money;
- readonly basis:Quantity;
- readonly place:string;
- readonly observedAt:string;
- readonly transactionLevel:TransactionLevel;
- readonly conditions:readonly string[];
-}
-
-export function priceObservation(input:PriceObservation):PriceObservation {
- if(!input.place.trim()) throw new Error('PRICE_PLACE_REQUIRED');
- if(Number.isNaN(Date.parse(input.observedAt))) throw new Error('PRICE_TIME_INVALID');
- if(input.basis.amount<=0) throw new Error('PRICE_BASIS_INVALID');
- return Object.freeze({...input,conditions:[...input.conditions]});
-}
-
-export interface CatalogListing {
- readonly listingId:string;
- readonly sku:string;
- readonly specificationId:SpecificationId;
- readonly displayName:string;
- readonly active:boolean;
-}
-
-export interface MemberOffer {
- readonly id:OfferId;
- readonly offerorId:ParticipantId;
- readonly specificationId:SpecificationId;
- readonly quantity:Quantity;
- readonly memberPrice:Money;
- readonly priceBasis:Quantity;
- readonly pickupPlace:string;
- readonly validFrom:string;
- readonly validUntil:string;
- readonly priceEvidenceIds:readonly EvidenceId[];
- readonly policyVersions:readonly string[];
-}
-
-export function isWithinValidity(validFrom:string,validUntil:string,at:string):boolean {
- const from=Date.parse(validFrom), until=Date.parse(validUntil), t=Date.parse(at);
- if(Number.isNaN(from)||Number.isNaN(until)||until<=from) throw new Error('OFFER_VALIDITY_INVALID');
- if(Number.isNaN(t)) throw new Error('TIME_INVALID');
- return t>=from&&t<=until;
-}
-
-export class InMemoryCatalog {
- private specifications=new Map<SpecificationId,Specification>();
- private listings=new Map<string,CatalogListing>();
- private priceEvidence=new Map<EvidenceId,PriceObservation>();
- private offers=new Map<OfferId,MemberOffer>();
- publishSpecification(spec:Specification):Specification{
-  const current=this.specifications.get(spec.id);
-  if(current && spec.version<=current.version) throw new Error('SPECIFICATION_VERSION_NOT_ADVANCED');
-  this.specifications.set(spec.id,Object.freeze({...spec})); return spec;
- }
- publishListing(listing:CatalogListing):CatalogListing{
-  if(!this.specifications.has(listing.specificationId)) throw new Error('LISTING_SPECIFICATION_UNKNOWN');
-  if(!listing.sku.trim()) throw new Error('SKU_EMPTY');
-  this.listings.set(listing.listingId,Object.freeze({...listing})); return listing;
- }
- recordPriceObservation(observation:PriceObservation):PriceObservation{
-  if(!this.specifications.has(observation.specificationId)) throw new Error('PRICE_SPECIFICATION_UNKNOWN');
-  if(this.priceEvidence.has(observation.evidenceId)) throw new Error('PRICE_EVIDENCE_DUPLICATE');
-  const valid=priceObservation(observation); this.priceEvidence.set(valid.evidenceId,valid); return valid;
- }
- publishMemberOffer(offer:MemberOffer):MemberOffer{
-  if(!this.specifications.has(offer.specificationId)) throw new Error('OFFER_SPECIFICATION_UNKNOWN');
-  isWithinValidity(offer.validFrom,offer.validUntil,offer.validFrom);
-  if(!offer.pickupPlace.trim()) throw new Error('OFFER_PLACE_REQUIRED');
-  if(offer.quantity.amount<=0 || offer.priceBasis.amount<=0) throw new Error('OFFER_QUANTITY_INVALID');
-  if(offer.priceEvidenceIds.length===0) throw new Error('OFFER_PRICE_EVIDENCE_REQUIRED');
-  for(const evidenceId of offer.priceEvidenceIds){ const p=this.priceEvidence.get(evidenceId); if(!p) throw new Error('OFFER_PRICE_EVIDENCE_UNKNOWN'); if(p.specificationId!==offer.specificationId) throw new Error('OFFER_PRICE_EVIDENCE_SPEC_MISMATCH'); }
-  if(this.offers.has(offer.id)) throw new Error('OFFER_ID_DUPLICATE');
-  const frozen=Object.freeze({...offer,priceEvidenceIds:[...offer.priceEvidenceIds],policyVersions:[...offer.policyVersions]}); this.offers.set(offer.id,frozen); return frozen;
- }
- isOfferExecutable(id:OfferId,at:string):boolean{
-  const o=this.offers.get(id); if(!o) return false; return isWithinValidity(o.validFrom,o.validUntil,at);
- }
- getSpecification(id:SpecificationId){ return this.specifications.get(id); }
- getListing(id:string){ return this.listings.get(id); }
- getOffer(id:OfferId){ return this.offers.get(id); }
+export class InMemoryCatalog{
+ private specifications=new Map<SpecificationId,Map<number,Specification>>();private currentSpecificationVersion=new Map<SpecificationId,number>();private listings=new Map<string,CatalogListing>();private listingSpecVersion=new Map<string,number>();private priceEvidence=new Map<EvidenceId,PriceObservation>();private priceSpecVersion=new Map<EvidenceId,number>();private offers=new Map<OfferId,MemberOffer>();private offerSpecVersion=new Map<OfferId,number>();
+ publishSpecification(spec:Specification):Specification{const versions=this.specifications.get(spec.id)??new Map<number,Specification>();const current=this.currentSpecificationVersion.get(spec.id);if(current!==undefined&&spec.version<=current)throw new Error('SPECIFICATION_VERSION_NOT_ADVANCED');if(versions.has(spec.version))throw new Error('SPECIFICATION_VERSION_DUPLICATE');const frozen=Object.freeze({...spec});versions.set(spec.version,frozen);this.specifications.set(spec.id,versions);this.currentSpecificationVersion.set(spec.id,spec.version);return frozen;}
+ private currentVersion(id:SpecificationId){const v=this.currentSpecificationVersion.get(id);if(v===undefined)throw new Error('SPECIFICATION_UNKNOWN');return v;}
+ publishListing(listing:CatalogListing):CatalogListing{const version=this.currentVersion(listing.specificationId);if(!listing.sku.trim())throw new Error('SKU_EMPTY');const frozen=Object.freeze({...listing});this.listings.set(listing.listingId,frozen);this.listingSpecVersion.set(listing.listingId,version);return frozen;}
+ recordPriceObservation(observation:PriceObservation):PriceObservation{const version=this.currentVersion(observation.specificationId);if(this.priceEvidence.has(observation.evidenceId))throw new Error('PRICE_EVIDENCE_DUPLICATE');const valid=priceObservation(observation);this.priceEvidence.set(valid.evidenceId,valid);this.priceSpecVersion.set(valid.evidenceId,version);return valid;}
+ publishMemberOffer(offer:MemberOffer):MemberOffer{const version=this.currentVersion(offer.specificationId);isWithinValidity(offer.validFrom,offer.validUntil,offer.validFrom);if(!offer.pickupPlace.trim())throw new Error('OFFER_PLACE_REQUIRED');if(offer.quantity.amount<=0||offer.priceBasis.amount<=0)throw new Error('OFFER_QUANTITY_INVALID');if(offer.priceEvidenceIds.length===0)throw new Error('OFFER_PRICE_EVIDENCE_REQUIRED');if(offer.policyVersions.length===0||offer.policyVersions.some(x=>!x.trim()))throw new Error('OFFER_POLICY_VERSION_REQUIRED');for(const evidenceId of offer.priceEvidenceIds){const p=this.priceEvidence.get(evidenceId);if(!p)throw new Error('OFFER_PRICE_EVIDENCE_UNKNOWN');if(p.specificationId!==offer.specificationId)throw new Error('OFFER_PRICE_EVIDENCE_SPEC_MISMATCH');if(this.priceSpecVersion.get(evidenceId)!==version)throw new Error('OFFER_PRICE_EVIDENCE_SPEC_VERSION_MISMATCH');}if(this.offers.has(offer.id))throw new Error('OFFER_ID_DUPLICATE');const frozen=Object.freeze({...offer,quantity:Object.freeze({...offer.quantity}),memberPrice:Object.freeze({...offer.memberPrice}),priceBasis:Object.freeze({...offer.priceBasis}),priceEvidenceIds:Object.freeze([...offer.priceEvidenceIds]),policyVersions:Object.freeze([...offer.policyVersions])});this.offers.set(offer.id,frozen);this.offerSpecVersion.set(offer.id,version);return frozen;}
+ isOfferExecutable(id:OfferId,at:string):boolean{const o=this.offers.get(id);if(!o)return false;return isWithinValidity(o.validFrom,o.validUntil,at);}
+ getSpecification(id:SpecificationId,version?:number){const v=version??this.currentSpecificationVersion.get(id);return v===undefined?undefined:this.specifications.get(id)?.get(v);}
+ getListing(id:string){return this.listings.get(id);}getOffer(id:OfferId){return this.offers.get(id);}
+ getListingSpecification(id:string){const listing=this.listings.get(id),version=this.listingSpecVersion.get(id);return listing&&version!==undefined?this.getSpecification(listing.specificationId,version):undefined;}
+ getPriceObservationSpecification(id:EvidenceId){const observation=this.priceEvidence.get(id),version=this.priceSpecVersion.get(id);return observation&&version!==undefined?this.getSpecification(observation.specificationId,version):undefined;}
+ getOfferSpecification(id:OfferId){const offer=this.offers.get(id),version=this.offerSpecVersion.get(id);return offer&&version!==undefined?this.getSpecification(offer.specificationId,version):undefined;}
 }
