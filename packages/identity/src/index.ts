@@ -100,9 +100,11 @@ export class PilotIdentityMembershipService {
  }
 
  resolveActiveMember(principal:AuthenticatedPrincipal):{participant:Participant;membership:MembershipRelationship}{
+  if(!principal.issuer.trim()||!principal.subject.trim()||Number.isNaN(Date.parse(principal.authenticatedAt))) throw new Error('AUTH_PRINCIPAL_INVALID');
   const binding=this.bindings.resolve(principal);
   if(!binding) throw new Error('AUTH_IDENTITY_NOT_BOUND');
-  if(binding.providerEvidenceId!==principal.providerEvidenceId) throw new Error('AUTH_EVIDENCE_MISMATCH');
+  // providerEvidenceId identifies the current authentication observation. A new login is expected
+  // to carry new evidence; issuer+subject binding, not bind-time evidence identity, determines identity.
   const participant=this.participants.require(binding.participantId);
   const membership=this.memberships.byParticipant(binding.participantId).find(x=>x.state==='ACTIVE');
   if(!membership) throw new Error('ACTIVE_MEMBERSHIP_REQUIRED');
