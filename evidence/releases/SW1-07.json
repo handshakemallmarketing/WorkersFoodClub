@@ -1,0 +1,21 @@
+{
+  "slice":"SW1-07",
+  "status":"PARTIAL_GREEN",
+  "implemented":[
+    "authority-gated remedy proposal/creation/completion composition",
+    "canonical obligation and exception resolution",
+    "shared performed+remedied quantity conservation",
+    "duplicate completion protection",
+    "substitution consent/equivalence/recomputation preservation"
+  ],
+  "invariants":{
+    "INV-001":"PARTIAL_GREEN",
+    "INV-020":"PARTIAL_GREEN",
+    "INV-021":"PARTIAL_GREEN",
+    "INV-024":"PARTIAL_GREEN",
+    "INV-027":"PARTIAL_GREEN",
+    "INV-030":"PARTIAL_GREEN"
+  },
+  "proofs":["packages/pilot-remedies/src/index.ts","tests/node/sw1-07.test.mjs"],
+  "not_claimed":["live refund rail","stored-value credit authorization","production launch","complete durable transaction fencing for the SW1 composition"]
+}
