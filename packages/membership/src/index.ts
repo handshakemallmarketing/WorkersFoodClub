@@ -33,7 +33,7 @@ export class FoundingWorkerEligibilityPolicy implements EligibilityPolicy {
   const workerClass=input.attributes['workerClass'];
   const verified=input.attributes['verified']===true;
   const allowed=workerClass==='PUBLIC_SECTOR' || workerClass==='APPROVED_INSTITUTION';
-  return Object.freeze({participantId:input.participantId,eligible:verified&&allowed,policyVersion:this.version,evidenceIds:[...input.evidenceIds],evaluatedAt:input.at,reason:verified&&allowed?'ELIGIBLE':'ELIGIBILITY_NOT_PROVEN'});
+  return Object.freeze({participantId:input.participantId,eligible:verified&&allowed,policyVersion:this.version,evidenceIds:Object.freeze([...input.evidenceIds]),evaluatedAt:input.at,reason:verified&&allowed?'ELIGIBLE':'ELIGIBILITY_NOT_PROVEN'});
  }
 }
 
@@ -41,10 +41,11 @@ export class InMemoryMembershipStore {
  private readonly relationships=new Map<string,MembershipRelationship>();
  establish(input:{id:string;participantId:ParticipantId;decision:EligibilityDecision;at:string}):MembershipRelationship{
   if(this.relationships.has(input.id)) throw new Error('MEMBERSHIP_ID_DUPLICATE');
+  if(this.byParticipant(input.participantId).some(x=>x.state==='ACTIVE')) throw new Error('ACTIVE_MEMBERSHIP_ALREADY_EXISTS');
   if(!input.decision.eligible) throw new Error('MEMBERSHIP_REQUIRES_ELIGIBILITY');
   if(input.decision.participantId!==input.participantId) throw new Error('ELIGIBILITY_PARTICIPANT_MISMATCH');
   if(input.decision.evidenceIds.length===0) throw new Error('MEMBERSHIP_ELIGIBILITY_EVIDENCE_REQUIRED');
-  const membership:MembershipRelationship=Object.freeze({id:input.id,participantId:input.participantId,state:'ACTIVE',establishedAt:input.at,eligibilityPolicyVersion:input.decision.policyVersion,eligibilityEvidenceIds:[...input.decision.evidenceIds]});
+  const membership:MembershipRelationship=Object.freeze({id:input.id,participantId:input.participantId,state:'ACTIVE',establishedAt:input.at,eligibilityPolicyVersion:input.decision.policyVersion,eligibilityEvidenceIds:Object.freeze([...input.decision.evidenceIds])});
   this.relationships.set(input.id,membership); return membership;
  }
  get(id:string){ return this.relationships.get(id); }
