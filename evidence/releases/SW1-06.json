@@ -1,0 +1,17 @@
+{
+  "release":"SW1-06",
+  "title":"Pick, Pack, Pickup, Acceptance and Exception Workflow",
+  "status":"PARTIAL_GREEN",
+  "baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "delivered":[
+    "authority-gated pick/pack/ready workflow over canonical allocation records",
+    "evidence-backed pickup handover distinct from member acceptance",
+    "member-authorized full and partial acceptance",
+    "partial-performance preservation through shared obligation-resolution ledger",
+    "shortfall/rejection exception capture linked to acceptance evidence",
+    "exception boundary that does not auto-create remedies"
+  ],
+  "proof":["packages/pilot-fulfillment/src/index.ts","packages/fulfillment/src/index.ts","tests/node/sw1-06.test.mjs"],
+  "notClaimed":["production durable fulfillment transaction","legal title/risk transfer policy","automatic remedy authorization","production launch"],
+  "next":"SW1-07 — refund/replacement remedies and obligation resolution"
+}
