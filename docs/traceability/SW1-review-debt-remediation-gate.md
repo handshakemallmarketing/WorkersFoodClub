@@ -6,10 +6,11 @@ Purpose: audit every unresolved review conversation from prior SW0/SW1 pull requ
 
 Priority order:
 1. Reproduce and remediate all unresolved P1 findings still live on current main.
-2. Add adversarial regression tests for every confirmed defect.
-3. Reconcile traceability and release evidence where prior reviews found overstated or stale claims.
-4. Resolve historical GitHub review threads only after the corresponding current-main disposition is evidenced.
-5. Re-run constitutional-conformance on the final remediation head.
+2. Reproduce and remediate all confirmed-live P2 findings, unless an explicit release decision documents and accepts a bounded deferral.
+3. Add adversarial regression tests for every confirmed defect.
+4. Reconcile traceability and release evidence where prior reviews found overstated or stale claims.
+5. Resolve historical GitHub review threads only after the corresponding current-main disposition is evidenced.
+6. Re-run constitutional-conformance on the final remediation head.
 
 Initial live-review clusters:
 - SW0 RC3/RC3R: live PostgreSQL same-owner fencing proof and transfer-policy authority attack coverage.
@@ -21,6 +22,7 @@ Initial live-review clusters:
 
 Exit criteria:
 - zero unresolved P1 defects known to be reproducible on current main;
+- zero confirmed-live P2 defects unless each deferred P2 has an explicit, bounded release-decision acceptance with rationale, risk owner and follow-up gate;
 - every historical unresolved thread has an explicit disposition;
 - fixes have adversarial tests and traceability where material;
 - constitutional-conformance is green;
