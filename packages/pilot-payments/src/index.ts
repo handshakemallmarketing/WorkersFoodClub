@@ -6,7 +6,7 @@ import {InMemoryDemandCommitmentLedger,type PaymentEvidenceRecord} from '../../d
 
 export type ProviderTerminalStatus='CONFIRMED'|'FAILED';
 export interface PaymentIntent {readonly id:string;readonly obligationId:ObligationId;readonly participantId:ParticipantId;readonly offerId:OfferId;readonly provider:string;readonly providerReference:string;readonly amount:Money;readonly state:'PENDING';readonly createdAt:string;}
-export interface VerifiedProviderWebhook {readonly providerReference:string;readonly status:ProviderTerminalStatus;readonly amount:Money;readonly occurredAt:string;}
+export interface VerifiedProviderWebhook {readonly providerReference:string;readonly rawStatus:string;readonly status:ProviderTerminalStatus;readonly statusMappingVersion:string;readonly amount:Money;readonly occurredAt:string;}
 export interface PaymentWebhookVerifier {verify(input:{rawBody:string;signature:string}):VerifiedProviderWebhook;}
 export interface PaymentProvider {readonly name:string;createIntent(input:{obligationId:ObligationId;participantId:ParticipantId;offerId:OfferId;amount:Money;idempotencyKey:string;at:string}):PaymentIntent;getIntent(providerReference:string):PaymentIntent|undefined;getIntentForObligation(obligationId:ObligationId):PaymentIntent|undefined;}
 export interface PaymentOperationContext {readonly actorId:ParticipantId;readonly grantIds:readonly AuthorityGrantId[];readonly at:string;}
@@ -31,15 +31,16 @@ export class SandboxWebhookVerifier implements PaymentWebhookVerifier{
  verify(input:{rawBody:string;signature:string}):VerifiedProviderWebhook{
   if(input.signature!==`sandbox:${this.secret}:${input.rawBody}`) throw new Error('PAYMENT_WEBHOOK_SIGNATURE_INVALID');let parsed:any;try{parsed=JSON.parse(input.rawBody);}catch{throw new Error('PAYMENT_WEBHOOK_BODY_INVALID');}
   if(!parsed||typeof parsed.providerReference!=='string'||!['CONFIRMED','FAILED'].includes(parsed.status)||typeof parsed.amountMinor!=='string'||!['GHS','USD'].includes(parsed.currency)||typeof parsed.occurredAt!=='string') throw new Error('PAYMENT_WEBHOOK_BODY_INVALID');validTime(parsed.occurredAt);
-  return Object.freeze({providerReference:parsed.providerReference,status:parsed.status,amount:Object.freeze({minor:BigInt(parsed.amountMinor),currency:parsed.currency}),occurredAt:parsed.occurredAt});
+  return Object.freeze({providerReference:parsed.providerReference,rawStatus:parsed.status,status:parsed.status,statusMappingVersion:'sandbox-terminal-v1',amount:Object.freeze({minor:BigInt(parsed.amountMinor),currency:parsed.currency}),occurredAt:parsed.occurredAt});
  }
 }
 
 export interface PaymentReconciliationReceipt {readonly eventId:string;readonly evidenceId:EvidenceId;readonly providerReference:string;readonly status:ProviderTerminalStatus;readonly economicTreatment:'RESTRICTED_MEMBER_PREPAYMENT'|'NO_ECONOMIC_EFFECT';}
+type ProviderReceiptBinding={readonly receipt:PaymentReconciliationReceipt;readonly amount:Money;readonly obligationId:ObligationId;readonly participantId:ParticipantId;readonly offerId:OfferId;};
 
 export class PilotPaymentService{
  private receipts=new Map<string,PaymentReconciliationReceipt>();
- private receiptsByProviderReference=new Map<string,{receipt:PaymentReconciliationReceipt;amount:Money}>();
+ private receiptsByProviderReference=new Map<string,ProviderReceiptBinding>();
  constructor(private readonly provider:PaymentProvider,private readonly verifier:PaymentWebhookVerifier,private readonly demand:InMemoryDemandCommitmentLedger,private readonly authority:AuthorityEvaluator){}
  createIntent(ctx:PaymentOperationContext,input:{obligationId:ObligationId;participantId:ParticipantId;offer:MemberOffer;idempotencyKey:string}):PaymentIntent{
   validTime(ctx.at);const c=this.demand.getCommitment(input.obligationId);if(!c) throw new Error('PAYMENT_OBLIGATION_UNKNOWN');if(c.participantId!==input.participantId||ctx.actorId!==input.participantId) throw new Error('PAYMENT_PARTICIPANT_MISMATCH');if(c.offerId!==input.offer.id) throw new Error('PAYMENT_OFFER_MISMATCH');
@@ -49,12 +50,23 @@ export class PilotPaymentService{
   const existing=this.provider.getIntentForObligation(input.obligationId);if(existing){if(existing.participantId!==c.participantId||existing.offerId!==c.offerId||!sameMoney(existing.amount,c.committedMemberPrice)) throw new Error('PAYMENT_OBLIGATION_INTENT_CONFLICT');return existing;}
   return this.provider.createIntent({obligationId:input.obligationId,participantId:c.participantId,offerId:c.offerId,amount:c.committedMemberPrice,idempotencyKey:input.idempotencyKey,at:ctx.at});
  }
+ private assertIntentBinding(intent:PaymentIntent,obligationId:ObligationId){
+  if(intent.obligationId!==obligationId) throw new Error('PAYMENT_PROVIDER_REFERENCE_REBOUND');
+  const c=this.demand.getCommitment(obligationId);if(!c||c.participantId!==intent.participantId||c.offerId!==intent.offerId) throw new Error('PAYMENT_PROVIDER_REFERENCE_REBOUND');
+ }
+ private makeReceipt(eventId:string,record:PaymentEvidenceRecord):PaymentReconciliationReceipt{
+  const treatment=this.demand.paymentTreatment(record.evidenceId);return Object.freeze({eventId,evidenceId:record.evidenceId,providerReference:record.providerReference,status:record.status as ProviderTerminalStatus,economicTreatment:treatment.classification});
+ }
+ private recordTerminal(eventId:string,intent:PaymentIntent,verified:VerifiedProviderWebhook,receivedAt:string,supersedesEvidenceId?:EvidenceId){
+  const evidenceId=asId<'EvidenceId'>(`evidence:payment:${eventId}`);const record:PaymentEvidenceRecord={evidenceId,obligationId:intent.obligationId,provider:intent.provider,providerReference:intent.providerReference,amount:verified.amount,status:verified.status,observedAt:verified.occurredAt,recordedAt:receivedAt,providerRawStatus:verified.rawStatus,providerStatusMappingVersion:verified.statusMappingVersion,...(supersedesEvidenceId!==undefined?{supersedesEvidenceId}: {})};
+  const persisted=this.demand.recordPaymentEvidence(record);const receipt=this.makeReceipt(eventId,persisted);this.receipts.set(eventId,receipt);this.receiptsByProviderReference.set(intent.providerReference,Object.freeze({receipt,amount:Object.freeze({...verified.amount}),obligationId:intent.obligationId,participantId:intent.participantId,offerId:intent.offerId}));return receipt;
+ }
  reconcileWebhook(input:{eventId:string;rawBody:string;signature:string;receivedAt:string}):PaymentReconciliationReceipt{
   validTime(input.receivedAt);const verified=this.verifier.verify({rawBody:input.rawBody,signature:input.signature});const intent=this.provider.getIntent(verified.providerReference);if(!intent) throw new Error('PAYMENT_INTENT_UNKNOWN');if(!sameMoney(intent.amount,verified.amount)) throw new Error('PAYMENT_AMOUNT_MISMATCH');
-  const priorEvent=this.receipts.get(input.eventId);if(priorEvent){const priorPayment=this.demand.getPayment(priorEvent.evidenceId);if(!priorPayment||priorEvent.providerReference!==verified.providerReference||priorEvent.status!==verified.status||!sameMoney(priorPayment.amount,verified.amount)) throw new Error('PAYMENT_EVENT_REPLAY_CONFLICT');return priorEvent;}
-  const priorByRef=this.receiptsByProviderReference.get(verified.providerReference);if(priorByRef){if(!sameMoney(priorByRef.amount,verified.amount)) throw new Error('PAYMENT_PROVIDER_REFERENCE_AMOUNT_CONFLICT');if(priorByRef.receipt.status!==verified.status) throw new Error('PAYMENT_PROVIDER_TERMINAL_CONFLICT');this.receipts.set(input.eventId,priorByRef.receipt);return priorByRef.receipt;}
+  const priorEvent=this.receipts.get(input.eventId);if(priorEvent){const priorPayment=this.demand.getPayment(priorEvent.evidenceId);if(!priorPayment||priorEvent.providerReference!==verified.providerReference||priorEvent.status!==verified.status||!sameMoney(priorPayment.amount,verified.amount)||priorPayment.providerRawStatus!==verified.rawStatus||priorPayment.providerStatusMappingVersion!==verified.statusMappingVersion) throw new Error('PAYMENT_EVENT_REPLAY_CONFLICT');this.assertIntentBinding(intent,priorPayment.obligationId);return priorEvent;}
+  const priorByRef=this.receiptsByProviderReference.get(verified.providerReference);if(priorByRef){if(priorByRef.obligationId!==intent.obligationId||priorByRef.participantId!==intent.participantId||priorByRef.offerId!==intent.offerId) throw new Error('PAYMENT_PROVIDER_REFERENCE_REBOUND');if(!sameMoney(priorByRef.amount,verified.amount)) throw new Error('PAYMENT_PROVIDER_REFERENCE_AMOUNT_CONFLICT');if(priorByRef.receipt.status===verified.status){this.receipts.set(input.eventId,priorByRef.receipt);return priorByRef.receipt;}return this.recordTerminal(input.eventId,intent,verified,input.receivedAt,priorByRef.receipt.evidenceId);}
   const persisted=this.demand.findPaymentByProviderReference(intent.provider,verified.providerReference);
-  if(persisted){if(!sameMoney(persisted.amount,verified.amount)) throw new Error('PAYMENT_PROVIDER_REFERENCE_AMOUNT_CONFLICT');if(persisted.status!==verified.status) throw new Error('PAYMENT_PROVIDER_TERMINAL_CONFLICT');const treatment=this.demand.paymentTreatment(persisted.evidenceId);const receipt=Object.freeze({eventId:input.eventId,evidenceId:persisted.evidenceId,providerReference:persisted.providerReference,status:verified.status,economicTreatment:treatment.classification});this.receipts.set(input.eventId,receipt);this.receiptsByProviderReference.set(intent.providerReference,{receipt,amount:Object.freeze({...persisted.amount})});return receipt;}
-  const evidenceId=asId<'EvidenceId'>(`evidence:payment:${input.eventId}`);const record:PaymentEvidenceRecord={evidenceId,obligationId:intent.obligationId,provider:intent.provider,providerReference:intent.providerReference,amount:verified.amount,status:verified.status,observedAt:verified.occurredAt,recordedAt:input.receivedAt};this.demand.recordPaymentEvidence(record);const treatment=this.demand.paymentTreatment(evidenceId);const receipt=Object.freeze({eventId:input.eventId,evidenceId,providerReference:intent.providerReference,status:verified.status,economicTreatment:treatment.classification});this.receipts.set(input.eventId,receipt);this.receiptsByProviderReference.set(intent.providerReference,{receipt,amount:Object.freeze({...verified.amount})});return receipt;
+  if(persisted){this.assertIntentBinding(intent,persisted.obligationId);if(!sameMoney(persisted.amount,verified.amount)) throw new Error('PAYMENT_PROVIDER_REFERENCE_AMOUNT_CONFLICT');if(persisted.status===verified.status){const receipt=this.makeReceipt(input.eventId,persisted);this.receipts.set(input.eventId,receipt);this.receiptsByProviderReference.set(intent.providerReference,Object.freeze({receipt,amount:Object.freeze({...persisted.amount}),obligationId:intent.obligationId,participantId:intent.participantId,offerId:intent.offerId}));return receipt;}return this.recordTerminal(input.eventId,intent,verified,input.receivedAt,persisted.evidenceId);}
+  return this.recordTerminal(input.eventId,intent,verified,input.receivedAt);
  }
 }
