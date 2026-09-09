@@ -7,8 +7,8 @@
     "external authenticated identity remains distinct from canonical Participant identity",
     "provider identity may bind to a Participant only through explicit authorized action",
     "membership verification requires real delegated authority",
-    "active member access requires both authenticated binding and active membership",
-    "provider evidence mismatch fails closed"
+    "active member access requires both authenticated issuer+subject binding and active membership",
+    "fresh authentication evidence is permitted for the same bound issuer+subject tuple"
   ],
   "invariants":{
     "INV-001":"PARTIAL_GREEN strengthened at SW1 product boundary: UI/auth-provider access is not authority; identity.bind and membership.verify require AuthorityEvaluator approval.",
@@ -25,7 +25,8 @@
     "duplicate provider identity rebinding rejected",
     "revoked membership-verification grant rejected",
     "suspended membership rejected",
-    "provider evidence mismatch rejected"
+    "wrong issuer rejected",
+    "issuer/subject delimiter-collision impersonation rejected by injective tuple encoding"
   ],
   "productionAuthorization":false,
   "next":"SW1-02 governed catalog, offers, benchmark display and sales-window configuration"
