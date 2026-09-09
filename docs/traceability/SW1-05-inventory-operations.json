@@ -1,0 +1,32 @@
+{
+  "release":"SW1-05",
+  "title":"Inventory Receiving, Explicit Lineage, Quality and Allocation Operator Workflow",
+  "scope":"Bounded pilot inventory operator boundary over the existing SW0 inventory, demand and explicit-lineage kernels after SW1-04A remediation.",
+  "proofs":[
+    "packages/pilot-inventory/src/index.ts",
+    "tests/node/sw1-05.test.mjs",
+    "packages/inventory/src/index.ts",
+    "packages/lineage/src/index.ts",
+    "packages/demand/src/index.ts"
+  ],
+  "invariants":["INV-001","INV-004","INV-007","INV-008","INV-009","INV-010","INV-027","INV-030"],
+  "claims":[
+    "inventory receive, quality, transform, derived-receive and allocation actions require real Authority grants with quantity context where applicable",
+    "allocation authority is scoped to the affected lot rather than a caller-controlled allocation identifier",
+    "custody is not inferred from UI role; the receiving operator must match the declared custodian in this pilot workflow",
+    "allocation resolves the purchase obligation from the canonical demand ledger rather than trusting caller-shaped obligation state",
+    "transform consumption reduces source allocatable availability so transformed and source quantities cannot be double allocated",
+    "derived lots must match explicit output lineage quantity",
+    "unsafe or not-yet-accepted lots report zero allocatable availability",
+    "future-dated quality evidence cannot unlock inventory early",
+    "receipt/lineage collision is prevalidated so failure cannot leave a ghost inventory receipt",
+    "lot and obligation over-allocation fail closed"
+  ],
+  "limitations":[
+    "reference workflow remains in-memory in this SW1 product slice; durable lineage and transactional primitives already exist from SW0",
+    "SW1-05 does not independently prove stale-command/version fencing and therefore does not add new INV-028 proof",
+    "no production warehouse UI or device integration",
+    "no production launch authorization"
+  ],
+  "next":"SW1-06 pick/pack/pickup, acceptance and exception workflow"
+}
