@@ -10,7 +10,7 @@
     "disclose projection source lineage and freshness appropriate to use",
     "prove drop/rebuild equivalence from canonical sources"
   ],
-  "constitutionalBasis":["C10-RAT-06","C10-RAT-10","INV-013","INV-024","INV-029","INV-030"],
+  "constitutionalBasis":["INV-013","INV-024","INV-029","INV-030"],
   "productionAuthorization":false,
-  "next":"SW1-09 conformance hardening and end-to-end constitutional vertical-slice replay"
+  "next":"SW1-09 — pilot operations/admin controls, audit views and recovery tooling"
 }
