@@ -1,8 +1,0 @@
-{
-  "slice":"SW1-08B",
-  "status":"PARTIAL_GREEN",
-  "implemented":["adversarial regression for transform-versus-allocation physical conservation"],
-  "invariants":{"INV-007":"PARTIAL_GREEN","INV-008":"PARTIAL_GREEN","INV-009":"PARTIAL_GREEN","INV-027":"PARTIAL_GREEN","INV-030":"PARTIAL_GREEN"},
-  "proofs":["tests/node/sw1-08b.test.mjs","docs/traceability/SW1-08B-inventory-transform-allocation-conservation.json"],
-  "not_claimed":["production launch","complete durable multi-ledger transaction fencing"]
-}
