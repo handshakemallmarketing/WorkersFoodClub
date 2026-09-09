@@ -74,7 +74,7 @@ export class PilotIdentityMembershipService {
   this.participants.require(input.participantId);
   if(Number.isNaN(Date.parse(input.principal.authenticatedAt)) || Number.isNaN(Date.parse(input.at))) throw new Error('AUTH_TIME_INVALID');
   if(Date.parse(input.principal.authenticatedAt)>Date.parse(input.at)) throw new Error('AUTHENTICATION_FROM_FUTURE');
-  const decision=this.authority.evaluate({actorId:input.actorId,action:'identity.bind',targetId:`participant:${String(input.participantId)}`,at:input.at,grantIds:input.grantIds});
+  const decision=this.authority.evaluate({actorId:input.actorId,action:'identity.bind',targetId:String(input.participantId),at:input.at,grantIds:input.grantIds});
   if(!decision.allowed || !decision.grantId) throw new Error(`IDENTITY_BIND_UNAUTHORIZED:${decision.reason}`);
   return this.bindings.bind({
    id:input.bindingId,
@@ -95,7 +95,7 @@ export class PilotIdentityMembershipService {
  }):MembershipRelationship{
   this.participants.require(input.actorId);
   this.participants.require(input.participantId);
-  const authorityDecision=this.authority.evaluate({actorId:input.actorId,action:'membership.verify',targetId:`membership:${input.membershipId}`,at:input.at,grantIds:input.grantIds});
+  const authorityDecision=this.authority.evaluate({actorId:input.actorId,action:'membership.verify',targetId:input.membershipId,at:input.at,grantIds:input.grantIds});
   if(!authorityDecision.allowed) throw new Error(`MEMBERSHIP_VERIFY_UNAUTHORIZED:${authorityDecision.reason}`);
   return this.memberships.establish({id:input.membershipId,participantId:input.participantId,decision:input.decision,at:input.at});
  }
