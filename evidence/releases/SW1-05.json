@@ -1,0 +1,10 @@
+{
+  "release":"SW1-05",
+  "status":"BOUNDED_GREEN_PENDING_CI",
+  "scope":"Pilot inventory receiving, explicit lineage, quality and allocation operator workflow rebuilt on SW1-04A",
+  "evidence":["packages/pilot-inventory/src/index.ts","tests/node/sw1-05.test.mjs","docs/traceability/SW1-05-inventory-operations.json"],
+  "reviewRemediations":["source inventory debited by transform-aware availability","receipt-lineage collision prevalidation","bounded authority quantity context","canonical obligation resolution","quality-aware availability","future quality rejection","lot-scoped allocation authority","corrected lot-overallocation proof","unsupported INV-028 claim removed"],
+  "productionAuthorization":false,
+  "invariantStatusPromotion":false,
+  "next":"SW1-06"
+}
