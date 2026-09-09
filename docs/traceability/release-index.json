@@ -16,6 +16,6 @@
     "INV-027":["tests/node/sw0-rc1b.test.mjs","tests/node/sw0-12b.test.mjs","packages/durability/src/postgres.ts","scripts/test-postgres-durability.sh","docs/traceability/SW0-RC3R-independent-rereview.json","packages/pilot-checkout/src/index.ts","tests/node/sw1-03.test.mjs"],
     "INV-028":["tests/node/sw0-rc1b.test.mjs","tests/node/sw0-12b.test.mjs","packages/durability/src/postgres.ts","scripts/test-postgres-durability.sh","docs/traceability/SW0-RC3R-independent-rereview.json"],
     "INV-029":["tests/node/sw0-10.test.mjs","tests/node/sw0-rc2c.test.mjs"],
-    "INV-030":["scripts/check-traceability.mjs","docs/traceability/release-index.json"]
+    "INV-030":["scripts/check-traceability.mjs","docs/traceability/release-index.json","docs/traceability/SW1-03-cart-preorder-checkout.json","docs/traceability/SW1-04-sandbox-payments.json"]
   }
 }
