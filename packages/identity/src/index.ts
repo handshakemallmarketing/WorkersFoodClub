@@ -36,7 +36,8 @@ export class InMemoryParticipantDirectory {
 export class InMemoryIdentityBindingStore {
  private readonly byExternalKey=new Map<string,IdentityBinding>();
  private readonly byId=new Map<string,IdentityBinding>();
- private key(issuer:string,subject:string){ return `${issuer}::${subject}`; }
+ // JSON tuple encoding is injective for string issuer/subject pairs and avoids delimiter collisions.
+ private key(issuer:string,subject:string){ return JSON.stringify([issuer,subject]); }
  bind(binding:IdentityBinding):IdentityBinding{
   if(!binding.issuer.trim() || !binding.subject.trim()) throw new Error('AUTH_IDENTITY_INVALID');
   if(this.byId.has(binding.id)) throw new Error('IDENTITY_BINDING_ID_DUPLICATE');
@@ -100,9 +101,11 @@ export class PilotIdentityMembershipService {
  }
 
  resolveActiveMember(principal:AuthenticatedPrincipal):{participant:Participant;membership:MembershipRelationship}{
+  if(!principal.issuer.trim()||!principal.subject.trim()||Number.isNaN(Date.parse(principal.authenticatedAt))) throw new Error('AUTH_PRINCIPAL_INVALID');
   const binding=this.bindings.resolve(principal);
   if(!binding) throw new Error('AUTH_IDENTITY_NOT_BOUND');
-  if(binding.providerEvidenceId!==principal.providerEvidenceId) throw new Error('AUTH_EVIDENCE_MISMATCH');
+  // providerEvidenceId identifies the current authentication observation. A new login is expected
+  // to carry new evidence; the exact issuer+subject tuple, not bind-time evidence identity, determines identity.
   const participant=this.participants.require(binding.participantId);
   const membership=this.memberships.byParticipant(binding.participantId).find(x=>x.state==='ACTIVE');
   if(!membership) throw new Error('ACTIVE_MEMBERSHIP_REQUIRED');
