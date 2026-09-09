@@ -26,14 +26,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - name: Install PostgreSQL client
-        run: |
-          # The hosted runner carries unrelated third-party APT sources (for example
-          # Google Chrome). A stale index there must not block installation of the
-          # Ubuntu-provided PostgreSQL client used by the durability checks.
-          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get -o Acquire::Retries=3 update
-          sudo apt-get install -y --no-install-recommends postgresql-client
       - run: pnpm canon:check
       - run: pnpm traceability:check
       - run: pnpm typecheck
