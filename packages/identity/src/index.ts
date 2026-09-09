@@ -1,6 +1,6 @@
 import type {AuthorityGrantId,EvidenceId,Participant,ParticipantId} from '../../kernel/src/index.js';
 import {AuthorityEvaluator} from '../../authority/src/index.js';
-import type {EligibilityDecision,InMemoryMembershipStore,MembershipRelationship} from '../../membership/src/index.js';
+import type {EligibilityDecision,InMemoryMembershipStore,MembershipRelationship,GovernedEligibilityDecisionStore} from '../../membership/src/index.js';
 
 export interface AuthenticatedPrincipal {
  readonly issuer:string;
@@ -36,19 +36,27 @@ export class InMemoryParticipantDirectory {
 export class InMemoryIdentityBindingStore {
  private readonly byExternalKey=new Map<string,IdentityBinding>();
  private readonly byId=new Map<string,IdentityBinding>();
- // JSON tuple encoding is injective for string issuer/subject pairs and avoids delimiter collisions.
  private key(issuer:string,subject:string){ return JSON.stringify([issuer,subject]); }
  bind(binding:IdentityBinding):IdentityBinding{
   if(!binding.issuer.trim() || !binding.subject.trim()) throw new Error('AUTH_IDENTITY_INVALID');
-  if(this.byId.has(binding.id)) throw new Error('IDENTITY_BINDING_ID_DUPLICATE');
+  const existingById=this.byId.get(binding.id);
+  if(existingById){
+   if(this.same(existingById,binding)) return existingById;
+   throw new Error('IDENTITY_BINDING_ID_CONFLICT');
+  }
   const key=this.key(binding.issuer,binding.subject);
-  if(this.byExternalKey.has(key)) throw new Error('AUTH_IDENTITY_ALREADY_BOUND');
+  const existingExternal=this.byExternalKey.get(key);
+  if(existingExternal){
+   if(this.same(existingExternal,binding)) return existingExternal;
+   throw new Error('AUTH_IDENTITY_ALREADY_BOUND');
+  }
   const frozen=Object.freeze({...binding});
   this.byId.set(binding.id,frozen);
   this.byExternalKey.set(key,frozen);
   return frozen;
  }
  resolve(principal:Pick<AuthenticatedPrincipal,'issuer'|'subject'>){ return this.byExternalKey.get(this.key(principal.issuer,principal.subject)); }
+ private same(a:IdentityBinding,b:IdentityBinding){return a.id===b.id&&a.issuer===b.issuer&&a.subject===b.subject&&a.participantId===b.participantId&&a.providerEvidenceId===b.providerEvidenceId&&a.boundAt===b.boundAt&&a.boundBy===b.boundBy&&a.authorityGrantId===b.authorityGrantId;}
 }
 
 export interface AuthorizedIdentityCommand {
@@ -62,50 +70,44 @@ export class PilotIdentityMembershipService {
   private readonly participants:InMemoryParticipantDirectory,
   private readonly bindings:InMemoryIdentityBindingStore,
   private readonly memberships:InMemoryMembershipStore,
-  private readonly authority:AuthorityEvaluator
+  private readonly authority:AuthorityEvaluator,
+  private readonly eligibility?:GovernedEligibilityDecisionStore
  ){}
 
- bindAuthenticatedIdentity(input:AuthorizedIdentityCommand & {
-  bindingId:string;
-  principal:AuthenticatedPrincipal;
-  participantId:ParticipantId;
- }):IdentityBinding{
+ bindAuthenticatedIdentity(input:AuthorizedIdentityCommand & {bindingId:string;principal:AuthenticatedPrincipal;participantId:ParticipantId;}):IdentityBinding{
   this.participants.require(input.actorId);
   this.participants.require(input.participantId);
   if(Number.isNaN(Date.parse(input.principal.authenticatedAt)) || Number.isNaN(Date.parse(input.at))) throw new Error('AUTH_TIME_INVALID');
   if(Date.parse(input.principal.authenticatedAt)>Date.parse(input.at)) throw new Error('AUTHENTICATION_FROM_FUTURE');
+  const existing=this.bindings.resolve(input.principal);
+  if(existing){
+   if(existing.id===input.bindingId&&existing.participantId===input.participantId&&existing.providerEvidenceId===input.principal.providerEvidenceId&&existing.boundAt===input.at&&existing.boundBy===input.actorId) return existing;
+   throw new Error('AUTH_IDENTITY_ALREADY_BOUND');
+  }
   const decision=this.authority.evaluate({actorId:input.actorId,action:'identity.bind',targetId:String(input.participantId),at:input.at,grantIds:input.grantIds});
   if(!decision.allowed || !decision.grantId) throw new Error(`IDENTITY_BIND_UNAUTHORIZED:${decision.reason}`);
-  return this.bindings.bind({
-   id:input.bindingId,
-   issuer:input.principal.issuer,
-   subject:input.principal.subject,
-   participantId:input.participantId,
-   providerEvidenceId:input.principal.providerEvidenceId,
-   boundAt:input.at,
-   boundBy:input.actorId,
-   authorityGrantId:decision.grantId
-  });
+  return this.bindings.bind({id:input.bindingId,issuer:input.principal.issuer,subject:input.principal.subject,participantId:input.participantId,providerEvidenceId:input.principal.providerEvidenceId,boundAt:input.at,boundBy:input.actorId,authorityGrantId:decision.grantId});
  }
 
- establishVerifiedMembership(input:AuthorizedIdentityCommand & {
-  membershipId:string;
-  participantId:ParticipantId;
-  decision:EligibilityDecision;
- }):MembershipRelationship{
+ establishVerifiedMembership(input:AuthorizedIdentityCommand & {membershipId:string;participantId:ParticipantId;decision:EligibilityDecision;}):MembershipRelationship{
   this.participants.require(input.actorId);
   this.participants.require(input.participantId);
+  const existing=this.memberships.get(input.membershipId);
+  if(existing){
+   if(existing.participantId===input.participantId&&existing.establishedAt===input.at&&existing.eligibilityPolicyVersion===input.decision.policyVersion&&JSON.stringify(existing.eligibilityEvidenceIds)===JSON.stringify(input.decision.evidenceIds)) return existing;
+   throw new Error('MEMBERSHIP_ID_CONFLICT');
+  }
+  if(!this.eligibility) throw new Error('GOVERNED_ELIGIBILITY_REQUIRED');
+  const governed=this.eligibility.requireGoverned(input.decision);
   const authorityDecision=this.authority.evaluate({actorId:input.actorId,action:'membership.verify',targetId:input.membershipId,at:input.at,grantIds:input.grantIds});
   if(!authorityDecision.allowed) throw new Error(`MEMBERSHIP_VERIFY_UNAUTHORIZED:${authorityDecision.reason}`);
-  return this.memberships.establish({id:input.membershipId,participantId:input.participantId,decision:input.decision,at:input.at});
+  return this.memberships.establish({id:input.membershipId,participantId:input.participantId,decision:governed,at:input.at});
  }
 
  resolveActiveMember(principal:AuthenticatedPrincipal):{participant:Participant;membership:MembershipRelationship}{
   if(!principal.issuer.trim()||!principal.subject.trim()||Number.isNaN(Date.parse(principal.authenticatedAt))) throw new Error('AUTH_PRINCIPAL_INVALID');
   const binding=this.bindings.resolve(principal);
   if(!binding) throw new Error('AUTH_IDENTITY_NOT_BOUND');
-  // providerEvidenceId identifies the current authentication observation. A new login is expected
-  // to carry new evidence; the exact issuer+subject tuple, not bind-time evidence identity, determines identity.
   const participant=this.participants.require(binding.participantId);
   const membership=this.memberships.byParticipant(binding.participantId).find(x=>x.state==='ACTIVE');
   if(!membership) throw new Error('ACTIVE_MEMBERSHIP_REQUIRED');
