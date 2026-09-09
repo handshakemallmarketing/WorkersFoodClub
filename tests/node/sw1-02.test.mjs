@@ -70,5 +70,12 @@ test('review debt: catalog view cannot swap in a different benchmark after publi
 });
 
 test('review debt: quantity-limited catalog publication authority receives offer quantity',()=>{
- const authorityStore=new InMemoryAuthorityStore();const actor=pid('participant:limited-catalog');const grant=gid('grant:limited-catalog');authorityStore.put({id:grant,grantorId:pid('participant:food-club'),actorId:actor,actions:['catalog.specification.publish','catalog.listing.publish','catalog.price.observe','catalog.sales-window.publish','catalog.benchmark.publish','catalog.offer.publish'],targetPrefix:'',maxQuantity:5,validFrom:'2026-09-08T00:00:00Z'});const f={actor,grant,authorityStore,service:new GovernedPilotCatalogService(new AuthorityEvaluator(authorityStore),new InMemoryCatalog())};const {ctx,spec,pe}=seed(f);const offer=oid('offer:limited');f.service.publishOffer(ctx,{salesWindowId:'window:sep',benchmarkDisplayId:'benchmark:rice',offer:{id:offer,offerorId:pid('participant:food-club'),specificationId:spec,quantity:quantity(5,'kg'),memberPrice:money(50000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'Hospital A',validFrom:'2026-09-08T12:00:00Z',validUntil:'2026-09-10T12:00:00Z',priceEvidenceIds:[pe],policyVersions:['member-price-v1']}});assert.ok(offer);
+ const f=fixture();
+ const {ctx,spec,pe}=seed(f);
+ const limited=gid('grant:limited-offer');
+ f.authorityStore.put({id:limited,grantorId:pid('participant:food-club'),actorId:f.actor,actions:['catalog.offer.publish'],targetPrefix:'offer:',maxQuantity:5,validFrom:'2026-09-08T00:00:00Z'});
+ const limitedCtx={actorId:f.actor,grantIds:[limited],at};
+ const offer=oid('offer:limited');
+ f.service.publishOffer(limitedCtx,{salesWindowId:'window:sep',benchmarkDisplayId:'benchmark:rice',offer:{id:offer,offerorId:pid('participant:food-club'),specificationId:spec,quantity:quantity(5,'kg'),memberPrice:money(50000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'Hospital A',validFrom:'2026-09-08T12:00:00Z',validUntil:'2026-09-10T12:00:00Z',priceEvidenceIds:[pe],policyVersions:['member-price-v1']}});
+ assert.ok(offer);
 });
