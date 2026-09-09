@@ -1,0 +1,16 @@
+{
+  "release":"SW1-08",
+  "title":"Member Savings Ledger, Order History and Projection Rebuild/Freshness",
+  "baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "scope":[
+    "compute member savings from actual fulfilled/remedied economics against governed versioned benchmarks",
+    "preserve zero and negative savings rather than suppressing unfavorable outcomes",
+    "derive member order history from canonical obligations, fulfillment, remedies and economic evidence",
+    "treat member, order and savings views as rebuildable projections rather than competing write authorities",
+    "disclose projection source lineage and freshness appropriate to use",
+    "prove drop/rebuild equivalence from canonical sources"
+  ],
+  "constitutionalBasis":["C10-RAT-06","C10-RAT-10","INV-013","INV-024","INV-029","INV-030"],
+  "productionAuthorization":false,
+  "next":"SW1-09 conformance hardening and end-to-end constitutional vertical-slice replay"
+}
