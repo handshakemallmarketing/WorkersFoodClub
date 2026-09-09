@@ -56,8 +56,11 @@ export class GovernedPilotInventoryService {
  transform(ctx:InventoryOperationContext,input:ExplicitPhysicalTransform){
   if(!Number.isNaN(Date.parse(input.occurredAt))&&Date.parse(input.occurredAt)>Date.parse(ctx.at)) throw new Error('TRANSFORMATION_FROM_FUTURE');
   for(const port of input.inputs){
-   if(!this.inventory.getReceipt(port.lotId as LotId)) throw new Error('TRANSFORMATION_INPUT_NOT_RECEIVED');
+   const lotId=port.lotId as LotId;
+   if(!this.inventory.getReceipt(lotId)) throw new Error('TRANSFORMATION_INPUT_NOT_RECEIVED');
    this.authorize(ctx,'inventory.transform',port.lotId,port.quantity.amount);
+   const available=this.availability(lotId);
+   if(port.quantity.unit!==available.unit||port.quantity.amount>available.amount) throw new Error('TRANSFORMATION_INPUT_EXCEEDS_AVAILABLE');
   }
   return this.lineage.transform(input);
  }
