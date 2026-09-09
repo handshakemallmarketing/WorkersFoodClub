@@ -33,6 +33,8 @@ test('SW1-02 governed offer retains benchmark evidence and bounded sales window'
  const view=f.service.catalogView({listingId:'listing:rice',offerId:offer,benchmarkDisplayId:'benchmark:rice',at:'2026-09-09T12:00:00Z'});
  assert.equal(view.benchmark.disclaimer,'REFERENCE_ONLY_NOT_FINAL_SAVINGS');
  assert.equal(view.benchmark.value.minor,60000n);
+ assert.deepEqual(view.benchmark.conditions,['cash']);
+ assert.throws(()=>view.benchmark.conditions.push('tampered'),TypeError);
 });
 
 test('SW1-02 UI/catalog access cannot substitute for catalog authority',()=>{
@@ -55,4 +57,18 @@ test('SW1-02 offer cannot escape governed sales window or pickup place',()=>{
 test('SW1-02 offer must retain the evidence used for displayed benchmark',()=>{
  const f=fixture(),{ctx,spec}=seed(f);
  assert.throws(()=>f.service.publishOffer(ctx,{salesWindowId:'window:sep',benchmarkDisplayId:'benchmark:rice',offer:{id:oid('offer:no-benchmark-lineage'),offerorId:pid('participant:food-club'),specificationId:spec,quantity:quantity(5,'kg'),memberPrice:money(50000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'Hospital A',validFrom:'2026-09-08T12:00:00Z',validUntil:'2026-09-09T12:00:00Z',priceEvidenceIds:[eid('evidence:other')],policyVersions:['member-price-v1']}}),/OFFER_BENCHMARK_EVIDENCE_NOT_RETAINED|OFFER_PRICE_EVIDENCE_UNKNOWN/);
+});
+
+test('review debt: catalog view cannot swap in a different benchmark after publication',()=>{
+ const f=fixture(),{ctx,spec,pe}=seed(f);
+ const alternate=eid('evidence:retail-rice-alt');
+ f.service.recordPriceObservation(ctx,{evidenceId:alternate,specificationId:spec,price:money(90000n,'GHS'),basis:quantity(5,'kg'),place:'Accra Retail',observedAt:'2026-09-08T09:30:00Z',transactionLevel:'RETAIL',conditions:['promo']});
+ f.service.defineBenchmarkDisplay(ctx,{id:'benchmark:rice:alt',specificationId:spec,priceEvidenceId:alternate,methodVersion:'retail-reference-v1'});
+ const offer=oid('offer:bound-benchmark');
+ f.service.publishOffer(ctx,{salesWindowId:'window:sep',benchmarkDisplayId:'benchmark:rice',offer:{id:offer,offerorId:pid('participant:food-club'),specificationId:spec,quantity:quantity(5,'kg'),memberPrice:money(50000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'Hospital A',validFrom:'2026-09-08T12:00:00Z',validUntil:'2026-09-10T12:00:00Z',priceEvidenceIds:[pe,alternate],policyVersions:['member-price-v1']}});
+ assert.throws(()=>f.service.catalogView({listingId:'listing:rice',offerId:offer,benchmarkDisplayId:'benchmark:rice:alt',at:'2026-09-09T12:00:00Z'}),/CATALOG_VIEW_BENCHMARK_MISMATCH/);
+});
+
+test('review debt: quantity-limited catalog publication authority receives offer quantity',()=>{
+ const authorityStore=new InMemoryAuthorityStore();const actor=pid('participant:limited-catalog');const grant=gid('grant:limited-catalog');authorityStore.put({id:grant,grantorId:pid('participant:food-club'),actorId:actor,actions:['catalog.specification.publish','catalog.listing.publish','catalog.price.observe','catalog.sales-window.publish','catalog.benchmark.publish','catalog.offer.publish'],targetPrefix:'',maxQuantity:5,validFrom:'2026-09-08T00:00:00Z'});const f={actor,grant,authorityStore,service:new GovernedPilotCatalogService(new AuthorityEvaluator(authorityStore),new InMemoryCatalog())};const {ctx,spec,pe}=seed(f);const offer=oid('offer:limited');f.service.publishOffer(ctx,{salesWindowId:'window:sep',benchmarkDisplayId:'benchmark:rice',offer:{id:offer,offerorId:pid('participant:food-club'),specificationId:spec,quantity:quantity(5,'kg'),memberPrice:money(50000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'Hospital A',validFrom:'2026-09-08T12:00:00Z',validUntil:'2026-09-10T12:00:00Z',priceEvidenceIds:[pe],policyVersions:['member-price-v1']}});assert.ok(offer);
 });
