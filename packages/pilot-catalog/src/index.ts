@@ -21,6 +21,7 @@ export interface BenchmarkDisplay {
  readonly place:string;
  readonly observedAt:string;
  readonly transactionLevel:'FARMGATE'|'WHOLESALE'|'RETAIL'|'MEMBER';
+ readonly conditions:readonly string[];
  readonly methodVersion:string;
  readonly disclaimer:'REFERENCE_ONLY_NOT_FINAL_SAVINGS';
 }
@@ -38,10 +39,12 @@ export class GovernedPilotCatalogService {
  private readonly windows=new Map<string,SalesWindow>();
  private readonly observedPrices=new Map<EvidenceId,PriceObservation>();
  private readonly benchmarks=new Map<string,BenchmarkDisplay>();
+ private readonly benchmarkByOffer=new Map<OfferId,string>();
  constructor(private readonly authority:AuthorityEvaluator,private readonly catalog:InMemoryCatalog){}
 
- private authorize(ctx:CatalogPublicationContext,action:string,targetId:string){
-  const decision=this.authority.evaluate({actorId:ctx.actorId,action,targetId,at:ctx.at,grantIds:ctx.grantIds});
+ private authorize(ctx:CatalogPublicationContext,action:string,targetId:string,quantity?:number){
+  const request={actorId:ctx.actorId,action,targetId,at:ctx.at,grantIds:ctx.grantIds,...(quantity===undefined?{}:{quantity})};
+  const decision=this.authority.evaluate(request);
   if(!decision.allowed) throw new Error(`CATALOG_UNAUTHORIZED:${decision.reason}`);
   return decision;
  }
@@ -81,24 +84,27 @@ export class GovernedPilotCatalogService {
   if(!observation) throw new Error('BENCHMARK_PRICE_EVIDENCE_UNKNOWN');
   if(observation.specificationId!==input.specificationId) throw new Error('BENCHMARK_SPECIFICATION_MISMATCH');
   requireText(input.methodVersion,'BENCHMARK_METHOD_REQUIRED');
-  const display:BenchmarkDisplay=Object.freeze({id:input.id,specificationId:input.specificationId,priceEvidenceId:input.priceEvidenceId,value:observation.price,basis:observation.basis,place:observation.place,observedAt:observation.observedAt,transactionLevel:observation.transactionLevel,methodVersion:input.methodVersion,disclaimer:'REFERENCE_ONLY_NOT_FINAL_SAVINGS'});
+  const display:BenchmarkDisplay=Object.freeze({id:input.id,specificationId:input.specificationId,priceEvidenceId:input.priceEvidenceId,value:observation.price,basis:observation.basis,place:observation.place,observedAt:observation.observedAt,transactionLevel:observation.transactionLevel,conditions:Object.freeze([...observation.conditions]),methodVersion:input.methodVersion,disclaimer:'REFERENCE_ONLY_NOT_FINAL_SAVINGS'});
   this.benchmarks.set(input.id,display);return display;
  }
 
  publishOffer(ctx:CatalogPublicationContext,input:{offer:MemberOffer;salesWindowId:string;benchmarkDisplayId:string}){
-  this.authorize(ctx,'catalog.offer.publish',String(input.offer.id));
+  this.authorize(ctx,'catalog.offer.publish',String(input.offer.id),input.offer.quantity.amount);
   const window=this.windows.get(input.salesWindowId);if(!window||!window.active) throw new Error('SALES_WINDOW_INACTIVE');
   const benchmark=this.benchmarks.get(input.benchmarkDisplayId);if(!benchmark) throw new Error('BENCHMARK_DISPLAY_UNKNOWN');
   if(benchmark.specificationId!==input.offer.specificationId) throw new Error('OFFER_BENCHMARK_SPECIFICATION_MISMATCH');
   if(input.offer.pickupPlace!==window.pickupPlace) throw new Error('OFFER_WINDOW_PLACE_MISMATCH');
   if(validTime(input.offer.validFrom)<validTime(window.validFrom)||validTime(input.offer.validUntil)>validTime(window.validUntil)) throw new Error('OFFER_OUTSIDE_SALES_WINDOW');
   if(!input.offer.priceEvidenceIds.includes(benchmark.priceEvidenceId)) throw new Error('OFFER_BENCHMARK_EVIDENCE_NOT_RETAINED');
-  return this.catalog.publishMemberOffer(input.offer);
+  const published=this.catalog.publishMemberOffer(input.offer);
+  this.benchmarkByOffer.set(input.offer.id,input.benchmarkDisplayId);
+  return published;
  }
 
  catalogView(input:{listingId:string;offerId:OfferId;benchmarkDisplayId:string;at:string}){
   const listing=this.catalog.getListing(input.listingId);if(!listing||!listing.active) throw new Error('LISTING_INACTIVE');
   const offer=this.catalog.getOffer(input.offerId);if(!offer||!this.catalog.isOfferExecutable(input.offerId,input.at)) throw new Error('OFFER_NOT_EXECUTABLE');
+  const publishedBenchmarkId=this.benchmarkByOffer.get(input.offerId);if(!publishedBenchmarkId||publishedBenchmarkId!==input.benchmarkDisplayId) throw new Error('CATALOG_VIEW_BENCHMARK_MISMATCH');
   const benchmark=this.benchmarks.get(input.benchmarkDisplayId);if(!benchmark) throw new Error('BENCHMARK_DISPLAY_UNKNOWN');
   if(listing.specificationId!==offer.specificationId||benchmark.specificationId!==offer.specificationId) throw new Error('CATALOG_VIEW_SPECIFICATION_MISMATCH');
   return Object.freeze({listing,offer,benchmark});

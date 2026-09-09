@@ -33,3 +33,5 @@ jobs:
       - run: pnpm test
       - run: pnpm test:kernel
       - run: bash scripts/test-postgres-durability.sh
+      - run: pnpm add -Dw --lockfile=false pg@8.13.1
+      - run: node scripts/test-postgres-adapter-race.mjs
