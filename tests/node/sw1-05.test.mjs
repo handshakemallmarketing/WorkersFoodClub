@@ -69,6 +69,7 @@ test('SW1-05 transform debits source availability and prevents physical double a
 test('SW1-05 failed source receipt on a derived lineage ID leaves no ghost inventory receipt',()=>{
  const {actor,grant,service}=setup(); const source=lot('lot:atomic-source'), derived=lot('lot:atomic-derived');
  service.receiveLot({actorId:actor,grantIds:[grant],at},receipt(String(source),actor,10));
+ service.assessQuality({actorId:actor,grantIds:[grant],at},{id:'quality:atomic-source',lotId:source,state:'ACCEPTED',assessedAt:at,evidenceIds:[eid('e:qas')]});
  service.transform({actorId:actor,grantIds:[grant],at},{id:'transform:atomic',kind:'REPACK',inputs:[{lotId:String(source),quantity:quantity(5,'kg')}],outputs:[{lotId:String(derived),quantity:quantity(5,'kg')}],lossQuantity:quantity(0,'kg'),occurredAt:at,evidenceIds:[eid('e:ta')]});
  assert.throws(()=>service.receiveLot({actorId:actor,grantIds:[grant],at},receipt(String(derived),actor,99)),/LINEAGE_LOT_INVALID/);
  assert.throws(()=>service.assessQuality({actorId:actor,grantIds:[grant],at},{id:'quality:ghost',lotId:derived,state:'ACCEPTED',assessedAt:at,evidenceIds:[eid('e:qg')]}),/QUALITY_LOT_UNKNOWN/);
