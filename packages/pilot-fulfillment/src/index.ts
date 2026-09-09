@@ -1,4 +1,4 @@
-import type {AuthorityGrantId,ObligationId,ParticipantId,Quantity} from '../../kernel/src/index.js';
+import type {AuthorityGrantId,ObligationId,ParticipantId,Quantity,SpecificationId} from '../../kernel/src/index.js';
 import {AuthorityEvaluator} from '../../authority/src/index.js';
 import type {InMemoryDemandCommitmentLedger} from '../../demand/src/index.js';
 import type {InMemoryInventoryLedger,AllocationRecord} from '../../inventory/src/index.js';
@@ -15,7 +15,7 @@ type FulfillmentObligationView={
  readonly id:ObligationId;
  readonly participantId:ParticipantId;
  readonly beneficiary:ParticipantId;
- readonly specificationId:ReturnType<InMemoryDemandCommitmentLedger['getCommitment']> extends infer _T ? any : never;
+ readonly specificationId:SpecificationId;
  readonly quantity:Quantity;
  readonly state:'OPEN';
 };
@@ -37,7 +37,7 @@ export class GovernedPilotFulfillmentService {
   return decision;
  }
 
- private order(obligationId:ObligationId){
+ private order(obligationId:ObligationId):FulfillmentObligationView{
   const commitment=this.demand.getCommitment(obligationId);
   if(!commitment) throw new Error('FULFILLMENT_OBLIGATION_UNKNOWN');
   return Object.freeze({
