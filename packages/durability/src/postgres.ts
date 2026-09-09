@@ -7,6 +7,7 @@ export interface PgPool {connect():Promise<PgClient>;}
 
 type Row={idempotency_key:string;command_id:string;state:'IN_FLIGHT'|'COMMITTED';owner_token:string;lease_until:string;fence_generation?:string|number;result_json:CommandResult|null};
 const iso=(d:Date)=>d.toISOString();
+const retryableTransactionError=(error:unknown):boolean=>{const code=typeof error==='object'&&error!==null&&'code' in error?String((error as {code?:unknown}).code??''):'';return code==='40001'||code==='40P01';};
 export interface FencedClaim {readonly state:'CLAIMED';readonly fenceGeneration:number;}
 
 export class PostgresDurableCommandStore implements DurableCommandStore {
@@ -15,7 +16,16 @@ export class PostgresDurableCommandStore implements DurableCommandStore {
   if(!ownerToken.trim()) throw new Error('DURABLE_OWNER_TOKEN_REQUIRED');
   if(!Number.isInteger(leaseMs)||leaseMs<=0) throw new Error('DURABLE_LEASE_INVALID');
  }
- private async tx<T>(fn:(c:PgClient)=>Promise<T>):Promise<T>{const c=await this.pool.connect();try{await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');const out=await fn(c);await c.query('COMMIT');return out;}catch(error){try{await c.query('ROLLBACK');}catch{}throw error;}finally{c.release?.();}}
+ private async tx<T>(fn:(c:PgClient)=>Promise<T>):Promise<T>{
+  const maxAttempts=5;
+  for(let attempt=1;attempt<=maxAttempts;attempt++){
+   const c=await this.pool.connect();
+   try{await c.query('BEGIN ISOLATION LEVEL SERIALIZABLE');const out=await fn(c);await c.query('COMMIT');return out;}
+   catch(error){try{await c.query('ROLLBACK');}catch{}if(!retryableTransactionError(error)||attempt===maxAttempts)throw error;await new Promise(resolve=>setTimeout(resolve,Math.min(5*attempt,25)));}
+   finally{c.release?.();}
+  }
+  throw new Error('DURABLE_TRANSACTION_RETRY_EXHAUSTED');
+ }
  async claimFenced(key:string,commandId:string):Promise<FencedClaim|'IN_FLIGHT'|CommandResult>{
   if(!key.trim()||!commandId.trim()) throw new Error('DURABLE_COMMAND_IDENTITY_REQUIRED');
   return this.tx(async c=>{const now=this.now(),leaseUntil=new Date(now.getTime()+this.leaseMs);const inserted=await c.query<Row>(`INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,created_at,updated_at) VALUES($1,$2,'IN_FLIGHT',$3,$4,1,$5,$5) ON CONFLICT (idempotency_key) DO NOTHING RETURNING idempotency_key,command_id,state,owner_token,lease_until,fence_generation,result_json`,[key,commandId,this.ownerToken,iso(leaseUntil),iso(now)]);if(inserted.rowCount===1){this.activeFences.set(key,1);return Object.freeze({state:'CLAIMED' as const,fenceGeneration:1});}const found=await c.query<Row>('SELECT idempotency_key,command_id,state,owner_token,lease_until,fence_generation,result_json FROM durable_command_execution WHERE idempotency_key=$1 FOR UPDATE',[key]);const row=found.rows[0];if(!row)throw new Error('DURABLE_CLAIM_LOST');if(row.command_id!==commandId)throw new Error('IDEMPOTENCY_KEY_COMMAND_CONFLICT');if(row.state==='COMMITTED'){if(!row.result_json)throw new Error('DURABLE_COMMITTED_RESULT_MISSING');return Object.freeze({...row.result_json,eventIds:[...row.result_json.eventIds],replayed:true});}if(Date.parse(row.lease_until)>now.getTime())return 'IN_FLIGHT';const takeover=await c.query<Row>(`UPDATE durable_command_execution SET owner_token=$2,lease_until=$3,fence_generation=fence_generation+1,updated_at=$4 WHERE idempotency_key=$1 AND state='IN_FLIGHT' AND lease_until<=$4 RETURNING idempotency_key,command_id,state,owner_token,lease_until,fence_generation,result_json`,[key,this.ownerToken,iso(leaseUntil),iso(now)]);if(takeover.rowCount!==1)return 'IN_FLIGHT';const fence=Number(takeover.rows[0]?.fence_generation);if(!Number.isInteger(fence)||fence<=0)throw new Error('DURABLE_FENCE_INVALID');this.activeFences.set(key,fence);return Object.freeze({state:'CLAIMED' as const,fenceGeneration:fence});});
