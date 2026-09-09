@@ -1,0 +1,39 @@
+{
+  "release":"SW1-07",
+  "title":"Governed Refund/Replacement Remedies and Obligation Resolution",
+  "baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "productEntry":"SW1-00",
+  "scope":[
+    "remedy creation resolves a canonical purchase obligation and recorded fulfillment exception",
+    "remedy creation and completion require bounded authority with quantity context",
+    "refund/replacement/credit quantity cannot exceed the source exception or shared unresolved obligation position",
+    "remedy completion is evidence-backed and duplicate completion fails closed",
+    "replacement through substitution cannot bypass equivalence, recomputation and consent requirements",
+    "performed and remedied quantity share one obligation-resolution conservation boundary",
+    "credit remains explicitly classified as non-stored-value unless separately classified and authorized"
+  ],
+  "invariants":{
+    "INV-001":"PARTIAL_GREEN strengthened: consequential remedy actions require AuthorityEvaluator approval.",
+    "INV-020":"PARTIAL_GREEN strengthened: performance plus remedy cannot exceed the original obligation quantity.",
+    "INV-021":"PARTIAL_GREEN strengthened: replacement/substitution retains equivalence, consent and economic recomputation requirements.",
+    "INV-024":"PARTIAL_GREEN strengthened: completion is additive evidence; prior fulfillment/exception history is not rewritten.",
+    "INV-027":"PARTIAL_GREEN strengthened: duplicate remedy completion cannot duplicate economic resolution.",
+    "INV-030":"No promotion. SW1 composition reuses SW0 remedy/resolution semantics and does not create new stored-value or automatic-settlement meaning."
+  },
+  "proof":[
+    "packages/pilot-remedies/src/index.ts",
+    "packages/remedy/src/index.ts",
+    "packages/resolution/src/index.ts",
+    "tests/node/sw1-07.test.mjs"
+  ],
+  "negativePaths":[
+    "missing remedy authority rejected",
+    "forged exception linkage rejected",
+    "remedy over-allocation rejected",
+    "duplicate remedy completion rejected",
+    "replacement without consent rejected",
+    "future-dated remedy effect rejected"
+  ],
+  "productionAuthorization":false,
+  "next":"SW1-08 member savings ledger, order history and projection rebuild/freshness"
+}
