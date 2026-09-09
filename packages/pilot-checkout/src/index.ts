@@ -8,6 +8,7 @@ export interface CartLine {readonly offerId:OfferId;readonly quantity:Quantity;}
 export interface PilotCart {readonly id:string;readonly participantId:ParticipantId;readonly state:CartState;readonly lines:readonly CartLine[];readonly createdAt:string;readonly updatedAt:string;readonly checkoutObligationId?:ObligationId;readonly checkoutReservationId?:string;}
 
 const validTime=(value:string)=>{if(Number.isNaN(Date.parse(value))) throw new Error('CART_TIME_INVALID');};
+const checkoutFailureCapability=Symbol('checkout-failure-capability');
 
 export class InMemoryPilotCartStore {
  private readonly carts=new Map<string,PilotCart>();
@@ -25,8 +26,8 @@ export class InMemoryPilotCartStore {
   validTime(input.at);if(!input.reservationId.trim()) throw new Error('CHECKOUT_RESERVATION_REQUIRED');const cart=this.requireOpen(input.cartId,input.participantId);
   const next:PilotCart=Object.freeze({...cart,state:'CHECKING_OUT',checkoutObligationId:input.obligationId,checkoutReservationId:input.reservationId,updatedAt:input.at});this.carts.set(cart.id,next);return next;
  }
- releaseCheckout(input:{cartId:string;participantId:ParticipantId;reservationId:string;at:string}):PilotCart{
-  validTime(input.at);const cart=this.requireReservation(input.cartId,input.participantId,input.reservationId);const {checkoutObligationId:_o,checkoutReservationId:_r,...rest}=cart;const next:PilotCart=Object.freeze({...rest,state:'OPEN',updatedAt:input.at});this.carts.set(cart.id,next);return next;
+ releaseCheckoutAfterFailure(input:{cartId:string;participantId:ParticipantId;reservationId:string;at:string},capability:symbol):PilotCart{
+  if(capability!==checkoutFailureCapability) throw new Error('CHECKOUT_RELEASE_FORBIDDEN');validTime(input.at);const cart=this.requireReservation(input.cartId,input.participantId,input.reservationId);const {checkoutObligationId:_o,checkoutReservationId:_r,...rest}=cart;const next:PilotCart=Object.freeze({...rest,state:'OPEN',updatedAt:input.at});this.carts.set(cart.id,next);return next;
  }
  markCheckedOut(input:{cartId:string;participantId:ParticipantId;reservationId:string;obligationId:ObligationId;at:string}):PilotCart{
   validTime(input.at);const cart=this.requireReservation(input.cartId,input.participantId,input.reservationId);if(cart.checkoutObligationId!==input.obligationId) throw new Error('CHECKOUT_OBLIGATION_MISMATCH');const next:PilotCart=Object.freeze({...cart,state:'CHECKED_OUT',updatedAt:input.at});this.carts.set(cart.id,next);return next;
@@ -47,7 +48,8 @@ export class PilotCheckoutService {
    const commitment=await this.commitments.commitPurchase({obligationId:input.obligationId,participantId:input.participantId,membership:input.membership,offer:input.offer,quantity:line.quantity,authorizedCommandId:input.authorizedCommandId,authorizedEventId:input.authorizedEventId,acceptedAt:input.acceptedAt,policyVersions:input.policyVersions});
    this.carts.markCheckedOut({cartId:input.cartId,participantId:input.participantId,reservationId,obligationId:input.obligationId,at:input.acceptedAt});return commitment;
   }catch(error){
-   const current=this.carts.get(input.cartId);if(current?.state==='CHECKING_OUT'&&current.checkoutReservationId===reservationId)this.carts.releaseCheckout({cartId:input.cartId,participantId:input.participantId,reservationId,at:input.acceptedAt});
+   const current=this.carts.get(input.cartId);
+   if(current?.state==='CHECKING_OUT'&&current.checkoutReservationId===reservationId&&!this.commitments.getCommitment(input.obligationId)) this.carts.releaseCheckoutAfterFailure({cartId:input.cartId,participantId:input.participantId,reservationId,at:input.acceptedAt},checkoutFailureCapability);
    throw error;
   }
  }
