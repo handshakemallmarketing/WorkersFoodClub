@@ -1,0 +1,13 @@
+{
+  "slice":"SW1-08B",
+  "status":"IMPLEMENTATION_IN_PROGRESS",
+  "finding":"pilot-inventory transform could consume quantity already committed by allocation because lineage consumption and inventory allocation were checked in separate ledgers",
+  "requiredFix":[
+    "bound every transform input against GovernedPilotInventoryService.availability before lineage.transform",
+    "reject transform input quantity greater than genuinely uncommitted available quantity",
+    "add adversarial regression proving a fully allocated lot cannot also be transformed"
+  ],
+  "invariants":["INV-007","INV-008","INV-009","INV-027","INV-030"],
+  "productionAuthorization":false,
+  "next":"SW1-09 conformance hardening and end-to-end constitutional vertical-slice replay"
+}
