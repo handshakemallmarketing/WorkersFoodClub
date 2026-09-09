@@ -51,7 +51,8 @@ export class PilotCheckoutService {
   const reservationId=`${String(input.authorizedCommandId)}:${input.authorizedEventId}`;
   this.carts.reserveCheckout({cartId:input.cartId,participantId:input.participantId,reservationId,obligationId:input.obligationId,at:input.acceptedAt});
   try{
-   const commitment=await this.commitments.commitPurchase({obligationId:input.obligationId,participantId:input.participantId,membership:canonicalMembership,offer:canonicalOffer,quantity:line.quantity,authorizedCommandId:input.authorizedCommandId,authorizedEventId:input.authorizedEventId,acceptedAt:input.acceptedAt,policyVersions:input.policyVersions});
+   const authorizationTerms=Object.freeze({participantId:input.participantId,action:'AcceptMemberPurchase' as const,cartId:input.cartId,offerId:canonicalOffer.id,quantity:Object.freeze({...line.quantity})});
+   const commitment=await this.commitments.commitPurchase({obligationId:input.obligationId,participantId:input.participantId,membership:canonicalMembership,offer:canonicalOffer,quantity:line.quantity,authorizedCommandId:input.authorizedCommandId,authorizedEventId:input.authorizedEventId,acceptedAt:input.acceptedAt,policyVersions:input.policyVersions,authorizationTerms});
    this.carts.markCheckedOut({cartId:input.cartId,participantId:input.participantId,reservationId,obligationId:input.obligationId,at:input.acceptedAt});return commitment;
   }catch(error){
    const current=this.carts.get(input.cartId);
