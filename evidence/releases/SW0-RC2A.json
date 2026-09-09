@@ -1,0 +1,11 @@
+{
+  "release":"SW0-RC2A",
+  "title":"Durable explicit multi-input/multi-output physical lineage",
+  "status":"PARTIAL_GREEN",
+  "closedBlockers":["RC1-B05"],
+  "affectedInvariants":["INV-007","INV-008"],
+  "delivered":["explicit per-input lot quantities","explicit per-output lot quantities","multi-input and multi-output transformations","atomic PostgreSQL lineage persistence","cumulative consumption enforcement","rollback without partial lineage state","durable normalized ancestry rows"],
+  "remainingRC1Blockers":["RC1-B04 transaction-specific title/risk production policy gate"],
+  "notAuthorized":["full GREEN for INV-007/008","production launch without title/risk policy","universal title/risk transfer rule"],
+  "traceability":"docs/traceability/SW0-RC2A-durable-explicit-lineage.json"
+}

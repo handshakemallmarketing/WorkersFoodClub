@@ -1,0 +1,35 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {asId,money,quantity} from '../../dist/packages/kernel/src/index.js';
+import {InMemoryDemandCommitmentLedger} from '../../dist/packages/demand/src/index.js';
+import {InMemoryInventoryLedger} from '../../dist/packages/inventory/src/index.js';
+import {SupplyDecisionLedger} from '../../dist/packages/governance/src/index.js';
+import {RebuildableProjection,inventoryProjection} from '../../dist/packages/projections/src/index.js';
+import {InMemoryObligationResolutionLedger} from '../../dist/packages/resolution/src/index.js';
+import {InMemoryRemedyLedger} from '../../dist/packages/remedy/src/index.js';
+import {mapProviderStatus,migrateNullableBoolean,projectLiquidity,resolveDeliveryEvidence} from '../../dist/packages/conformance/src/index.js';
+
+const pid=x=>asId(x),sid=x=>asId(x),oid=x=>asId(x),ofid=x=>asId(x),eid=x=>asId(x),cid=x=>asId(x),lid=x=>asId(x);
+const member={id:'membership:fx',participantId:pid('participant:member'),state:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('e:eligibility')]};
+const offer={id:ofid('offer:rice'),offerorId:pid('participant:club'),specificationId:sid('spec:rice'),quantity:quantity(1,'unit'),memberPrice:money(1000n,'GHS'),priceBasis:quantity(1,'unit'),pickupPlace:'pickup:a',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',priceEvidenceIds:[eid('e:price')],policyVersions:['price:v1']};
+const verifier={isAccepted:(c,e)=>c==='cmd:checkout'&&e==='evt:accepted'};
+const purchase=(overrides={})=>({obligationId:oid('obligation:fx'),participantId:member.participantId,membership:member,offer,quantity:quantity(1,'unit'),authorizedCommandId:cid('cmd:checkout'),authorizedEventId:'evt:accepted',acceptedAt:'2026-09-07T10:00:00Z',policyVersions:['checkout:v1'],...overrides});
+
+test('FX-001 duplicate checkout retry creates one purchase obligation only',async()=>{const l=new InMemoryDemandCommitmentLedger(verifier);const first=await l.commitPurchase(purchase());assert.equal(first.obligation.id,oid('obligation:fx'));await assert.rejects(()=>l.commitPurchase(purchase()),/OBLIGATION_ID_DUPLICATE/);assert.equal(l.getCommitment(oid('obligation:fx')).obligation.id,oid('obligation:fx'));});
+
+test('FX-002 concurrent allocation of last unit admits at most one hard allocation',async()=>{const l=new InMemoryInventoryLedger();const lot=lid('lot:last');l.receiveLot({lot:{id:lot,specificationId:sid('spec:rice'),quantity:quantity(1,'unit')},ownerId:pid('club'),custodianId:pid('club'),placeId:'warehouse:a',receivedAt:'2026-09-07T10:00:00Z',receiptEvidenceIds:[eid('e:receipt')]});l.assessQuality({id:'q1',lotId:lot,state:'ACCEPTED',assessedAt:'2026-09-07T10:01:00Z',evidenceIds:[eid('e:q')]});const obligation={id:oid('o:last'),specificationId:sid('spec:rice'),quantity:quantity(1,'unit'),state:'OPEN'};const alloc=id=>Promise.resolve().then(()=>l.allocate({id,lotId:lot,obligationId:obligation.id,specificationId:obligation.specificationId,quantity:quantity(1,'unit'),allocatedAt:'2026-09-07T10:02:00Z',evidenceIds:[eid(`e:${id}`)]},obligation));const settled=await Promise.allSettled([alloc('a1'),alloc('a2')]);assert.equal(settled.filter(x=>x.status==='fulfilled').length,1);assert.equal(l.allocatedForLot(lot),1);});
+
+test('FX-003 forecast cannot be promoted to order without authorized obligation event',async()=>{const l=new InMemoryDemandCommitmentLedger();l.recordSignal({id:'forecast:1',participantId:member.participantId,specificationId:offer.specificationId,quantity:quantity(20,'unit'),kind:'FORECAST',observedAt:'2026-09-07T09:00:00Z',evidenceIds:[eid('e:forecast')]});await assert.rejects(()=>l.commitPurchase(purchase({sourceDemandSignalId:'forecast:1'})),/COMMAND_VERIFIER_REQUIRED/);assert.equal(l.getCommitment(oid('obligation:fx')),undefined);});
+
+test('FX-004 supplier quote without executable quantity remains an offer, not available supply',()=>{const l=new SupplyDecisionLedger();assert.throws(()=>l.recordFact({id:'quote:zero',facet:'OFFER',specificationId:sid('spec:rice'),quantity:quantity(0,'unit'),place:'tema',at:'2026-09-07T10:00:00Z',evidenceIds:[eid('e:quote')]}),/SUPPLY_FACT_INVALID/);const quote=l.recordFact({id:'quote:1',facet:'OFFER',specificationId:sid('spec:rice'),quantity:quantity(10,'unit'),place:'tema',at:'2026-09-07T10:00:00Z',evidenceIds:[eid('e:quote2')]});assert.equal(quote.facet,'OFFER');assert.notEqual(quote.facet,'AVAILABLE');});
+
+test('FX-005 owned lot under quality hold cannot project as available',()=>{const p=new RebuildableProjection(inventoryProjection);const at='2026-09-07T10:00:00Z';const r=(sequence,recordId,payload)=>({stream:'inventory',sequence,recordId,occurredAt:at,payload});const row=p.rebuild([r(1,'r1',{kind:'LOT_RECEIVED',lotId:'lot:hold',specificationId:'rice',quantity:5}),r(2,'r2',{kind:'QUALITY',lotId:'lot:hold',state:'QUARANTINED'})],at).rows.get('lot:hold');assert.equal(row.availableQuantity,0);assert.equal(row.qualityState,'QUARANTINED');});
+
+test('FX-010 courier delivery assertion plus member dispute preserves conflict and blocks acceptance',()=>{assert.equal(resolveDeliveryEvidence({providerDelivered:true,memberAccepted:false,memberDisputed:true}),'DISPUTED');});
+
+test('FX-012 wallet-style credit cannot be represented as refund settlement',()=>{const resolution=new InMemoryObligationResolutionLedger();const l=new InMemoryRemedyLedger(resolution);const obligation={id:oid('o:refund'),participantId:pid('member'),specificationId:sid('spec:rice'),quantity:quantity(1,'unit')};l.recordException({id:'x1',obligationId:obligation.id,participantId:obligation.participantId,kind:'SHORTFALL',affectedQuantity:quantity(1,'unit'),occurredAt:'2026-09-07T10:00:00Z',evidenceIds:[eid('e:x')]},obligation);assert.throws(()=>l.createRemedy({id:'remedy:bad',sourceExceptionId:'x1',originalObligationId:obligation.id,participantId:obligation.participantId,kind:'CREDIT',quantity:quantity(1,'unit'),createdAt:'2026-09-07T10:01:00Z',authorizedEventId:'evt:remedy',evidenceIds:[eid('e:r')],economicClassification:'REMEDY_SETTLEMENT'}),/REMEDY_CLASSIFICATION_INVALID/);});
+
+test('FX-016 member prepayment cannot appear as unrestricted deployable capital',()=>{const view=projectLiquidity([{minor:50000n,currency:'GHS',classification:'RESTRICTED_MEMBER_PREPAYMENT'}]);assert.equal(view.deployableMinor,0n);assert.equal(view.restrictedMinor,50000n);});
+
+test('FX-022 external provider semantic change cannot silently upgrade status',()=>{const map={provider:'MOMO',version:'v1',mappings:{SUCCESS:'CONFIRMED',FAILED:'FAILED'}};assert.equal(mapProviderStatus(map,'SUCCESS'),'CONFIRMED');assert.equal(mapProviderStatus(map,'SETTLED_V2'),'UNKNOWN');});
+
+test('FX-025 migration preserves unknown instead of mapping it to false or zero',()=>{assert.equal(migrateNullableBoolean(undefined),'UNKNOWN');assert.equal(migrateNullableBoolean(null),'UNKNOWN');assert.equal(migrateNullableBoolean(false),'FALSE');assert.equal(migrateNullableBoolean(true),'TRUE');});

@@ -1,0 +1,18 @@
+{
+  "slice":"SW1-04",
+  "title":"Sandbox payment provider seam, webhook evidence and reconciliation",
+  "base":"SW1-03",
+  "claims":[
+    "payment intent is linked to an existing authorized purchase commitment",
+    "sandbox payment initiation is idempotent and conflicting reuse fails closed",
+    "provider webhook authenticity is verified by an injected verifier rather than caller assertion",
+    "tampered amounts are rejected before canonical payment evidence is recorded",
+    "verified terminal provider messages become typed payment evidence",
+    "confirmed member payment remains restricted prepayment rather than earned revenue or unrestricted capital",
+    "same webhook event replay is idempotent and a second event for the same provider reference cannot duplicate economic effect"
+  ],
+  "proof":["packages/pilot-payments/src/index.ts","tests/node/sw1-04.test.mjs"],
+  "invariants":["INV-002","INV-004","INV-023","INV-024","INV-027","INV-028","INV-030"],
+  "scope":"Sandbox adapter only; no live Mobile Money provider, live funds, production webhook signature scheme or production launch authorization.",
+  "status":"PARTIAL_GREEN"
+}

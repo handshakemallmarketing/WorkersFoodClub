@@ -55,11 +55,23 @@ export class InMemoryRejectionEvidenceSink implements RejectionEvidenceSink {
  all(){ return [...this.records]; }
 }
 
+/**
+ * Consequential commands must cross a transactional executor that owns durable
+ * idempotency, expected-version enforcement and canonical/domain co-commit.
+ * The legacy CommandBus handler path is intentionally unavailable for actions
+ * classified as consequential.
+ */
+export interface TransactionalCommandExecutor {
+ execute<T>(command:CommandEnvelope<T>,opts?:{quantity?:number}):Promise<CommandResult>;
+}
+
 export interface CommandBusOptions {
  readonly idempotencyStore?:IdempotencyStore;
  readonly versionStore?:VersionStore;
  readonly rejectionEvidence?:RejectionEvidenceSink;
  readonly executionRegistry?:CommandExecutionRegistry;
+ readonly consequentialActions?:readonly string[];
+ readonly transactionalExecutor?:TransactionalCommandExecutor;
 }
 
 export class CommandBus {
@@ -68,13 +80,22 @@ export class CommandBus {
  private readonly versions:VersionStore|undefined;
  private readonly rejectionEvidence:RejectionEvidenceSink|undefined;
  private readonly executionRegistry:CommandExecutionRegistry|undefined;
+ private readonly consequentialActions:Set<string>;
+ private readonly transactionalExecutor:TransactionalCommandExecutor|undefined;
  constructor(private readonly authority:AuthorityEvaluator, options:CommandBusOptions={}){
   this.idempotency=options.idempotencyStore??new InMemoryIdempotencyStore();
   this.versions=options.versionStore;
   this.rejectionEvidence=options.rejectionEvidence;
   this.executionRegistry=options.executionRegistry;
+  this.consequentialActions=new Set(options.consequentialActions??[]);
+  this.transactionalExecutor=options.transactionalExecutor;
+  if(this.consequentialActions.size>0&&!this.transactionalExecutor) throw new Error('TRANSACTIONAL_EXECUTOR_REQUIRED');
  }
- register<T>(handler:CommandHandler<T>){ if(this.handlers.has(handler.action)) throw new Error('HANDLER_DUPLICATE'); this.handlers.set(handler.action,handler); }
+ register<T>(handler:CommandHandler<T>){
+  if(this.consequentialActions.has(handler.action)) throw new Error('CONSEQUENTIAL_HANDLER_MUST_BE_TRANSACTIONAL');
+  if(this.handlers.has(handler.action)) throw new Error('HANDLER_DUPLICATE');
+  this.handlers.set(handler.action,handler);
+ }
  private async reject<T>(command:CommandEnvelope<T>,reason:string):Promise<CommandResult>{
   const result:CommandResult={status:'REJECTED',reason,eventIds:[],replayed:false};
   await this.rejectionEvidence?.append({commandId:command.commandId,idempotencyKey:command.idempotencyKey,actorId:command.actorId,action:command.action,...(command.targetId!==undefined?{targetId:command.targetId}:{}),reason,requestedAt:command.requestedAt,correlationId:command.correlationId,authorityGrantIds:[...command.authorityGrantIds],policyVersions:[...command.policyVersions]});
@@ -83,17 +104,25 @@ export class CommandBus {
   return stored===result?result:{...stored,replayed:true};
  }
  async execute<T>(command:CommandEnvelope<T>, opts?:{quantity?:number}):Promise<CommandResult>{
-  const prior=await this.idempotency.get(command.idempotencyKey);
-  if(prior){ await this.executionRegistry?.record(command.commandId,prior); return {...prior,replayed:true}; }
-  if(command.expectedVersion!==undefined){
-   if(!command.targetId) return this.reject(command,'EXPECTED_VERSION_REQUIRES_TARGET');
-   if(!this.versions) return this.reject(command,'VERSION_STORE_REQUIRED');
-   const current=await this.versions.get(command.targetId);
-   if(current===undefined || current!==command.expectedVersion) return this.reject(command,'VERSION_CONFLICT');
+  const consequential=this.consequentialActions.has(command.action);
+  if(!consequential){
+   const prior=await this.idempotency.get(command.idempotencyKey);
+   if(prior){ await this.executionRegistry?.record(command.commandId,prior); return {...prior,replayed:true}; }
+   if(command.expectedVersion!==undefined){
+    if(!command.targetId) return this.reject(command,'EXPECTED_VERSION_REQUIRES_TARGET');
+    if(!this.versions) return this.reject(command,'VERSION_STORE_REQUIRED');
+    const current=await this.versions.get(command.targetId);
+    if(current===undefined || current!==command.expectedVersion) return this.reject(command,'VERSION_CONFLICT');
+   }
   }
   const authRequest={actorId:command.actorId,action:command.action,at:command.requestedAt,grantIds:command.authorityGrantIds,...(command.targetId!==undefined?{targetId:command.targetId}:{}),...(opts?.quantity!==undefined?{quantity:opts.quantity}:{})};
   const decision=this.authority.evaluate(authRequest);
   if(!decision.allowed) return this.reject(command,decision.reason satisfies AuthorityReason);
+  if(consequential){
+   const result=await this.transactionalExecutor!.execute(command,opts);
+   await this.executionRegistry?.record(command.commandId,result);
+   return result;
+  }
   const handler=this.handlers.get(command.action); if(!handler) return this.reject(command,'NO_HANDLER');
   let eventIds:readonly string[];
   try { eventIds=await handler.handle(command); }

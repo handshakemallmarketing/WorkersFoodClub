@@ -1,0 +1,10 @@
+{
+  "release":"SW0-RC2C",
+  "title":"Full SW0 end-to-end adversarial vertical-slice proof",
+  "status":"PARTIAL_GREEN",
+  "affectedInvariants":["INV-003","INV-004","INV-007","INV-008","INV-009","INV-013","INV-019","INV-020","INV-024","INV-029"],
+  "delivered":["single cross-module executable purchase-to-savings path","duplicate payment rejection","explicit conserved lot provenance","quality-gated allocation","duplicate handover rejection","partial acceptance without false completion","refund remedy completion","independent governed title/risk transitions","governed benchmark savings with remedy economics","stale projection detection and deterministic rebuild"],
+  "attackRegister":"docs/traceability/SW0-RC2C-end-to-end-adversarial-proof.json",
+  "notAuthorized":["full GREEN for all invariants","production launch without RC3 review","treating in-memory integration proof as replacement for PostgreSQL durability proofs","hard-coded universal legal title/risk rule"],
+  "next":"SW0-RC3 independent release review and baseline freeze decision"
+}

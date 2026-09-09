@@ -1,0 +1,20 @@
+{
+  "slice":"SW0-RC3A",
+  "baseline":"CB-00-v0.1",
+  "sourceReview":"SW0-RC3",
+  "blockers":[
+    {"id":"RC3-B01","severity":"P0","remediation":"PostgresDurableCommandStore now returns CLAIMED only when it inserts a new claim row or successfully takes over an expired lease. Any existing unexpired IN_FLIGHT row returns IN_FLIGHT regardless of owner_token, preventing two process instances sharing one owner token from concurrently entering the handler."},
+    {"id":"RC3-B02","severity":"P1","remediation":"GovernedTransferPolicyRegistry now requires an injected AuthorityEvaluator-compatible source of truth and ratification calls it for RatifyTransferPolicy against the exact stored grant. Caller-shaped authorization objects are ignored and cannot manufacture authority."}
+  ],
+  "proof":[
+    "tests/node/sw0-12b.test.mjs",
+    "packages/durability/src/postgres.ts",
+    "tests/node/sw0-rc2b.test.mjs",
+    "tests/node/sw0-rc2c.test.mjs",
+    "packages/transfer/src/index.ts",
+    "evidence/releases/SW0-RC3A.json"
+  ],
+  "invariantStatus":{"INV-001":"PARTIAL_GREEN","INV-027":"PARTIAL_GREEN","INV-028":"PARTIAL_GREEN"},
+  "releaseDecision":"NOT_A_RELEASE_DECISION",
+  "next":"After CI green and merge, run SW0-RC3R independent falsification re-review. Do not freeze SW0_KERNEL_BASELINE_v1.0 before RC3R GO."
+}

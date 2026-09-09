@@ -1,0 +1,10 @@
+{
+  "release":"SW0-RC1A",
+  "title":"Durable command fencing closure",
+  "status":"PARTIAL_GREEN",
+  "closedBlocker":"RC1-B02",
+  "affectedInvariants":["INV-027","INV-028"],
+  "delivered":["monotonic PostgreSQL fence_generation","fenced claim/takeover","same-owner duplicate claimant suppression within adapter instance","fenced commit and abandon","fence required by PostgresDomainCommitter","live PostgreSQL stale-fence rejection proof"],
+  "remainingRC1Blockers":["RC1-B01","RC1-B03","RC1-B04 production policy gate","RC1-B05 provenance completion"],
+  "next":"SW0-RC1B"
+}

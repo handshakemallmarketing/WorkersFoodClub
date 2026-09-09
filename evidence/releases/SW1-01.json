@@ -1,0 +1,20 @@
+{
+  "release":"SW1-01",
+  "title":"Authentication, Participant Binding, Membership Verification and Operator Authority",
+  "status":"IMPLEMENTED_PENDING_CI_AND_REVIEW",
+  "proof":[
+    "packages/identity/src/index.ts",
+    "tests/node/sw1-01.test.mjs",
+    "docs/traceability/SW1-01-auth-participant-membership-authority.json"
+  ],
+  "claims":[
+    "Authentication-provider identity is not canonical Participant identity.",
+    "Identity binding requires an AuthorityEvaluator-approved identity.bind grant.",
+    "Membership establishment requires an AuthorityEvaluator-approved membership.verify grant and qualifying eligibility evidence.",
+    "Revoked authority and inactive membership fail closed.",
+    "A bound identity cannot be silently rebound to a different Participant."
+  ],
+  "invariantsStrengthened":["INV-001","INV-002","INV-030"],
+  "productionAuthorization":false,
+  "next":"SW1-02"
+}

@@ -1,0 +1,20 @@
+{
+  "release":"SW1-02",
+  "title":"Governed catalog and bounded member offers",
+  "baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "evidence":[
+    "packages/pilot-catalog/src/index.ts",
+    "tests/node/sw1-02.test.mjs",
+    "docs/traceability/SW1-02-governed-catalog.json"
+  ],
+  "adversarialCoverage":[
+    "missing publication authority",
+    "revoked publication authority",
+    "offer outside governed sales window",
+    "pickup-place mismatch",
+    "benchmark evidence not retained by offer"
+  ],
+  "productionAuthorization":false,
+  "invariantStatusPromotion":false,
+  "next":"SW1-03"
+}

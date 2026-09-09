@@ -1,0 +1,1 @@
+The transfer policies used by tests/node/sw0-rc2b.test.mjs are conformance fixtures only. They are not production legal terms, do not establish Ghana title/risk law, and must not be promoted to production defaults. Production transaction types require separately ratified policy content under OPEN-011.

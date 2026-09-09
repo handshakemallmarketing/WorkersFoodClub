@@ -1,8 +1,11 @@
 import {describe,it,expect} from 'vitest';
-describe('SW0-11 remaining constitutional frontier',()=>{
-  const stillRed=[];
-  for(const id of stillRed) it.todo(`${id} requires domain-slice proof`);
-  const futureFixtures=['FX-001','FX-002','FX-003','FX-004','FX-005','FX-010','FX-012','FX-016','FX-022','FX-025'];
-  for(const id of futureFixtures) it.todo(`${id} adversarial fixture`);
-  it('all 30 invariants now have at least partial executable proof',()=>expect(stillRed).toHaveLength(0));
+import fs from 'node:fs';
+const fixtures=JSON.parse(fs.readFileSync('canon/fixtures.json','utf8'));
+
+describe('SW0-12E adversarial fixture frontier',()=>{
+  it('all 25 CB-00 adversarial fixtures have executable GREEN proof',()=>{
+    expect(fixtures.fixtures).toHaveLength(25);
+    expect(fixtures.fixtures.filter((x:{status:string})=>x.status!=='GREEN')).toEqual([]);
+    expect(fixtures.fixtures.every((x:{proof?:string})=>typeof x.proof==='string'&&x.proof.length>0)).toBe(true);
+  });
 });
