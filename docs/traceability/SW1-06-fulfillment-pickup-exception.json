@@ -1,0 +1,38 @@
+{
+  "release":"SW1-06",
+  "title":"Governed Pick, Pack, Pickup, Acceptance and Exception Workflow",
+  "baseline":"SW0_KERNEL_BASELINE_v1.0",
+  "productEntry":"SW1-00",
+  "scope":[
+    "pick, pack and ready transitions resolve a canonical inventory allocation and require bounded fulfillment authority",
+    "warehouse operator identity must match the actor executing fulfillment work and handover",
+    "pickup handover is evidence-backed and remains distinct from member acceptance and obligation discharge",
+    "member acceptance is an independently authorized member act resolved against the canonical purchase commitment participant",
+    "partial acceptance discharges only actually accepted quantity",
+    "shortfall/rejection exception capture requires acceptance linkage and cannot exceed unresolved quantity",
+    "exception capture does not automatically create or complete a remedy"
+  ],
+  "invariants":{
+    "INV-001":"PARTIAL_GREEN strengthened: fulfillment work, handover, acceptance and exception capture require AuthorityEvaluator approval rather than UI role.",
+    "INV-004":"PARTIAL_GREEN strengthened: fulfillment effects are bound to canonical allocation and purchase-commitment relationships.",
+    "INV-019":"PARTIAL_GREEN strengthened: handover remains distinct from acceptance and discharge at the SW1 operator/member boundary.",
+    "INV-020":"PARTIAL_GREEN strengthened: only accepted quantity is recorded as performed; shortfall remains unresolved.",
+    "INV-030":"No promotion. SW1 composition reuses SW0 fulfillment/remedy semantics and does not invent automatic remedy or transfer meaning."
+  },
+  "proof":[
+    "packages/pilot-fulfillment/src/index.ts",
+    "packages/fulfillment/src/index.ts",
+    "tests/node/sw1-06.test.mjs"
+  ],
+  "negativePaths":[
+    "missing fulfillment authority rejected",
+    "forged allocation identifier rejected",
+    "wrong member acceptance rejected",
+    "handover without separate acceptance leaves obligation open",
+    "shortfall without acceptance lineage rejected",
+    "shortfall exceeding unresolved quantity rejected",
+    "future-dated fulfillment evidence rejected by application boundary"
+  ],
+  "productionAuthorization":false,
+  "next":"SW1-07 refund/replacement remedies and obligation resolution"
+}
