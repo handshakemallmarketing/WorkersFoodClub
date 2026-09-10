@@ -11,16 +11,18 @@ const pid=x=>asId(x),oid=x=>asId(x),sid=x=>asId(x),eid=x=>asId(x);
 const member=pid('participant:member');
 const club=pid('participant:club');
 const obligationId=oid('obligation:sw1-08');
+const offerId=oid('offer:sw1-08');
 const spec=sid('spec:rice');
-const commitment={obligation:{id:obligationId,obligor:member,beneficiary:club,specificationId:spec,quantity:quantity(5,'kg'),state:'OPEN'},participantId:member,acceptedAt:'2026-09-09T09:00:00Z',committedMemberPrice:money(800n,'GHS'),committedPriceBasis:quantity(5,'kg')};
+const commitment={obligation:{id:obligationId,obligor:member,beneficiary:club,specificationId:spec,quantity:quantity(5,'kg'),state:'OPEN'},participantId:member,offerId,acceptedAt:'2026-09-09T09:00:00Z',committedMemberPrice:money(800n,'GHS'),committedPriceBasis:quantity(5,'kg')};
 const payment=(minor=800n)=>({evidenceId:eid('e:payment'),obligationId,provider:'SANDBOX_MOMO',providerReference:'ref:1',amount:money(minor,'GHS'),status:'CONFIRMED',observedAt:'2026-09-09T09:05:00Z',recordedAt:'2026-09-09T09:05:01Z'});
 const demandFor=(price=800n)=>({getCommitment:id=>id===obligationId?{...commitment,committedMemberPrice:money(price,'GHS')}:undefined,paymentsFor:id=>id===obligationId?[payment(price)]:[]});
+const governedContext={benchmarkForOffer:id=>id===offerId?Object.freeze({place:'Accra'}):undefined};
 
 function economicsSetup(outlayMinor=800n){
  const economics=new InMemoryEconomicsLedger();
  const resolution=new InMemoryObligationResolutionLedger();
  resolution.recordPerformed('acceptance:1',{id:obligationId,quantity:quantity(5,'kg')},quantity(5,'kg'));
- const service=new GovernedMemberEconomicsService(demandFor(outlayMinor),resolution,economics);
+ const service=new GovernedMemberEconomicsService(demandFor(outlayMinor),resolution,economics,undefined,governedContext);
  economics.defineBenchmark({id:'benchmark:rice',version:1,purpose:'MEMBER_SAVINGS',specificationId:spec,quantity:quantity(5,'kg'),place:'Accra',serviceLevel:'pickup',transactionLevel:'RETAIL',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',normalizationRuleVersion:'norm:v1',availabilityRuleVersion:'availability:v1',observationEvidenceIds:[eid('e:market')],definedAt:'2026-09-01T00:00:00Z'});
  economics.recordBenchmarkValuation({id:'valuation:rice',benchmarkId:'benchmark:rice',benchmarkVersion:1,obligationId,specificationId:spec,quantity:quantity(5,'kg'),place:'Accra',serviceLevel:'pickup',availability:'EXECUTABLE',comparableValue:money(1000n,'GHS'),evaluatedAt:'2026-09-09T09:05:00Z',evidenceIds:[eid('e:market')]});
  service.recordFulfilledEconomics({id:'member-econ:1',obligationId,participantId:member,specificationId:spec,quantity:quantity(5,'kg'),place:'Accra',serviceLevel:'pickup',goodsOutlay:money(outlayMinor,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(0n,'GHS'),economicEvidenceIds:[eid('e:payment')],realizedAt:'2026-09-09T09:10:00Z',substitutionEvidenceIds:[]});
@@ -31,12 +33,12 @@ test('SW1-08 savings economics must be bound to actual performed quantity',()=>{
  const economics=new InMemoryEconomicsLedger();
  const resolution=new InMemoryObligationResolutionLedger();
  resolution.recordPerformed('acceptance:partial',{id:obligationId,quantity:quantity(5,'kg')},quantity(4,'kg'));
- const service=new GovernedMemberEconomicsService(demandFor(),resolution,economics);
+ const service=new GovernedMemberEconomicsService(demandFor(),resolution,economics,undefined,governedContext);
  assert.throws(()=>service.recordFulfilledEconomics({id:'member-econ:forged',obligationId,participantId:member,specificationId:spec,quantity:quantity(5,'kg'),place:'Accra',serviceLevel:'pickup',goodsOutlay:money(800n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(0n,'GHS'),economicEvidenceIds:[eid('e:payment')],realizedAt:'2026-09-09T09:10:00Z',substitutionEvidenceIds:[]}),/MEMBER_ECONOMICS_NOT_ACTUAL_PERFORMANCE/);
 });
 
 test('SW1-08 member economics rejects caller-fabricated outlay refund charges and evidence',()=>{
- const economics=new InMemoryEconomicsLedger();const resolution=new InMemoryObligationResolutionLedger();resolution.recordPerformed('acceptance:1',{id:obligationId,quantity:quantity(5,'kg')},quantity(5,'kg'));const service=new GovernedMemberEconomicsService(demandFor(),resolution,economics);
+ const economics=new InMemoryEconomicsLedger();const resolution=new InMemoryObligationResolutionLedger();resolution.recordPerformed('acceptance:1',{id:obligationId,quantity:quantity(5,'kg')},quantity(5,'kg'));const service=new GovernedMemberEconomicsService(demandFor(),resolution,economics,undefined,governedContext);
  const base={id:'member-econ:forged',obligationId,participantId:member,specificationId:spec,quantity:quantity(5,'kg'),place:'Accra',serviceLevel:'pickup',goodsOutlay:money(800n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(0n,'GHS'),economicEvidenceIds:[eid('e:payment')],realizedAt:'2026-09-09T09:10:00Z',substitutionEvidenceIds:[]};
  assert.throws(()=>service.recordFulfilledEconomics({...base,goodsOutlay:money(1n,'GHS')}),/MEMBER_ECONOMICS_OUTLAY_NOT_CANONICAL/);
  assert.throws(()=>service.recordFulfilledEconomics({...base,mandatoryCharges:money(1n,'GHS')}),/MEMBER_ECONOMICS_CHARGES_NOT_CANONICAL/);
@@ -49,7 +51,7 @@ test('SW1-08 completed replacement contributes to actual fulfilled goods quantit
  remedies.recordException({id:'exception:shortfall',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-09T09:06:00Z',evidenceIds:[eid('e:shortfall')]},{id:obligationId,participantId:member,specificationId:spec,quantity:quantity(5,'kg')});
  remedies.createRemedy({id:'remedy:replacement',sourceExceptionId:'exception:shortfall',originalObligationId:obligationId,participantId:member,kind:'REPLACEMENT',quantity:quantity(1,'kg'),createdAt:'2026-09-09T09:07:00Z',authorizedEventId:'event:replacement',evidenceIds:[eid('e:replacement-auth')],economicClassification:'REMEDY_SETTLEMENT'});
  remedies.completeRemedy({id:'completion:replacement',remedyObligationId:'remedy:replacement',quantity:quantity(1,'kg'),completedAt:'2026-09-09T09:08:00Z',evidenceIds:[eid('e:replacement-complete')]});
- const service=new GovernedMemberEconomicsService(demandFor(),resolution,economics,remedies);
+ const service=new GovernedMemberEconomicsService(demandFor(),resolution,economics,remedies,governedContext);
  assert.doesNotThrow(()=>service.recordFulfilledEconomics({id:'member-econ:replacement',obligationId,participantId:member,specificationId:spec,quantity:quantity(5,'kg'),place:'Accra',serviceLevel:'pickup',goodsOutlay:money(800n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(0n,'GHS'),economicEvidenceIds:[eid('e:payment')],realizedAt:'2026-09-09T09:10:00Z',substitutionEvidenceIds:[eid('e:replacement-complete')]}));
 });
 
@@ -58,7 +60,7 @@ test('SW1-08 canonical completed refund is required before refund can reduce mem
  remedies.recordException({id:'exception:refund',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-09T09:06:00Z',evidenceIds:[eid('e:shortfall')]},{id:obligationId,participantId:member,specificationId:spec,quantity:quantity(5,'kg')});
  remedies.createRemedy({id:'remedy:refund',sourceExceptionId:'exception:refund',originalObligationId:obligationId,participantId:member,kind:'REFUND',quantity:quantity(1,'kg'),createdAt:'2026-09-09T09:07:00Z',authorizedEventId:'event:refund',evidenceIds:[eid('e:refund-auth')],economicClassification:'REMEDY_SETTLEMENT'});
  remedies.completeRemedy({id:'completion:refund',remedyObligationId:'remedy:refund',quantity:quantity(1,'kg'),completedAt:'2026-09-09T09:08:00Z',evidenceIds:[eid('e:refund-settled')],settlementAmount:money(160n,'GHS')});
- const service=new GovernedMemberEconomicsService(demandFor(),resolution,economics,remedies);
+ const service=new GovernedMemberEconomicsService(demandFor(),resolution,economics,remedies,governedContext);
  assert.doesNotThrow(()=>service.recordFulfilledEconomics({id:'member-econ:refund',obligationId,participantId:member,specificationId:spec,quantity:quantity(4,'kg'),place:'Accra',serviceLevel:'pickup',goodsOutlay:money(800n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(160n,'GHS'),economicEvidenceIds:[eid('e:payment'),eid('e:refund-settled')],realizedAt:'2026-09-09T09:10:00Z',substitutionEvidenceIds:[]}));
 });
 
