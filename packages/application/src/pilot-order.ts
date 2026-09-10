@@ -21,15 +21,17 @@ export class PilotOrderApplicationService {
   private readonly remedyService:GovernedPilotRemedyService,
   private readonly economicsService:GovernedMemberEconomicsService,
   private readonly demand:Pick<InMemoryDemandCommitmentLedger,'getCommitment'>
- ){}
+ ){
+  if(this.fulfillmentService.resolutionLedger()!==this.remedyService.resolutionLedger()) throw new Error('ORDER_STREAM_RESOLUTION_LEDGER_MISMATCH');
+ }
  private append(recordId:string,occurredAt:string,payload:unknown){
   return this.canonical.append({stream:'orders',sequence:++this.sequence,recordId,occurredAt,payload});
  }
- private appendResolution(obligationId:Parameters<GovernedPilotFulfillmentService['performance']>[0],recordSuffix:string,occurredAt:string){
+ private appendResolution(obligationId:Parameters<GovernedPilotFulfillmentService['performance']>[0],effectType:'acceptance'|'remedy',recordSuffix:string,occurredAt:string){
   const commitment=this.demand.getCommitment(obligationId);
   if(!commitment) throw new Error('ORDER_STREAM_OBLIGATION_UNKNOWN');
   const position=this.remedyService.position(obligationId);
-  this.append(`order:${String(obligationId)}:resolution:${recordSuffix}`,occurredAt,{kind:'ORDER_RESOLUTION',obligationId:String(obligationId),performedQuantity:position.performedQuantity.amount,remediedQuantity:position.remediedQuantity.amount,unresolvedQuantity:position.unresolvedQuantity.amount,unit:commitment.obligation.quantity.unit});
+  this.append(`order:${String(obligationId)}:resolution:${effectType}:${recordSuffix}`,occurredAt,{kind:'ORDER_RESOLUTION',obligationId:String(obligationId),performedQuantity:position.performedQuantity.amount,remediedQuantity:position.remediedQuantity.amount,unresolvedQuantity:position.unresolvedQuantity.amount,unit:commitment.obligation.quantity.unit});
  }
  async checkout(input:Parameters<PilotCheckoutService['checkout']>[0]){
   const commitment=await this.checkoutService.checkout(input);
@@ -38,14 +40,14 @@ export class PilotOrderApplicationService {
  }
  accept(ctx:Parameters<GovernedPilotFulfillmentService['accept']>[0],input:Parameters<GovernedPilotFulfillmentService['accept']>[1]){
   const acceptance=this.fulfillmentService.accept(ctx,input);
-  this.appendResolution(input.obligationId,acceptance.id,acceptance.acceptedAt);
+  this.appendResolution(input.obligationId,'acceptance',acceptance.id,acceptance.acceptedAt);
   return acceptance;
  }
  completeRemedy(ctx:Parameters<GovernedPilotRemedyService['completeRemedy']>[0],input:Parameters<GovernedPilotRemedyService['completeRemedy']>[1]){
   const remedy=this.remedyService.getRemedy(input.remedyObligationId);
   if(!remedy) throw new Error('ORDER_STREAM_REMEDY_UNKNOWN');
   const completion=this.remedyService.completeRemedy(ctx,input);
-  this.appendResolution(remedy.originalObligationId,completion.id,completion.completedAt);
+  this.appendResolution(remedy.originalObligationId,'remedy',completion.id,completion.completedAt);
   return completion;
  }
  calculateSavings(input:Parameters<GovernedMemberEconomicsService['calculateSavings']>[0]){
