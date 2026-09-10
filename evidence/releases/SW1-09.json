@@ -1,0 +1,35 @@
+{
+  "slice":"SW1-09",
+  "status":"GREEN_PENDING_MERGE",
+  "implementedAt":"2026-09-10",
+  "validatedCommit":"068a1ed17a66a72d96d89fc7cb6fc36c63f69d96",
+  "workflowRun":34465270467,
+  "scope":[
+    "governed administrative command envelope over existing canonical boundaries",
+    "accepted, rejected, and replayed operational audit records with actor and authority lineage",
+    "actor-bound idempotency and fail-closed conflicting request reuse",
+    "safe recovery of the exact original authorized failed operation after no-effect reconciliation",
+    "duplicate-effect avoidance when reconciliation proves an effect already occurred",
+    "separately authorized stuck-work diagnosis",
+    "non-authoritative cross-domain audit views for member, obligation, payment, inventory, fulfillment, remedy, and economics with canonical lineage and freshness disclosure"
+  ],
+  "code":["packages/pilot-operations/src/index.ts"],
+  "tests":["tests/node/sw1-09.test.mjs"],
+  "traceability":"docs/traceability/SW1-09-pilot-operations-admin-audit-recovery.json",
+  "checks":{
+    "canon:check":"PASS",
+    "traceability:check":"PASS_AGAINST_SW1-08B_PRE_PROMOTION_BASELINE",
+    "typecheck":"PASS",
+    "test":"PASS",
+    "test:kernel":"PASS",
+    "postgresDurability":"PASS",
+    "postgresAdapterRace":"PASS"
+  },
+  "productionAuthorization":false,
+  "limitations":[
+    "operational facade remains in-memory in this bounded SW1 proof",
+    "no live provider or member-funds activation",
+    "no claim of complete distributed transaction fencing",
+    "integrated end-to-end member-journey falsification remains SW1-RC1 work"
+  ]
+}
