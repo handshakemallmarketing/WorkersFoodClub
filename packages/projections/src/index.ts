@@ -14,6 +14,20 @@ const immutableClone=<T>(value:T):T=>{
  return Object.freeze(copy) as T;
 };
 
+class ImmutableMapView<K,V> implements ReadonlyMap<K,V>{
+ readonly #map:Map<K,V>;
+ constructor(source:Iterable<readonly [K,V]>){this.#map=new Map(Array.from(source,([key,value])=>[key,immutableClone(value)] as [K,V]));Object.freeze(this);}
+ get size(){return this.#map.size;}
+ get(key:K){return this.#map.get(key);}
+ has(key:K){return this.#map.has(key);}
+ entries(){return this.#map.entries();}
+ keys(){return this.#map.keys();}
+ values(){return this.#map.values();}
+ forEach(callbackfn:(value:V,key:K,map:ReadonlyMap<K,V>)=>void,thisArg?:unknown){this.#map.forEach((value,key)=>callbackfn.call(thisArg,value,key,this));}
+ [Symbol.iterator](){return this.#map[Symbol.iterator]();}
+ get [Symbol.toStringTag](){return 'ImmutableMapView';}
+}
+
 export class CanonicalRecordLog{
  private readonly records:CanonicalProjectionRecord[]=[];private readonly recordIds=new Set<string>();private readonly sequences=new Set<number>();
  append<T>(record:CanonicalProjectionRecord<T>):CanonicalProjectionRecord<T>{
@@ -36,7 +50,7 @@ export class RebuildableProjection<T>{
   this.rows=next;this.checkpoint=Object.freeze({projection:this.definition.name,throughSequence:source.at(-1)?.sequence??0,rebuiltAt,sourceCount:source.length});return this.snapshot();
  }
  drop():void{this.rows=new Map();this.checkpoint=Object.freeze({projection:this.definition.name,throughSequence:0,rebuiltAt:new Date(0).toISOString(),sourceCount:0});}
- snapshot():ProjectionSnapshot<T>{return Object.freeze({projection:this.definition.name,rows:new Map(this.rows),checkpoint:this.checkpoint});}
+ snapshot():ProjectionSnapshot<T>{return Object.freeze({projection:this.definition.name,rows:new ImmutableMapView(this.rows),checkpoint:this.checkpoint});}
  get(key:string){return this.rows.get(key);}
 }
 
