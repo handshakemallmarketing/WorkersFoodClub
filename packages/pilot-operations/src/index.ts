@@ -3,6 +3,7 @@ import {AuthorityEvaluator} from '../../authority/src/index.js';
 
 export type AdminOperationOutcome='ACCEPTED'|'REJECTED'|'REPLAYED';
 export type RecoveryDisposition='ALREADY_APPLIED'|'RETRIED';
+export type PilotAuditDomain='MEMBER'|'OBLIGATION'|'PAYMENT'|'INVENTORY'|'FULFILLMENT'|'REMEDY'|'ECONOMICS';
 
 export interface AdminOperationContext {
  readonly actorId:ParticipantId;
@@ -48,14 +49,42 @@ export interface RecoveryResult{
  readonly sourceRecordIds:readonly string[];
 }
 
+export interface PilotAuditSnapshot{
+ readonly domain:PilotAuditDomain;
+ readonly targetId:string;
+ readonly currentState:unknown;
+ readonly sourceRecordIds:readonly string[];
+ readonly observedAt:string;
+}
+
+export interface PilotAuditSource{
+ readonly domain:PilotAuditDomain;
+ read(targetId:string):PilotAuditSnapshot|undefined;
+}
+
 export interface AuditView{
  readonly targetId:string;
- readonly records:readonly AdminAuditRecord[];
+ readonly operationalRecords:readonly AdminAuditRecord[];
+ readonly domainSnapshots:readonly PilotAuditSnapshot[];
  readonly sourceRecordIds:readonly string[];
  readonly generatedAt:string;
  readonly freshestSourceAt?:string;
  readonly ageMs?:number;
  readonly stale:boolean;
+ readonly authoritative:false;
+}
+
+export interface OperationDiagnosis{
+ readonly requestId:string;
+ readonly targetId:string;
+ readonly action:string;
+ readonly outcome:'ACCEPTED'|'REJECTED';
+ readonly failureReason?:string;
+ readonly retryable:boolean;
+ readonly attemptedAt:string;
+ readonly ageMs:number;
+ readonly stale:boolean;
+ readonly auditId:string;
  readonly authoritative:false;
 }
 
@@ -88,7 +117,10 @@ export class GovernedPilotOperationsService{
  private readonly requests=new Map<string,StoredRequest<unknown>>();
  private readonly auditRecords:AdminAuditRecord[]=[];
  private auditSequence=0;
- constructor(private readonly authority:AuthorityEvaluator){}
+ constructor(private readonly authority:AuthorityEvaluator,private readonly auditSources:readonly PilotAuditSource[]=[]){
+  const domains=auditSources.map(x=>x.domain);
+  if(new Set(domains).size!==domains.length) throw new Error('AUDIT_SOURCE_DOMAIN_DUPLICATE');
+ }
 
  private appendAudit(input:Omit<AdminAuditRecord,'id'>){
   const record=Object.freeze({...input,id:`audit:${input.requestId}:${++this.auditSequence}`}) as AdminAuditRecord;
@@ -102,6 +134,12 @@ export class GovernedPilotOperationsService{
   if(!request.targetId.trim()) throw new Error('ADMIN_TARGET_REQUIRED');
   if(!request.reason.trim()) throw new Error('ADMIN_REASON_REQUIRED');
   if(!validTime(ctx.at)) throw new Error('ADMIN_TIME_INVALID');
+ }
+
+ private authorizeRead(ctx:AdminOperationContext,targetId:string){
+  if(!validTime(ctx.at)) throw new Error('AUDIT_VIEW_TIME_INVALID');
+  const decision=this.authority.evaluate({actorId:ctx.actorId,action:'admin.audit.read',targetId,at:ctx.at,grantIds:ctx.grantIds});
+  if(!decision.allowed) throw new Error(`AUDIT_VIEW_UNAUTHORIZED:${decision.reason}`);
  }
 
  executeMutation<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>):R{
@@ -169,16 +207,35 @@ export class GovernedPilotOperationsService{
   });
  }
 
+ diagnose(ctx:AdminOperationContext,requestId:string,maxAgeMs:number):OperationDiagnosis{
+  if(!Number.isFinite(maxAgeMs)||maxAgeMs<0) throw new Error('DIAGNOSIS_MAX_AGE_INVALID');
+  const request=this.requests.get(requestId);
+  if(!request) throw new Error('DIAGNOSIS_REQUEST_UNKNOWN');
+  this.authorizeRead(ctx,request.targetId);
+  const ageMs=Date.parse(ctx.at)-Date.parse(request.attemptedAt);
+  if(ageMs<0) throw new Error('DIAGNOSIS_TIME_BEFORE_REQUEST');
+  return Object.freeze({requestId,targetId:request.targetId,action:request.action,outcome:request.outcome,...(request.failureReason?{failureReason:request.failureReason}:{}),retryable:request.outcome==='REJECTED'&&request.failureReason==='MUTATION_FAILED'&&Boolean(request.retry),attemptedAt:request.attemptedAt,ageMs,stale:ageMs>maxAgeMs,auditId:request.auditId,authoritative:false as const});
+ }
+
  auditView(ctx:AdminOperationContext,targetId:string,maxAgeMs:number):AuditView{
   if(!Number.isFinite(maxAgeMs)||maxAgeMs<0) throw new Error('AUDIT_VIEW_MAX_AGE_INVALID');
-  if(!validTime(ctx.at)) throw new Error('AUDIT_VIEW_TIME_INVALID');
-  const decision=this.authority.evaluate({actorId:ctx.actorId,action:'admin.audit.read',targetId,at:ctx.at,grantIds:ctx.grantIds});
-  if(!decision.allowed) throw new Error(`AUDIT_VIEW_UNAUTHORIZED:${decision.reason}`);
-  const records=this.auditRecords.filter(x=>x.targetId===targetId);
-  const freshest=records.reduce<string|undefined>((latest,r)=>!latest||Date.parse(r.attemptedAt)>Date.parse(latest)?r.attemptedAt:latest,undefined);
+  this.authorizeRead(ctx,targetId);
+  const operationalRecords=this.auditRecords.filter(x=>x.targetId===targetId);
+  const domainSnapshots=this.auditSources.flatMap(source=>{
+   const snapshot=source.read(targetId);
+   if(!snapshot) return [];
+   if(snapshot.domain!==source.domain||snapshot.targetId!==targetId) throw new Error('AUDIT_SOURCE_SEMANTIC_MISMATCH');
+   if(!validTime(snapshot.observedAt)||Date.parse(snapshot.observedAt)>Date.parse(ctx.at)) throw new Error('AUDIT_SOURCE_TIME_INVALID');
+   if(!uniqueSources(snapshot.sourceRecordIds)) throw new Error('AUDIT_SOURCE_LINEAGE_INVALID');
+   return [Object.freeze({...snapshot,sourceRecordIds:Object.freeze([...snapshot.sourceRecordIds])})];
+  });
+  const allSourceRecordIds=[...operationalRecords.map(x=>x.id),...domainSnapshots.flatMap(x=>x.sourceRecordIds)];
+  if(!uniqueSources(allSourceRecordIds)&&allSourceRecordIds.length>0) throw new Error('AUDIT_VIEW_SOURCE_COLLISION');
+  const sourceTimes=[...operationalRecords.map(x=>x.attemptedAt),...domainSnapshots.map(x=>x.observedAt)];
+  const freshest=sourceTimes.reduce<string|undefined>((latest,current)=>!latest||Date.parse(current)>Date.parse(latest)?current:latest,undefined);
   const ageMs=freshest===undefined?undefined:Date.parse(ctx.at)-Date.parse(freshest);
   if(ageMs!==undefined&&ageMs<0) throw new Error('AUDIT_VIEW_TIME_BEFORE_SOURCE');
-  return Object.freeze({targetId,records:Object.freeze([...records]),sourceRecordIds:Object.freeze(records.map(x=>x.id)),generatedAt:ctx.at,...(freshest!==undefined&&ageMs!==undefined?{freshestSourceAt:freshest,ageMs}:{}),stale:ageMs===undefined||ageMs>maxAgeMs,authoritative:false as const});
+  return Object.freeze({targetId,operationalRecords:Object.freeze([...operationalRecords]),domainSnapshots:Object.freeze(domainSnapshots),sourceRecordIds:Object.freeze(allSourceRecordIds),generatedAt:ctx.at,...(freshest!==undefined&&ageMs!==undefined?{freshestSourceAt:freshest,ageMs}:{}),stale:ageMs===undefined||ageMs>maxAgeMs,authoritative:false as const});
  }
 
  auditLog(){return Object.freeze([...this.auditRecords]);}
