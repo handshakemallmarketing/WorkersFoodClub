@@ -1,0 +1,40 @@
+{
+  "slice": "SW1-RC1",
+  "status": "GO_RC1",
+  "validatedCodeCommit": "005d931e2900229f6b21bb4020f70998fb7caf93",
+  "reviewArtifact": "docs/traceability/SW1-RC1-integrated-staging-falsification-review.json",
+  "contract": "docs/sw1/SW1-RC1-integrated-staging-falsification-review.md",
+  "tests": [
+    "tests/node/sw1-rc1.test.mjs",
+    "tests/node/sw1-09-recovery-hardening.test.mjs"
+  ],
+  "productionCodeRemediation": [
+    "packages/pilot-operations/src/index.ts"
+  ],
+  "constitutionalConformance": {
+    "runId": 34470839715,
+    "jobId": 102850112088,
+    "result": "SUCCESS"
+  },
+  "mandatoryJourney": "unbound identity -> verified member -> governed offer/benchmark -> 5kg commitment/payment/allocation -> 4kg performed + 1kg shortfall -> separately authorized 1kg refund -> canonical fulfilled economics -> governed signed savings -> deterministic projection rebuild",
+  "falsificationCoverage": [
+    "authority bypass",
+    "checkout proof substitution",
+    "payment replay/tamper/signature",
+    "inventory double-use",
+    "fulfillment overclaim",
+    "remedy fabrication",
+    "economics fabrication",
+    "projection authority inversion",
+    "admin recovery fabrication/runtime capability spoof"
+  ],
+  "unresolvedP0P1Findings": [],
+  "productionAuthorization": false,
+  "authorizes": "entry to SW1-RC2 only",
+  "limitations": [
+    "sandbox payments",
+    "predominantly in-memory cumulative domain replay",
+    "no live funds/provider activation",
+    "no production launch authorization"
+  ]
+}
