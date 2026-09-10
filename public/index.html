@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>Food Club Ghana — Preview</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">FC</div>
+        <div><strong>Food Club Ghana</strong><span>Member Preview</span></div>
+      </div>
+      <nav>
+        <button class="nav-item active" data-view="dashboard">Overview</button>
+        <button class="nav-item" data-view="catalog">Member Offers</button>
+        <button class="nav-item" data-view="orders">My Orders</button>
+        <button class="nav-item" data-view="operator">Operations</button>
+        <button class="nav-item" data-view="controls">RC2 Controls</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="status-dot"></span>
+        Preview environment
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Workers Food Club</p>
+          <h1 id="page-title">Member Overview</h1>
+        </div>
+        <div class="env-badges">
+          <span class="badge neutral">Neon connected</span>
+          <span class="badge warning">Sandbox payments only</span>
+        </div>
+      </header>
+
+      <section id="dashboard" class="view active">
+        <div class="hero-card">
+          <div>
+            <p class="eyebrow">Pilot cohort preview</p>
+            <h2>Better food buying through pooled member demand.</h2>
+            <p>Food Club Ghana organizes member commitments, governed sourcing, physical inventory, fulfillment and savings evidence into one auditable operating flow.</p>
+            <div class="hero-actions">
+              <button class="primary" data-go="catalog">Browse current offers</button>
+              <button class="secondary" data-go="orders">View order history</button>
+            </div>
+          </div>
+          <div class="metric-stack">
+            <div class="metric"><span>Preview status</span><strong>RC2 staging</strong></div>
+            <div class="metric"><span>Database</span><strong>Neon PostgreSQL</strong></div>
+            <div class="metric"><span>Live funds</span><strong>Disabled</strong></div>
+          </div>
+        </div>
+
+        <div class="grid three">
+          <article class="card"><span class="kicker">Demand</span><h3>5 kg</h3><p>Illustrative pooled rice commitment for the current pilot window.</p></article>
+          <article class="card"><span class="kicker">Fulfillment</span><h3>Pickup</h3><p>Member acceptance and remedy states remain independently evidenced.</p></article>
+          <article class="card"><span class="kicker">Savings</span><h3>GHS 80.00</h3><p>Illustrative governed savings evidence from the integrated RC1 scenario.</p></article>
+        </div>
+      </section>
+
+      <section id="catalog" class="view">
+        <div class="section-intro"><div><p class="eyebrow">Current pilot offers</p><h2>Member Offers</h2></div><span class="badge neutral">Preview data</span></div>
+        <div class="offer-grid">
+          <article class="offer-card"><div class="offer-icon">R</div><div><h3>Premium Rice</h3><p>5 kg member pack · pickup fulfillment</p><div class="offer-meta"><strong>GHS 120.00</strong><span>Illustrative</span></div></div><button class="primary small" disabled>Commit in sandbox</button></article>
+          <article class="offer-card muted"><div class="offer-icon">V</div><div><h3>Vegetable Box</h3><p>Seasonal pilot offer</p><div class="offer-meta"><strong>Coming soon</strong><span>Not open</span></div></div><button class="secondary small" disabled>Unavailable</button></article>
+        </div>
+      </section>
+
+      <section id="orders" class="view">
+        <div class="section-intro"><div><p class="eyebrow">Member activity</p><h2>My Orders</h2></div></div>
+        <div class="timeline-card">
+          <div class="timeline-row"><span class="timeline-dot done"></span><div><strong>Commitment accepted</strong><p>5 kg rice · governed obligation created</p></div><time>Preview</time></div>
+          <div class="timeline-row"><span class="timeline-dot done"></span><div><strong>Payment confirmed</strong><p>Sandbox provider evidence recorded</p></div><time>Preview</time></div>
+          <div class="timeline-row"><span class="timeline-dot done"></span><div><strong>Fulfillment recorded</strong><p>4 kg accepted · 1 kg shortfall</p></div><time>Preview</time></div>
+          <div class="timeline-row"><span class="timeline-dot done"></span><div><strong>Remedy completed</strong><p>1 kg shortfall refunded under separate authority</p></div><time>Preview</time></div>
+        </div>
+      </section>
+
+      <section id="operator" class="view">
+        <div class="section-intro"><div><p class="eyebrow">Pilot operations</p><h2>Operator Console</h2></div><span class="badge warning">Read-only preview</span></div>
+        <div class="grid two">
+          <article class="card"><span class="kicker">Canonical state</span><h3>Auditable</h3><p>Order, payment, resolution, economics and lineage events are governed by explicit domain controls.</p></article>
+          <article class="card"><span class="kicker">Recovery</span><h3>Fail closed</h3><p>Reserved recovery paths cannot silently rewrite canonical history or redirect consequential effects.</p></article>
+          <article class="card"><span class="kicker">Inventory</span><h3>Conserved</h3><p>Allocated physical inventory cannot simultaneously be consumed by a lineage transform.</p></article>
+          <article class="card"><span class="kicker">Projection</span><h3>Rebuildable</h3><p>Operational views are projections over canonical evidence rather than sources of authority.</p></article>
+        </div>
+      </section>
+
+      <section id="controls" class="view">
+        <div class="section-intro"><div><p class="eyebrow">Production-readiness</p><h2>RC2 Control Status</h2></div><span class="badge danger">Production NO-GO</span></div>
+        <div class="control-list">
+          <div class="control pass"><span>Secrets & environment isolation</span><strong>Implemented</strong></div>
+          <div class="control pass"><span>Privacy & retention controls</span><strong>Implemented</strong></div>
+          <div class="control pass"><span>Consequential observability</span><strong>Implemented</strong></div>
+          <div class="control pass"><span>PostgreSQL backup/restore rehearsal</span><strong>CI proven</strong></div>
+          <div class="control open"><span>Live Mobile Money provider evidence</span><strong>Open blocker</strong></div>
+          <div class="control open"><span>Operator incident runbooks</span><strong>Open blocker</strong></div>
+          <div class="control open"><span>Transaction title/risk policy</span><strong>Open blocker</strong></div>
+          <div class="control open"><span>Integrated RC2 adversarial rehearsal</span><strong>Open blocker</strong></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
