@@ -113,6 +113,7 @@ const stable=(value:unknown):string=>{
 const requestFingerprint=(ctx:AdminOperationContext,request:AdminOperationRequest)=>stable({actorId:String(ctx.actorId),action:request.action,targetId:request.targetId,reason:request.reason,payload:request.payload});
 const uniqueSources=(ids:readonly string[])=>ids.length===new Set(ids).size&&ids.every(x=>x.trim().length>0);
 const recoveryAction='admin.recovery.reconcile';
+const recoveryCapability=Symbol('governed-recovery-capability');
 
 export class GovernedPilotOperationsService{
  private readonly requests=new Map<string,StoredRequest<unknown>>();
@@ -144,13 +145,16 @@ export class GovernedPilotOperationsService{
  }
 
  executeMutation<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>):R{
-  if(request.action===recoveryAction) throw new Error('ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN');
   return this.executeMutationInternal(ctx,request,mutate);
  }
 
- private executeMutationInternal<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>):R{
+ private executeMutationInternal<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>,capability?:symbol):R{
   this.validateRequest(request,ctx);
   const fp=requestFingerprint(ctx,request);
+  if(request.action===recoveryAction&&capability!==recoveryCapability){
+   this.appendAudit({requestId:request.requestId,actorId:ctx.actorId,action:request.action,targetId:request.targetId,reason:request.reason,attemptedAt:ctx.at,outcome:'REJECTED',authorityReason:'RECOVERY_ENTRYPOINT_REQUIRED',fingerprint:fp,sourceRecordIds:Object.freeze([])});
+   throw new Error('ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN');
+  }
   const prior=this.requests.get(request.requestId) as StoredRequest<R>|undefined;
   if(prior){
    if(prior.fingerprint!==fp){
@@ -210,7 +214,7 @@ export class GovernedPilotOperationsService{
    const sourceRecordIds=Object.freeze([original.auditId,...observed.sourceRecordIds,...retried.sourceRecordIds]);
    if(!uniqueSources(sourceRecordIds)) throw new Error('RECOVERY_SOURCE_LINEAGE_INVALID');
    return {result:Object.freeze({disposition:'RETRIED',sourceRecordIds}),sourceRecordIds};
-  });
+  },recoveryCapability);
  }
 
  diagnose(ctx:AdminOperationContext,requestId:string,maxAgeMs:number):OperationDiagnosis{
