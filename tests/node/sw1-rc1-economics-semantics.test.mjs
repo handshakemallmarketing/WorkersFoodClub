@@ -80,3 +80,14 @@ test('SW1-RC1 fulfilled economics comparison context cannot be caller-colluded',
  assert.throws(()=>service.recordFulfilledEconomics({...base,id:'member-econ:rc1-bad-service',serviceLevel:'delivery'}),/MEMBER_ECONOMICS_COMPARISON_CONTEXT_NOT_CANONICAL/);
  assert.doesNotThrow(()=>service.recordFulfilledEconomics(base));
 });
+
+test('SW1-RC1 governed benchmark package rolls back method when valuation fails and permits corrected retry',()=>{
+ const {economics,service}=setup();
+ economics.defineBenchmark({id:'benchmark:seed',version:1,purpose:'MEMBER_SAVINGS',specificationId:spec,quantity:quantity(4.5,'kg'),place:benchmark.place,serviceLevel:'pickup',transactionLevel:'RETAIL',validFrom:offerValidity.validFrom,validUntil:offerValidity.validUntil,normalizationRuleVersion:'seed-v1',availabilityRuleVersion:'seed-v1',observationEvidenceIds:[benchmark.priceEvidenceId],definedAt:acceptedAt});
+ economics.recordBenchmarkValuation({id:'valuation:collision',benchmarkId:'benchmark:seed',benchmarkVersion:1,obligationId,specificationId:spec,quantity:quantity(4.5,'kg'),place:benchmark.place,serviceLevel:'pickup',availability:'EXECUTABLE',comparableValue:money(54000n,'GHS'),evaluatedAt:acceptedAt,evidenceIds:[benchmark.priceEvidenceId]});
+ assert.throws(()=>service.recordGovernedSavingsBenchmark({benchmarkId:'benchmark:atomic',benchmarkVersion:1,valuationId:'valuation:collision',obligationId,listingId:'listing:rc1-rice',offerId,benchmarkDisplayId:benchmark.id}),/BENCHMARK_VALUATION_ID_DUPLICATE/);
+ assert.equal(economics.getBenchmark('benchmark:atomic',1),undefined,'failed package must not strand benchmark method');
+ const corrected=service.recordGovernedSavingsBenchmark({benchmarkId:'benchmark:atomic',benchmarkVersion:1,valuationId:'valuation:atomic-corrected',obligationId,listingId:'listing:rc1-rice',offerId,benchmarkDisplayId:benchmark.id});
+ assert.equal(corrected.method.id,'benchmark:atomic');
+ assert.equal(corrected.valuation.id,'valuation:atomic-corrected');
+});
