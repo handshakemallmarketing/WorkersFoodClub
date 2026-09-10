@@ -114,12 +114,12 @@ async function runJourney(){
   const mctx={actorId:member,grantIds:[f.grants.memberFulfillment],at:'2026-09-10T08:41:00Z'};
   f.fulfillment.accept(mctx,{id:'acceptance:rc1',handoverId:'handover:rc1',obligationId,participantId:member,state:'PARTIALLY_ACCEPTED',quantity:quantity(4,'kg'),acceptedAt:'2026-09-10T08:37:00Z',evidenceIds:[eid('evidence:rc1-acceptance')]});
   f.fulfillment.recordException(mctx,{id:'exception:rc1-shortfall',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-10T08:38:00Z',evidenceIds:[eid('evidence:rc1-shortfall')],relatedAcceptanceId:'acceptance:rc1'});
-  assert.equal(f.resolution.position(obligationId).performedQuantity.amount,4); assert.equal(f.remediesLedger.getRemedy('remedy:rc1-refund'),undefined);
+  assert.equal(f.resolution.position(commitment.obligation).performedQuantity.amount,4); assert.equal(f.remediesLedger.getRemedy('remedy:rc1-refund'),undefined);
 
   const rctx={actorId:finance,grantIds:[f.grants.remedy],at:'2026-09-10T08:45:00Z'};
   f.remedies.createRemedy(rctx,{id:'remedy:rc1-refund',sourceExceptionId:'exception:rc1-shortfall',originalObligationId:obligationId,participantId:member,kind:'REFUND',quantity:quantity(1,'kg'),createdAt:'2026-09-10T08:42:00Z',authorizedEventId:'event:rc1-refund-authorized',evidenceIds:[eid('evidence:rc1-refund-auth')],economicClassification:'REMEDY_SETTLEMENT'});
   f.remedies.completeRemedy(rctx,{id:'completion:rc1-refund',remedyObligationId:'remedy:rc1-refund',quantity:quantity(1,'kg'),completedAt:'2026-09-10T08:43:00Z',evidenceIds:[eid('evidence:rc1-refund-settled')],settlementAmount:money(10000n,'GHS')});
-  const position=f.resolution.position(obligationId); assert.equal(position.performedQuantity.amount,4); assert.equal(position.remediedQuantity.amount,1); assert.equal(position.unresolvedQuantity.amount,0);
+  const position=f.resolution.position(commitment.obligation); assert.equal(position.performedQuantity.amount,4); assert.equal(position.remediedQuantity.amount,1); assert.equal(position.unresolvedQuantity.amount,0);
 
   f.economicsLedger.defineBenchmark({id:'benchmark:rc1',version:1,purpose:'MEMBER_SAVINGS',specificationId:rice,quantity:quantity(4,'kg'),place:'Accra',serviceLevel:'pickup',transactionLevel:'RETAIL',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',normalizationRuleVersion:'norm:v1',availabilityRuleVersion:'availability:v1',observationEvidenceIds:[marketEvidence],definedAt:'2026-09-10T08:10:00Z'});
   f.economicsLedger.recordBenchmarkValuation({id:'valuation:rc1',benchmarkId:'benchmark:rc1',benchmarkVersion:1,obligationId,specificationId:rice,quantity:quantity(4,'kg'),place:'Accra',serviceLevel:'pickup',availability:'EXECUTABLE',comparableValue:money(48000n,'GHS'),evaluatedAt:'2026-09-10T08:50:00Z',evidenceIds:[marketEvidence]});
