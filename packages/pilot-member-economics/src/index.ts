@@ -33,7 +33,7 @@ export class GovernedMemberEconomicsService{
   private readonly resolution:InMemoryObligationResolutionLedger,
   private readonly economics:InMemoryEconomicsLedger,
   private readonly remedies?:Pick<InMemoryRemedyLedger,'completedRemediesFor'|'resolutionLedger'>,
-  private readonly catalog?:Pick<GovernedPilotCatalogService,'benchmarkForOffer'|'historicalOfferContext'>
+  private readonly catalog?:Pick<GovernedPilotCatalogService,'benchmarkForOffer'|'historicalOfferContext'|'catalogStore'>
  ){
   if(this.remedies&&this.remedies.resolutionLedger()!==this.resolution) throw new Error('MEMBER_ECONOMICS_REMEDY_RESOLUTION_LEDGER_MISMATCH');
  }
@@ -104,6 +104,8 @@ export class GovernedMemberEconomicsService{
   return this.economics.calculateSavings(input);
  }
  resolutionLedger(){return this.resolution;}
+ demandLedger(){return this.demand;}
+ catalogStore(){return this.catalog?.catalogStore();}
 }
 
 export interface MemberOrderOperationalView{
