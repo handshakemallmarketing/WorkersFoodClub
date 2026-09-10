@@ -1,0 +1,113 @@
+{
+  "slice": "SW1-RC1",
+  "reviewedCommit": "005d931e2900229f6b21bb4020f70998fb7caf93",
+  "verdict": "GO_RC1",
+  "reviewType": "direct cumulative falsification review with prior Codex findings remediated",
+  "productionAuthorization": false,
+  "nextAuthorizedPhase": "SW1-RC2",
+  "ci": {
+    "workflow": "constitutional-conformance",
+    "runId": 34470839715,
+    "jobId": 102850112088,
+    "result": "SUCCESS",
+    "checks": [
+      "canon:check",
+      "traceability:check",
+      "typecheck",
+      "test",
+      "test:kernel",
+      "postgres-durability",
+      "postgres-adapter-race"
+    ]
+  },
+  "mandatoryJourney": {
+    "test": "tests/node/sw1-rc1.test.mjs",
+    "startsFrom": "unbound authenticated identity",
+    "committedQuantity": "5 kg",
+    "performedQuantity": "4 kg",
+    "shortfallQuantity": "1 kg",
+    "remediedQuantity": "1 kg refund",
+    "unresolvedQuantity": "0 kg",
+    "savingsMinor": "8000 GHS minor units",
+    "projection": "canonical order log -> rebuild -> freshness assertion -> drop -> rebuild -> identical digest"
+  },
+  "mandatoryFalsificationCoverage": [
+    "authority bypass",
+    "checkout authorization proof substitution",
+    "payment forged signature and amount tamper/replay",
+    "inventory allocated-quantity double use",
+    "fulfillment overclaim after resolution",
+    "remedy fabrication without source exception",
+    "economics fabrication against canonical payment/performance/refund",
+    "projection authority inversion via stale snapshot",
+    "admin recovery fabrication including runtime capability spoof"
+  ],
+  "resolvedFindings": [
+    {
+      "severity": "P1",
+      "finding": "catalog test authority incorrectly imposed a quantity ceiling on quantity-less publication actions",
+      "classification": "fixture defect",
+      "resolution": "removed invalid catalog maxQuantity fixture constraint"
+    },
+    {
+      "severity": "P1",
+      "finding": "inventory double-use assertion did not match canonical service error vocabulary",
+      "classification": "fixture defect",
+      "resolution": "assertion now binds to TRANSFORMATION_INPUT_EXCEEDS_AVAILABLE"
+    },
+    {
+      "severity": "P1",
+      "finding": "resolution position was called with obligation ID instead of canonical obligation shape",
+      "classification": "fixture defect",
+      "resolution": "integrated replay passes commitment.obligation"
+    },
+    {
+      "severity": "P1",
+      "finding": "material projection rebuild/freshness step missing",
+      "classification": "evidence gap",
+      "resolution": "integrated journey now rebuilds, checks freshness/lineage, drops and deterministically rebuilds projection"
+    },
+    {
+      "severity": "P1",
+      "finding": "savings valuation was hard-coded rather than derived from governed catalog benchmark lineage",
+      "classification": "evidence gap",
+      "resolution": "fulfilled comparable value is derived from BenchmarkDisplay value/basis and preserves price evidence lineage"
+    },
+    {
+      "severity": "P1",
+      "finding": "mandatory integrated attack coverage incomplete",
+      "classification": "evidence gap",
+      "resolution": "all mandatory attacks are now executable across tests/node/sw1-rc1.test.mjs and tests/node/sw1-09-recovery-hardening.test.mjs"
+    },
+    {
+      "severity": "P0/P1",
+      "finding": "generic executeMutation could invoke reserved admin.recovery.reconcile and bypass recover() reconciliation safeguards",
+      "classification": "product defect",
+      "resolution": "reserved recovery action now requires a module-private runtime capability; direct and spoofed internal calls fail closed and are audited"
+    }
+  ],
+  "reviewEvidence": {
+    "priorCodexReviewedCommit": "9c04ed9aa0b1825a8b50e53e1f24750086bcd500",
+    "priorCodexP1Threads": 5,
+    "priorCodexThreadsResolved": 5,
+    "exactHeadCodexReview": "REQUESTED_PENDING_NOT_COUNTED_AS_APPROVAL"
+  },
+  "unresolvedP0P1Findings": [],
+  "primaryInvariants": [
+    "INV-001","INV-003","INV-004","INV-007","INV-008","INV-009","INV-010","INV-013",
+    "INV-019","INV-020","INV-021","INV-024","INV-027","INV-028","INV-029","INV-030"
+  ],
+  "sourcePaths": [
+    "docs/sw1/SW1-RC1-integrated-staging-falsification-review.md",
+    "tests/node/sw1-rc1.test.mjs",
+    "tests/node/sw1-09-recovery-hardening.test.mjs",
+    "packages/pilot-operations/src/index.ts"
+  ],
+  "limitations": [
+    "sandbox payment provider only",
+    "in-memory cumulative replay for most pilot domain services",
+    "no production launch authorization",
+    "no live funds/provider activation",
+    "exact-head Codex review remains pending and is not represented as approval"
+  ]
+}
