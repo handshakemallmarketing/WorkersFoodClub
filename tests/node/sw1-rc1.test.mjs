@@ -142,7 +142,7 @@ async function runJourney(){
   projection.drop();
   const rebuilt=projection.rebuild(canonical.all(),'2026-09-10T08:54:00Z');
   assertFresh(rebuilt,canonical.all()); assert.equal(snapshotDigest(rebuilt),firstDigest);
-  return {f,active,commitment,receipt,position,savings,benchmarkDisplay,projectionSnapshot:rebuilt};
+  return {f,active,commitment,receipt,position,savings,benchmarkDisplay,projectionSnapshot:rebuilt,canonical};
 }
 
 test('SW1-RC1 integrated replay preserves the mandatory 5kg -> 4kg performance + 1kg refund conservation path',async()=>{
@@ -158,4 +158,25 @@ test('SW1-RC1 integrated state rejects forged payment and economics mutation att
   const tampered=JSON.stringify({providerReference:intent.providerReference,status:'CONFIRMED',amountMinor:'1',currency:'GHS',occurredAt:'2026-09-10T09:01:00Z'});
   assert.throws(()=>f.payments.reconcileWebhook({eventId:'event:rc1-tampered',rawBody:tampered,signature:`sandbox:rc1-secret:${tampered}`,receivedAt:'2026-09-10T09:02:00Z'}),/PAYMENT_AMOUNT_MISMATCH/);
   assert.throws(()=>f.economics.recordFulfilledEconomics({id:'member-econ:rc1-forged',obligationId,participantId:member,specificationId:rice,quantity:quantity(5,'kg'),place:benchmarkDisplay.place,serviceLevel:'pickup',goodsOutlay:money(1n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(10000n,'GHS'),economicEvidenceIds:[receipt.evidenceId,eid('evidence:rc1-refund-settled')],realizedAt:'2026-09-10T09:03:00Z',substitutionEvidenceIds:[]}),/MEMBER_ECONOMICS_NOT_ACTUAL_PERFORMANCE|MEMBER_ECONOMICS_OUTLAY_NOT_CANONICAL/);
+});
+
+test('SW1-RC1 remaining mandatory attacks fail closed against the completed integrated state',async()=>{
+  const {f,commitment,canonical,projectionSnapshot}=await runJourney();
+  assert.throws(()=>f.catalogService.publishSpecification({actorId:catalogOperator,grantIds:[],at:'2026-09-10T09:04:00Z'},{id:sid('spec:rc1-unauthorized'),version:1,name:'Unauthorized',baseUnit:'kg'}),/CATALOG_UNAUTHORIZED:NO_GRANT/);
+
+  const offer=f.catalog.getOffer(offerId); const membership=f.memberships.get('membership:rc1');
+  f.carts.create({id:'cart:rc1-forged',participantId:member,at:'2026-09-10T09:04:00Z'});
+  f.carts.setSingleLine({cartId:'cart:rc1-forged',participantId:member,offer,quantity:quantity(5,'kg'),at:'2026-09-10T09:05:00Z'});
+  await assert.rejects(()=>f.checkout.checkout({cartId:'cart:rc1-forged',participantId:member,membership,offer,obligationId:oid('obligation:rc1-forged'),authorizedCommandId:cid('command:rc1-forged'),authorizedEventId:'event:rc1-forged',acceptedAt:'2026-09-10T09:06:00Z',policyVersions:['checkout-v1']}),/AUTHORIZED_COMMITMENT_NOT_VERIFIED/);
+
+  const intent=f.payments.createIntent({actorId:member,grantIds:[f.grants.payment],at:'2026-09-10T09:07:00Z'},{obligationId,participantId:member,offer,idempotencyKey:'rc1-payment'});
+  const validBody=JSON.stringify({providerReference:intent.providerReference,status:'CONFIRMED',amountMinor:'50000',currency:'GHS',occurredAt:'2026-09-10T09:07:30Z'});
+  assert.throws(()=>f.payments.reconcileWebhook({eventId:'event:rc1-forged-signature',rawBody:validBody,signature:'forged',receivedAt:'2026-09-10T09:08:00Z'}),/PAYMENT_WEBHOOK_SIGNATURE_INVALID/);
+
+  assert.throws(()=>f.fulfillment.recordException({actorId:member,grantIds:[f.grants.memberFulfillment],at:'2026-09-10T09:09:00Z'},{id:'exception:rc1-overclaim',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-10T09:08:30Z',evidenceIds:[eid('evidence:rc1-overclaim')],relatedAcceptanceId:'acceptance:rc1'}),/EXCEPTION_EXCEEDS_UNRESOLVED_QUANTITY/);
+
+  assert.throws(()=>f.remedies.createRemedy({actorId:finance,grantIds:[f.grants.remedy],at:'2026-09-10T09:10:00Z'},{id:'remedy:rc1-fabricated',sourceExceptionId:'exception:rc1-missing',originalObligationId:obligationId,participantId:member,kind:'REFUND',quantity:quantity(1,'kg'),createdAt:'2026-09-10T09:09:30Z',authorizedEventId:'event:rc1-fabricated-remedy',evidenceIds:[eid('evidence:rc1-fabricated-remedy')],economicClassification:'REMEDY_SETTLEMENT'}),/REMEDY_EXCEPTION_MISMATCH/);
+
+  canonical.append({stream:'orders',sequence:4,recordId:'order:rc1-late-canonical',occurredAt:'2026-09-10T09:11:00Z',payload:{kind:'ORDER_RESOLUTION',obligationId:String(obligationId),performedQuantity:4,remediedQuantity:1,unresolvedQuantity:0,unit:commitment.obligation.quantity.unit}});
+  assert.throws(()=>assertFresh(projectionSnapshot,canonical.all()),/PROJECTION_STALE/);
 });
