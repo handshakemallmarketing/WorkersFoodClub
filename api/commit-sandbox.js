@@ -92,7 +92,11 @@ export default async function handler(req, res) {
           result_json, created_at, updated_at
         )
         SELECT ${requestId}, ${commandId}, 'COMMITTED', ${ownerToken}, now(), 1,
-               jsonb_build_object('status','ACCEPTED','obligationId',obligation_id,'eventIds',jsonb_build_array(${eventId})),
+               jsonb_build_object(
+                 'status','ACCEPTED',
+                 'obligationId', obligation_id,
+                 'eventIds', jsonb_build_array(${eventId}::text)
+               ),
                now(), now()
           FROM commitment
         RETURNING command_id
