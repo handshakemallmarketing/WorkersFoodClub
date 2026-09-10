@@ -61,7 +61,10 @@ type StoredRequest<R>={
 
 const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
 const stable=(value:unknown):string=>{
- if(value===null||typeof value!=='object') return JSON.stringify(value);
+ if(value===null||typeof value!=='object'){
+  const encoded=JSON.stringify(value);
+  return encoded===undefined?'undefined':encoded;
+ }
  if(Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
  const record=value as Record<string,unknown>;
  return `{${Object.keys(record).sort().map(k=>`${JSON.stringify(k)}:${stable(record[k])}`).join(',')}}`;
