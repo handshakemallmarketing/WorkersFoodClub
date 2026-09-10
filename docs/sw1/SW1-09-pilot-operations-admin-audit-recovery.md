@@ -31,6 +31,10 @@ SW1-09 implements the accepted operational slice for the Food Club pilot. It doe
 - Recovery action for safe retry/reconciliation of already-authorized work with duplicate-effect prevention.
 - Adversarial tests for unauthorized admin access, stale recovery, conflicting request reuse, and audit-view freshness disclosure.
 
+## Relationship to the prescribed SW1 member journey
+
+SW1-09 preserves the operations and recovery work assigned by the SW1 acceptance contract; it does not substitute a partial replay for that work. The later RC integrated replay must exercise the full prescribed member journey beginning with verified membership, continuing through governed catalog/offer and checkout commitment creation, payment, inventory and fulfillment, and deliberately exercising the shortfall/remedy/refund path before economics/projection rebuild. A replay that starts from a pre-created commitment or makes the required exception/remedy path optional is not sufficient evidence for the RC claim.
+
 ## Non-goals
 
 - No production launch authorization.
@@ -40,4 +44,12 @@ SW1-09 implements the accepted operational slice for the Food Club pilot. It doe
 
 ## Exit
 
-SW1-09 exits only when operational controls, audit views, and recovery tooling are implemented with adversarial coverage and the cumulative constitutional-conformance gate is green.
+SW1-09 exits only when all of the following are true:
+
+1. Operational controls, audit views, and recovery tooling are implemented with adversarial coverage.
+2. An explicit SW1-09 traceability record maps the implemented code, tests, constitutional requirements, and evidence.
+3. SW1-09 release evidence is present in `evidence/releases/` and is indexed by the cumulative release index.
+4. `docs/traceability/matrix.json` and `docs/traceability/release-index.json` both advance their head to SW1-09 and remain mutually consistent.
+5. The cumulative constitutional-conformance gate is green.
+
+Merely obtaining a green checker while the matrix or release index remains at an earlier slice is not sufficient to exit SW1-09.
