@@ -1,0 +1,88 @@
+{
+  "slice": "SW1-RC2",
+  "status": "NO_GO_RC2",
+  "baselineCommit": "c46510669a97041cb755395697372af8b3394b89",
+  "reviewBranch": "sw1-rc2-production-readiness-falsification",
+  "productionAuthorization": false,
+  "auditType": "initial repository evidence gap audit",
+  "confirmedExistingControls": [
+    "SW1-RC1 cumulative authority/evidence/obligation/inventory/fulfillment/remedy/economics/projection/recovery falsification is merged and post-merge green",
+    "sandbox payment webhook verification rejects bad signatures and binds provider reference/amount/obligation/participant/offer",
+    "payment reconciliation has same-event replay and provider-reference redelivery controls",
+    "PostgreSQL durability and adapter-race tests exist in cumulative CI",
+    "canonical projections are rebuildable and runtime-immutable",
+    "administrative recovery is authority-gated and replays immutable original operations"
+  ],
+  "blockingGaps": [
+    {
+      "id": "RC2-PAY-001",
+      "severity": "P1",
+      "domain": "payment",
+      "finding": "No production/live Mobile Money provider adapter or provider-authenticity implementation is present; current payment provider and verifier are sandbox-only.",
+      "requiredClosure": "Implement or integrate the exact proposed production provider seam and prove provider-specific authenticity, reconciliation, reordered callbacks, timeout-after-success and refund retry behavior. Until then live funds remain unauthorized."
+    },
+    {
+      "id": "RC2-DUR-001",
+      "severity": "P1",
+      "domain": "durability",
+      "finding": "Cumulative PostgreSQL durability tests exist, but no production backup creation plus isolated restore rehearsal evidence is present.",
+      "requiredClosure": "Create automated backup/restore rehearsal tooling and evidence proving restored canonical state and deterministic material projections without targeting a live production store."
+    },
+    {
+      "id": "RC2-PRIV-001",
+      "severity": "P1",
+      "domain": "privacy",
+      "finding": "No RC2 production data inventory, minimization/retention/disposition policy, or privacy-sensitive access/export evidence is present.",
+      "requiredClosure": "Document data classes/purpose/sensitivity/retention/disposition and add executable checks for projection/log minimization and scoped sensitive access where applicable."
+    },
+    {
+      "id": "RC2-SEC-001",
+      "severity": "P1",
+      "domain": "secrets-environment",
+      "finding": "No production secrets/environment isolation contract and executable fail-closed configuration test is present.",
+      "requiredClosure": "Define production/non-production configuration, required-secret validation, sandbox/live isolation, log redaction and rotation/revocation procedure; add adversarial tests."
+    },
+    {
+      "id": "RC2-OBS-001",
+      "severity": "P1",
+      "domain": "observability",
+      "finding": "No production consequential-command/payment/recovery/projection/durability alert contract or redaction evidence is present.",
+      "requiredClosure": "Provide source-backed observability events/alerts and prove planted secret/sensitive markers are not leaked."
+    },
+    {
+      "id": "RC2-RUN-001",
+      "severity": "P1",
+      "domain": "incident-recovery",
+      "finding": "No complete operator incident/recovery runbook set exists for ambiguous payment, refund retry, database restore, compromised secret, unauthorized access, projection failure and inventory/fulfillment discrepancy.",
+      "requiredClosure": "Create inspectable runbooks that preserve additive history and prohibit direct canonical rewrites."
+    },
+    {
+      "id": "RC2-LEGAL-001",
+      "severity": "P1",
+      "domain": "title-risk-policy",
+      "finding": "No ratified transaction-specific title/risk-transfer policy reference is present for production pilot entry.",
+      "requiredClosure": "Reference a ratified external governed policy/version for title, custody, risk, acceptance and remedy behavior. Software must not invent the missing rule."
+    },
+    {
+      "id": "RC2-E2E-001",
+      "severity": "P1",
+      "domain": "production-like-rehearsal",
+      "finding": "No RC2 production-like adversarial rehearsal exists covering security, privacy, provider ambiguity, restore/rebuild, observability redaction and recovery redirection in one release candidate.",
+      "requiredClosure": "Implement and execute the RC2 rehearsal defined by the RC2 contract after prerequisite controls exist."
+    }
+  ],
+  "unresolvedP0P1Findings": [
+    "RC2-PAY-001","RC2-DUR-001","RC2-PRIV-001","RC2-SEC-001","RC2-OBS-001","RC2-RUN-001","RC2-LEGAL-001","RC2-E2E-001"
+  ],
+  "nextImplementationOrder": [
+    "secrets/environment isolation and redaction foundation",
+    "privacy/data inventory and retention contract",
+    "observability/incident evidence model",
+    "backup/restore rehearsal tooling",
+    "provider-neutral ambiguity/refund reconciliation hardening",
+    "exact live-provider integration when provider is selected/configured",
+    "title/risk policy reference",
+    "integrated RC2 production-like adversarial rehearsal"
+  ],
+  "note": "This gap register is deliberately NO_GO and is not release evidence. SW1-RC1 remains the authoritative accepted head until every RC2 blocker is closed."
+}
