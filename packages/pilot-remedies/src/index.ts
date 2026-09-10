@@ -69,6 +69,7 @@ export class GovernedPilotRemedyService {
 
  position(obligationId:ObligationId){return this.resolution.position(this.order(obligationId));}
  resolutionLedger(){return this.remedies.resolutionLedger();}
+ demandLedger(){return this.demand;}
  getRemedy(id:string){return this.remedies.getRemedy(id);}
  getCompletion(id:string){return this.remedies.getCompletion(id);}
 }
