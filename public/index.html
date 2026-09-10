@@ -10,10 +10,7 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">FC</div>
-        <div><strong>Food Club Ghana</strong><span>Member Preview</span></div>
-      </div>
+      <div class="brand"><div class="brand-mark">FC</div><div><strong>Food Club Ghana</strong><span>Member Preview</span></div></div>
       <nav>
         <button class="nav-item active" data-view="dashboard">Overview</button>
         <button class="nav-item" data-view="catalog">Member Offers</button>
@@ -27,10 +24,7 @@
     <main>
       <header class="topbar">
         <div><p class="eyebrow">Workers Food Club</p><h1 id="page-title">Member Overview</h1></div>
-        <div class="env-badges">
-          <span id="db-status" class="badge neutral">Checking Neon…</span>
-          <span class="badge warning">Sandbox payments only</span>
-        </div>
+        <div class="env-badges"><span id="db-status" class="badge neutral">Checking Neon…</span><span class="badge warning">Sandbox payments only</span></div>
       </header>
 
       <section id="dashboard" class="view active">
@@ -56,19 +50,12 @@
 
       <section id="catalog" class="view">
         <div class="section-intro"><div><p class="eyebrow">Current pilot offers</p><h2>Member Offers</h2></div><span id="offers-source" class="badge neutral">Loading Neon data…</span></div>
-        <div id="offer-grid" class="offer-grid" aria-live="polite">
-          <article class="offer-card muted"><div class="offer-icon">…</div><div><h3>Loading offers</h3><p>Reading staging catalog from Neon PostgreSQL.</p></div><button class="secondary small" disabled>Please wait</button></article>
-        </div>
+        <div id="offer-grid" class="offer-grid" aria-live="polite"><article class="offer-card muted"><div class="offer-icon">…</div><div><h3>Loading offers</h3><p>Reading staging catalog from Neon PostgreSQL.</p></div><button class="secondary small" disabled>Please wait</button></article></div>
       </section>
 
       <section id="orders" class="view">
-        <div class="section-intro"><div><p class="eyebrow">Member activity</p><h2>My Orders</h2></div></div>
-        <div class="timeline-card">
-          <div class="timeline-row"><span class="timeline-dot done"></span><div><strong>Commitment accepted</strong><p>5 kg rice · governed obligation created</p></div><time>Preview</time></div>
-          <div class="timeline-row"><span class="timeline-dot done"></span><div><strong>Payment confirmed</strong><p>Sandbox provider evidence recorded</p></div><time>Preview</time></div>
-          <div class="timeline-row"><span class="timeline-dot done"></span><div><strong>Fulfillment recorded</strong><p>4 kg accepted · 1 kg shortfall</p></div><time>Preview</time></div>
-          <div class="timeline-row"><span class="timeline-dot done"></span><div><strong>Remedy completed</strong><p>1 kg shortfall refunded under separate authority</p></div><time>Preview</time></div>
-        </div>
+        <div class="section-intro"><div><p class="eyebrow">Member activity</p><h2>My Orders</h2></div><span id="orders-source" class="badge neutral">Loading Neon data…</span></div>
+        <div id="orders-list" class="timeline-card" aria-live="polite"><div class="timeline-row"><span class="timeline-dot"></span><div><strong>Loading sandbox commitments</strong><p>Reading governed staging state from Neon PostgreSQL.</p></div><time>Staging</time></div></div>
       </section>
 
       <section id="operator" class="view">
