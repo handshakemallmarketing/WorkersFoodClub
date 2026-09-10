@@ -145,24 +145,27 @@ export class GovernedPilotOperationsService{
   if(!Number.isFinite(input.maxAgeMs)||input.maxAgeMs<0) throw new Error('RECOVERY_MAX_AGE_INVALID');
   const original=this.requests.get(input.originalRequestId);
   if(!original) throw new Error('RECOVERY_ORIGINAL_REQUEST_UNKNOWN');
-  const request:AdminOperationRequest={requestId:input.recoveryRequestId,action:'admin.recovery.reconcile',targetId:original.targetId,reason:input.reason,payload:{originalRequestId:input.originalRequestId}};
-  return this.executeMutation(ctx,request,()=>{
+  const request:AdminOperationRequest<{originalRequestId:string}>={requestId:input.recoveryRequestId,action:'admin.recovery.reconcile',targetId:original.targetId,reason:input.reason,payload:{originalRequestId:input.originalRequestId}};
+  return this.executeMutation<{originalRequestId:string},RecoveryResult>(ctx,request,():AdminMutationEffect<RecoveryResult>=>{
    const age=Date.parse(ctx.at)-Date.parse(original.attemptedAt);
    if(age<0) throw new Error('RECOVERY_TIME_INVALID');
    if(age>input.maxAgeMs) throw new Error('RECOVERY_STALE');
-   if(original.outcome==='ACCEPTED') return {result:Object.freeze({disposition:'ALREADY_APPLIED' as const,sourceRecordIds:Object.freeze([original.auditId])}),sourceRecordIds:Object.freeze([original.auditId])};
+   if(original.outcome==='ACCEPTED'){
+    const sourceRecordIds=Object.freeze([original.auditId]);
+    return {result:Object.freeze({disposition:'ALREADY_APPLIED',sourceRecordIds}),sourceRecordIds};
+   }
    if(original.failureReason!=='MUTATION_FAILED'||!original.retry) throw new Error('RECOVERY_ORIGINAL_NOT_RETRYABLE');
    const observed=probe();
    if(!uniqueSources(observed.sourceRecordIds)) throw new Error('RECOVERY_SOURCE_LINEAGE_INVALID');
    if(observed.effectObserved){
     const sourceRecordIds=Object.freeze([original.auditId,...observed.sourceRecordIds]);
-    return {result:Object.freeze({disposition:'ALREADY_APPLIED' as const,sourceRecordIds}),sourceRecordIds};
+    return {result:Object.freeze({disposition:'ALREADY_APPLIED',sourceRecordIds}),sourceRecordIds};
    }
    const retried=original.retry();
    if(!uniqueSources(retried.sourceRecordIds)) throw new Error('RECOVERY_RETRY_LINEAGE_INVALID');
    const sourceRecordIds=Object.freeze([original.auditId,...observed.sourceRecordIds,...retried.sourceRecordIds]);
    if(!uniqueSources(sourceRecordIds)) throw new Error('RECOVERY_SOURCE_LINEAGE_INVALID');
-   return {result:Object.freeze({disposition:'RETRIED' as const,sourceRecordIds}),sourceRecordIds};
+   return {result:Object.freeze({disposition:'RETRIED',sourceRecordIds}),sourceRecordIds};
   });
  }
 
@@ -175,7 +178,7 @@ export class GovernedPilotOperationsService{
   const freshest=records.reduce<string|undefined>((latest,r)=>!latest||Date.parse(r.attemptedAt)>Date.parse(latest)?r.attemptedAt:latest,undefined);
   const ageMs=freshest===undefined?undefined:Date.parse(ctx.at)-Date.parse(freshest);
   if(ageMs!==undefined&&ageMs<0) throw new Error('AUDIT_VIEW_TIME_BEFORE_SOURCE');
-  return Object.freeze({targetId,records:Object.freeze([...records]),sourceRecordIds:Object.freeze(records.map(x=>x.id)),generatedAt:ctx.at,...(freshest?{freshestSourceAt:freshest,ageMs}:{}),stale:ageMs===undefined||ageMs>maxAgeMs,authoritative:false as const});
+  return Object.freeze({targetId,records:Object.freeze([...records]),sourceRecordIds:Object.freeze(records.map(x=>x.id)),generatedAt:ctx.at,...(freshest!==undefined&&ageMs!==undefined?{freshestSourceAt:freshest,ageMs}:{}),stale:ageMs===undefined||ageMs>maxAgeMs,authoritative:false as const});
  }
 
  auditLog(){return Object.freeze([...this.auditRecords]);}
