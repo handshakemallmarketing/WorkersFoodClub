@@ -1,32 +1,58 @@
-import type {EvidenceId,Money,ObligationId,ParticipantId,Quantity,SpecificationId} from '../../kernel/src/index.js';
+import type {EvidenceId,Money,ObligationId,OfferId,ParticipantId,Quantity,SpecificationId} from '../../kernel/src/index.js';
 import type {InMemoryDemandCommitmentLedger} from '../../demand/src/index.js';
 import {InMemoryEconomicsLedger,type FulfilledMemberEconomics,type SavingsEntry} from '../../economics/src/index.js';
 import {InMemoryObligationResolutionLedger} from '../../resolution/src/index.js';
 import type {InMemoryRemedyLedger} from '../../remedy/src/index.js';
 import type {CanonicalProjectionRecord,ProjectionDefinition} from '../../projections/src/index.js';
+import type {GovernedPilotCatalogService} from '../../pilot-catalog/src/index.js';
 
-const sameQuantity=(a:Quantity,b:Quantity)=>a.unit===b.unit&&a.amount===b.amount;
+const QUANTITY_SIGNIFICANT_DIGITS=12;
+const normalizeAmount=(value:number)=>{
+ if(!Number.isFinite(value)||value<=0) throw new Error('GOVERNED_BENCHMARK_QUANTITY_MISMATCH');
+ const normalized=Number.parseFloat(value.toPrecision(QUANTITY_SIGNIFICANT_DIGITS));
+ if(!Number.isFinite(normalized)||normalized<=0) throw new Error('GOVERNED_BENCHMARK_QUANTITY_MISMATCH');
+ return normalized;
+};
 const sameMoney=(a:Money,b:Money)=>a.currency===b.currency&&a.minor===b.minor;
 const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
 const sameEvidence=(actual:readonly EvidenceId[],expected:readonly EvidenceId[])=>actual.length===expected.length&&new Set(actual.map(String)).size===actual.length&&actual.every(id=>expected.some(x=>String(x)===String(id)));
+const decimalFraction=(value:number)=>{
+ const normalized=normalizeAmount(value);
+ const [mantissa,exponentText]=normalized.toString().toLowerCase().split('e');
+ const exponent=Number(exponentText??'0');
+ const [whole,fraction='']=mantissa!.split('.');
+ const numeratorBase=BigInt(`${whole}${fraction}`);
+ const shift=exponent-fraction.length;
+ return shift>=0?{numerator:numeratorBase*(10n**BigInt(shift)),denominator:1n}:{numerator:numeratorBase,denominator:10n**BigInt(-shift)};
+};
+const prorateMinor=(minor:bigint,actual:number,basis:number)=>{const a=decimalFraction(actual),b=decimalFraction(basis);return minor*a.numerator*b.denominator/(a.denominator*b.numerator);};
 
 export class GovernedMemberEconomicsService{
  constructor(
   private readonly demand:Pick<InMemoryDemandCommitmentLedger,'getCommitment'|'paymentsFor'>,
   private readonly resolution:InMemoryObligationResolutionLedger,
   private readonly economics:InMemoryEconomicsLedger,
-  private readonly remedies?:Pick<InMemoryRemedyLedger,'completedRemediesFor'>
- ){}
+  private readonly remedies?:Pick<InMemoryRemedyLedger,'completedRemediesFor'|'resolutionLedger'>,
+  private readonly catalog?:Pick<GovernedPilotCatalogService,'benchmarkForOffer'|'historicalOfferContext'|'catalogStore'>
+ ){
+  if(this.remedies&&this.remedies.resolutionLedger()!==this.resolution) throw new Error('MEMBER_ECONOMICS_REMEDY_RESOLUTION_LEDGER_MISMATCH');
+ }
  recordFulfilledEconomics(input:FulfilledMemberEconomics){
   const commitment=this.demand.getCommitment(input.obligationId);
   if(!commitment) throw new Error('MEMBER_ECONOMICS_OBLIGATION_UNKNOWN');
   if(input.participantId!==commitment.participantId) throw new Error('MEMBER_ECONOMICS_PARTICIPANT_MISMATCH');
   if(input.specificationId!==commitment.obligation.specificationId) throw new Error('MEMBER_ECONOMICS_SPECIFICATION_MISMATCH');
+  if(!this.catalog) throw new Error('MEMBER_ECONOMICS_CATALOG_REQUIRED');
+  const benchmark=this.catalog.benchmarkForOffer(commitment.offerId);
+  if(!benchmark)throw new Error('MEMBER_ECONOMICS_BENCHMARK_CONTEXT_UNKNOWN');
+  if(input.place!==benchmark.place||input.serviceLevel!=='pickup')throw new Error('MEMBER_ECONOMICS_COMPARISON_CONTEXT_NOT_CANONICAL');
   const position=this.resolution.position({id:commitment.obligation.id,quantity:commitment.obligation.quantity});
   const completed=this.remedies?.completedRemediesFor(input.obligationId)??[];
   const replacements=completed.filter(x=>x.remedy.kind==='REPLACEMENT').reduce((n,x)=>n+x.completion.quantity.amount,0);
-  const fulfilledQuantity:Object=Object.freeze({amount:position.performedQuantity.amount+replacements,unit:position.performedQuantity.unit});
-  if(!sameQuantity(input.quantity,fulfilledQuantity as Quantity)||input.quantity.amount<=0) throw new Error('MEMBER_ECONOMICS_NOT_ACTUAL_PERFORMANCE');
+  const actualAmount=normalizeAmount(position.performedQuantity.amount+replacements);
+  const inputAmount=normalizeAmount(input.quantity.amount);
+  if(input.quantity.unit!==position.performedQuantity.unit||inputAmount!==actualAmount) throw new Error('MEMBER_ECONOMICS_NOT_ACTUAL_PERFORMANCE');
+  const canonicalQuantity:Quantity=Object.freeze({amount:actualAmount,unit:position.performedQuantity.unit});
 
   const confirmed=this.demand.paymentsFor(input.obligationId).filter(p=>p.status==='CONFIRMED');
   if(confirmed.length===0) throw new Error('MEMBER_ECONOMICS_CONFIRMED_PAYMENT_REQUIRED');
@@ -46,11 +72,40 @@ export class GovernedMemberEconomicsService{
   const canonicalEvidence:EvidenceId[]=[...confirmed.map(p=>p.evidenceId),...refunds.flatMap(x=>x.completion.evidenceIds)];
   if(!sameEvidence(input.economicEvidenceIds,canonicalEvidence)) throw new Error('MEMBER_ECONOMICS_EVIDENCE_NOT_CANONICAL');
   if(!validTime(input.realizedAt)||Date.parse(input.realizedAt)<Date.parse(commitment.acceptedAt)) throw new Error('MEMBER_ECONOMICS_TIME_INVALID');
-  return this.economics.recordFulfilledMemberEconomics(input);
+  return this.economics.recordFulfilledMemberEconomics({...input,quantity:canonicalQuantity});
+ }
+ recordGovernedSavingsBenchmark(input:{benchmarkId:string;benchmarkVersion:number;valuationId:string;obligationId:ObligationId;offerId:OfferId;benchmarkDisplayId:string;listingId?:string}){
+  if(!this.catalog) throw new Error('GOVERNED_BENCHMARK_CATALOG_REQUIRED');
+  const commitment=this.demand.getCommitment(input.obligationId);
+  if(!commitment) throw new Error('GOVERNED_BENCHMARK_OBLIGATION_UNKNOWN');
+  if(commitment.offerId!==input.offerId) throw new Error('GOVERNED_BENCHMARK_OFFER_MISMATCH');
+  const context=this.catalog.historicalOfferContext(input.offerId,input.benchmarkDisplayId);
+  const {offer,benchmark}=context;
+  const acceptedAt=Date.parse(commitment.acceptedAt);
+  if(Number.isNaN(acceptedAt)||acceptedAt<Date.parse(offer.validFrom)||acceptedAt>Date.parse(offer.validUntil)) throw new Error('GOVERNED_BENCHMARK_COMMITMENT_OUTSIDE_OFFER_VALIDITY');
+  const observedAt=Date.parse(benchmark.observedAt);
+  if(Number.isNaN(observedAt)||observedAt>acceptedAt) throw new Error('GOVERNED_BENCHMARK_EVIDENCE_FUTURE');
+  if(benchmark.specificationId!==commitment.obligation.specificationId) throw new Error('GOVERNED_BENCHMARK_SPECIFICATION_MISMATCH');
+  const position=this.resolution.position({id:commitment.obligation.id,quantity:commitment.obligation.quantity});
+  const completed=this.remedies?.completedRemediesFor(input.obligationId)??[];
+  const replacements=completed.filter(x=>x.remedy.kind==='REPLACEMENT').reduce((n,x)=>n+x.completion.quantity.amount,0);
+  const actualQuantity=normalizeAmount(position.performedQuantity.amount+replacements);
+  const basisAmount=normalizeAmount(benchmark.basis.amount);
+  if(position.performedQuantity.unit!==benchmark.basis.unit) throw new Error('GOVERNED_BENCHMARK_QUANTITY_MISMATCH');
+  const comparableMinor=prorateMinor(benchmark.value.minor,actualQuantity,basisAmount);
+  if(comparableMinor<=0n) throw new Error('GOVERNED_BENCHMARK_VALUATION_INVALID');
+  const canonicalQuantity:Quantity=Object.freeze({amount:actualQuantity,unit:benchmark.basis.unit});
+  const methodInput={id:input.benchmarkId,version:input.benchmarkVersion,purpose:'MEMBER_SAVINGS' as const,specificationId:benchmark.specificationId,quantity:canonicalQuantity,place:benchmark.place,serviceLevel:'pickup',transactionLevel:benchmark.transactionLevel,validFrom:offer.validFrom,validUntil:offer.validUntil,normalizationRuleVersion:benchmark.methodVersion,availabilityRuleVersion:'historical-committed-offer-v1',observationEvidenceIds:[benchmark.priceEvidenceId],definedAt:commitment.acceptedAt};
+  const valuationInput={id:input.valuationId,benchmarkId:input.benchmarkId,benchmarkVersion:input.benchmarkVersion,obligationId:input.obligationId,specificationId:benchmark.specificationId,quantity:canonicalQuantity,place:benchmark.place,serviceLevel:'pickup',availability:'EXECUTABLE' as const,comparableValue:Object.freeze({minor:comparableMinor,currency:benchmark.value.currency}),evaluatedAt:commitment.acceptedAt,evidenceIds:[benchmark.priceEvidenceId]};
+  const {method,valuation}=this.economics.recordBenchmarkPackage(methodInput,valuationInput);
+  return Object.freeze({method,valuation,benchmark});
  }
  calculateSavings(input:{id:string;benchmarkValuationId:string;memberEconomicsId:string;calculatedAt:string;supersedes?:string}):SavingsEntry{
   return this.economics.calculateSavings(input);
  }
+ resolutionLedger(){return this.resolution;}
+ demandLedger(){return this.demand;}
+ catalogStore(){return this.catalog?.catalogStore();}
 }
 
 export interface MemberOrderOperationalView{

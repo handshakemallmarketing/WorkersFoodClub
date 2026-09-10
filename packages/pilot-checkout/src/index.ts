@@ -60,4 +60,6 @@ export class PilotCheckoutService {
    throw error;
   }
  }
+ demandLedger(){return this.commitments;}
+ catalogStore(){return this.catalog;}
 }

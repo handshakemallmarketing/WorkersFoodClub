@@ -1,0 +1,107 @@
+{
+  "slice": "SW1-RC1",
+  "reviewedCodeCommit": "5dc4a15dce001c56714ea3100d79edb28b8bb4d6",
+  "verdict": "GO_RC1",
+  "reviewType": "direct cumulative adversarial falsification review after iterative Codex findings and independent remediation",
+  "productionAuthorization": false,
+  "nextAuthorizedPhase": "SW1-RC2",
+  "ci": {
+    "workflow": "constitutional-conformance",
+    "runNumber": 1008,
+    "runId": 34483117625,
+    "jobId": 102890584547,
+    "result": "SUCCESS",
+    "checks": [
+      "canon:check",
+      "traceability:check",
+      "typecheck",
+      "test",
+      "test:kernel",
+      "postgres-durability",
+      "postgres-adapter-race"
+    ]
+  },
+  "mandatoryJourney": {
+    "test": "tests/node/sw1-rc1.test.mjs",
+    "startsFrom": "unbound authenticated identity",
+    "committedQuantity": "5 kg",
+    "performedQuantity": "4 kg",
+    "shortfallQuantity": "1 kg",
+    "remediedQuantity": "1 kg refund",
+    "unresolvedQuantity": "0 kg",
+    "savingsMinor": "8000 GHS minor units",
+    "projection": "production canonical order stream -> rebuild -> freshness/lineage assertion -> drop -> deterministic rebuild"
+  },
+  "mandatoryFalsificationCoverage": [
+    "authority bypass across identity, catalog, inventory, fulfillment, remedy and administration",
+    "checkout authorization-proof substitution",
+    "payment forged signature, amount tamper, same-event replay and provider redelivery",
+    "inventory transform/double-allocation after allocation",
+    "fulfillment acceptance and exception overclaim at canonical boundary",
+    "remedy creation/completion fabrication and no-grant settlement",
+    "economics quantity/outlay/refund/evidence/context fabrication",
+    "benchmark future evidence, stale/live-state substitution, fractional quantity and package-identity attacks",
+    "projection payload/map mutation, stale snapshot and lineage attacks",
+    "admin recovery entrypoint, capability, request-ID and mutable-payload fabrication",
+    "application composition mismatch across resolution, demand and catalog stores",
+    "canonical record identifier collision through cross-domain and delimiter-bearing IDs"
+  ],
+  "resolvedFindingClasses": [
+    "RC1 fixture/API-shape defects that prevented the original integrated replay",
+    "missing production canonical order stream and projection rebuild/freshness evidence",
+    "hard-coded/caller-inflatable benchmark valuation",
+    "incomplete mandatory authority/payment/inventory/fulfillment/remedy/economics/recovery attacks",
+    "reserved admin recovery action callable outside governed recovery",
+    "runtime-spoofable recovery dispatch and reusable rejected request IDs",
+    "mutable recovery payload retained by retry closure",
+    "mutable canonical record payloads and runtime-mutable projection rows",
+    "fulfillment resolution not emitted independently of remedy completion",
+    "ambiguous/colliding canonical record IDs",
+    "non-atomic or mismatched benchmark method/valuation package",
+    "fractional quantity and binary floating-point money-proration errors",
+    "historical savings dependent on mutable current listing state",
+    "caller-controlled benchmark time/validity/service context and future-dated evidence",
+    "missing canonical catalog dependency in member economics",
+    "resolution-ledger mismatch across fulfillment, remedy and economics",
+    "remedy wrapper resolution different from embedded remedy ledger",
+    "economics performance/remedy resolution-store mismatch",
+    "demand-ledger mismatch across checkout, fulfillment, remedy, economics and application coordinator",
+    "catalog-store mismatch between checkout and economics"
+  ],
+  "reviewEvidence": {
+    "iterativeCodexReviews": "multiple prior candidate SHAs reviewed; all resulting P0/P1 findings remediated and their code threads resolved on a green descendant",
+    "exactCodeHeadCodexReview": "UNAVAILABLE_USAGE_LIMIT_NOT_COUNTED_AS_APPROVAL",
+    "exactCodeHeadDirectReview": "PASS_NO_UNRESOLVED_P0_P1",
+    "codexUsageLimitEvidence": "PR conversation bot response reports Codex code-review usage limit exhausted"
+  },
+  "unresolvedP0P1Findings": [],
+  "primaryInvariants": [
+    "INV-001","INV-003","INV-004","INV-007","INV-008","INV-009","INV-010","INV-013",
+    "INV-019","INV-020","INV-021","INV-024","INV-027","INV-028","INV-029","INV-030"
+  ],
+  "sourcePaths": [
+    "docs/sw1/SW1-RC1-integrated-staging-falsification-review.md",
+    "packages/application/src/pilot-order.ts",
+    "packages/economics/src/index.ts",
+    "packages/pilot-catalog/src/index.ts",
+    "packages/pilot-checkout/src/index.ts",
+    "packages/pilot-fulfillment/src/index.ts",
+    "packages/pilot-member-economics/src/index.ts",
+    "packages/pilot-operations/src/index.ts",
+    "packages/pilot-remedies/src/index.ts",
+    "packages/projections/src/index.ts",
+    "tests/node/sw1-rc1.test.mjs",
+    "tests/node/sw1-09-recovery-hardening.test.mjs",
+    "tests/node/sw1-rc1-application-composition.test.mjs",
+    "tests/node/sw1-rc1-economics-composition.test.mjs",
+    "tests/node/sw1-rc1-economics-semantics.test.mjs",
+    "tests/node/sw1-rc1-runtime-integrity.test.mjs"
+  ],
+  "limitations": [
+    "sandbox payment provider only",
+    "predominantly in-memory cumulative pilot-domain replay",
+    "no live funds/provider activation",
+    "no production launch authorization",
+    "exact-code-head Codex re-review unavailable because account code-review usage limit was exhausted; this is explicitly not represented as approval"
+  ]
+}

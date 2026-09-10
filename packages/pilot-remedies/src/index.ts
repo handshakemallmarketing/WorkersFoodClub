@@ -25,7 +25,9 @@ export class GovernedPilotRemedyService {
   private readonly demand:Pick<InMemoryDemandCommitmentLedger,'getCommitment'>,
   private readonly remedies:InMemoryRemedyLedger,
   private readonly resolution:InMemoryObligationResolutionLedger
- ){}
+ ){
+  if(this.remedies.resolutionLedger()!==this.resolution) throw new Error('REMEDY_RESOLUTION_LEDGER_MISMATCH');
+ }
 
  private authorize(ctx:RemedyOperationContext,action:string,targetId:string,quantity?:number){
   const decision=this.authority.evaluate({actorId:ctx.actorId,action,targetId,at:ctx.at,grantIds:ctx.grantIds,...(quantity===undefined?{}:{quantity})});
@@ -66,6 +68,8 @@ export class GovernedPilotRemedyService {
  }
 
  position(obligationId:ObligationId){return this.resolution.position(this.order(obligationId));}
+ resolutionLedger(){return this.remedies.resolutionLedger();}
+ demandLedger(){return this.demand;}
  getRemedy(id:string){return this.remedies.getRemedy(id);}
  getCompletion(id:string){return this.remedies.getCompletion(id);}
 }
