@@ -6,6 +6,8 @@ import type {GovernedMemberEconomicsService} from '../../pilot-member-economics/
 import {memberOrderProjection} from '../../pilot-member-economics/src/index.js';
 import {CanonicalRecordLog,RebuildableProjection} from '../../projections/src/index.js';
 
+const canonicalRecordId=(...parts:string[])=>parts.map(part=>`${part.length}:${part}`).join('|');
+
 /**
  * Application-layer canonical order stream for the SW1 pilot.
  * Domain services remain authoritative for their own writes; this coordinator
@@ -22,7 +24,8 @@ export class PilotOrderApplicationService {
   private readonly economicsService:GovernedMemberEconomicsService,
   private readonly demand:Pick<InMemoryDemandCommitmentLedger,'getCommitment'>
  ){
-  if(this.fulfillmentService.resolutionLedger()!==this.remedyService.resolutionLedger()) throw new Error('ORDER_STREAM_RESOLUTION_LEDGER_MISMATCH');
+  const resolution=this.fulfillmentService.resolutionLedger();
+  if(resolution!==this.remedyService.resolutionLedger()||resolution!==this.economicsService.resolutionLedger()) throw new Error('ORDER_STREAM_RESOLUTION_LEDGER_MISMATCH');
  }
  private append(recordId:string,occurredAt:string,payload:unknown){
   return this.canonical.append({stream:'orders',sequence:++this.sequence,recordId,occurredAt,payload});
@@ -31,11 +34,11 @@ export class PilotOrderApplicationService {
   const commitment=this.demand.getCommitment(obligationId);
   if(!commitment) throw new Error('ORDER_STREAM_OBLIGATION_UNKNOWN');
   const position=this.remedyService.position(obligationId);
-  this.append(`order:${String(obligationId)}:resolution:${effectType}:${recordSuffix}`,occurredAt,{kind:'ORDER_RESOLUTION',obligationId:String(obligationId),performedQuantity:position.performedQuantity.amount,remediedQuantity:position.remediedQuantity.amount,unresolvedQuantity:position.unresolvedQuantity.amount,unit:commitment.obligation.quantity.unit});
+  this.append(canonicalRecordId('order',String(obligationId),'resolution',effectType,recordSuffix),occurredAt,{kind:'ORDER_RESOLUTION',obligationId:String(obligationId),performedQuantity:position.performedQuantity.amount,remediedQuantity:position.remediedQuantity.amount,unresolvedQuantity:position.unresolvedQuantity.amount,unit:commitment.obligation.quantity.unit});
  }
  async checkout(input:Parameters<PilotCheckoutService['checkout']>[0]){
   const commitment=await this.checkoutService.checkout(input);
-  this.append(`order:${String(commitment.obligation.id)}:committed`,commitment.acceptedAt,{kind:'ORDER_COMMITTED',obligationId:String(commitment.obligation.id),participantId:String(commitment.participantId),specificationId:String(commitment.obligation.specificationId),quantity:commitment.obligation.quantity.amount,unit:commitment.obligation.quantity.unit});
+  this.append(canonicalRecordId('order',String(commitment.obligation.id),'committed'),commitment.acceptedAt,{kind:'ORDER_COMMITTED',obligationId:String(commitment.obligation.id),participantId:String(commitment.participantId),specificationId:String(commitment.obligation.specificationId),quantity:commitment.obligation.quantity.amount,unit:commitment.obligation.quantity.unit});
   return commitment;
  }
  accept(ctx:Parameters<GovernedPilotFulfillmentService['accept']>[0],input:Parameters<GovernedPilotFulfillmentService['accept']>[1]){
@@ -52,7 +55,7 @@ export class PilotOrderApplicationService {
  }
  calculateSavings(input:Parameters<GovernedMemberEconomicsService['calculateSavings']>[0]){
   const savings=this.economicsService.calculateSavings(input);
-  this.append(`order:${String(savings.obligationId)}:savings:${savings.id}`,savings.calculatedAt,{kind:'ORDER_SAVINGS',obligationId:String(savings.obligationId),entryId:savings.id,minor:savings.absoluteSavings.minor,currency:savings.absoluteSavings.currency,...(savings.supersedes?{supersedes:savings.supersedes}:{})});
+  this.append(canonicalRecordId('order',String(savings.obligationId),'savings',savings.id),savings.calculatedAt,{kind:'ORDER_SAVINGS',obligationId:String(savings.obligationId),entryId:savings.id,minor:savings.absoluteSavings.minor,currency:savings.absoluteSavings.currency,...(savings.supersedes?{supersedes:savings.supersedes}:{})});
   return savings;
  }
  canonicalRecords(){return this.canonical.all();}
