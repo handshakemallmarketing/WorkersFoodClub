@@ -111,6 +111,31 @@ export class PrivacyExportGate{
  }
 }
 
+export type ConsequentialSignalKind='COMMAND_FAILURE'|'AUTHORIZATION_FAILURE'|'PAYMENT_VERIFICATION_FAILURE'|'PAYMENT_RECONCILIATION_AMBIGUOUS'|'RECOVERY_STUCK'|'PROJECTION_STALE'|'DURABILITY_FAILURE'|'BACKUP_RESTORE_FAILURE';
+export type ConsequentialSeverity='INFO'|'WARNING'|'CRITICAL';
+export interface ConsequentialSignal {readonly kind:ConsequentialSignalKind;readonly severity:ConsequentialSeverity;readonly occurredAt:string;readonly correlationId:string;readonly detail:unknown;}
+
+const severityFor=(kind:ConsequentialSignalKind):ConsequentialSeverity=>{
+ if(kind==='DURABILITY_FAILURE'||kind==='BACKUP_RESTORE_FAILURE'||kind==='PAYMENT_RECONCILIATION_AMBIGUOUS') return 'CRITICAL';
+ if(kind==='AUTHORIZATION_FAILURE'||kind==='PAYMENT_VERIFICATION_FAILURE'||kind==='RECOVERY_STUCK'||kind==='PROJECTION_STALE'||kind==='COMMAND_FAILURE') return 'WARNING';
+ return 'INFO';
+};
+
+export class ConsequentialObservability{
+ private readonly signals:ConsequentialSignal[]=[];
+ constructor(private readonly logger=new SafeOperationalLogger()){}
+ emit(input:{kind:ConsequentialSignalKind;occurredAt:string;correlationId:string;detail?:unknown}):ConsequentialSignal{
+  if(Number.isNaN(Date.parse(input.occurredAt))) throw new Error('OBSERVABILITY_TIME_INVALID');
+  if(!nonBlank(input.correlationId)) throw new Error('OBSERVABILITY_CORRELATION_ID_REQUIRED');
+  const safeDetail=this.logger.record(input.detail??{});
+  const signal=Object.freeze({kind:input.kind,severity:severityFor(input.kind),occurredAt:input.occurredAt,correlationId:input.correlationId.trim(),detail:safeDetail});
+  this.signals.push(signal);
+  return signal;
+ }
+ all():readonly ConsequentialSignal[]{return Object.freeze([...this.signals]);}
+ alerts():readonly ConsequentialSignal[]{return Object.freeze(this.signals.filter(s=>s.severity==='CRITICAL'||s.severity==='WARNING'));}
+}
+
 export class ProductionReadinessGate{
  authorize(input:{envelope:ProductionEnvelope;evidence:readonly ReadinessEvidence[];unresolvedFindings?:readonly {severity:'P0'|'P1'|'P2';id:string}[]}):ProductionAuthorization{
   const {envelope}=input;
