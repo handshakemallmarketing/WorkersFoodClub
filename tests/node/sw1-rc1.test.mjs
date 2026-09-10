@@ -38,7 +38,7 @@ const t0='2026-09-10T08:00:00Z';
 
 function build(){
  const authorityStore=new InMemoryAuthorityStore();
- const grants={identity:gid('grant:rc1-identity'),membership:gid('grant:rc1-membership'),catalog:gid('grant:rc1-catalog'),payment:gid('grant:rc1-payment'),inventory:gid('grant:rc1-inventory'),warehouse:gid('grant:rc1-warehouse'),memberFulfillment:gid('grant:rc1-member-fulfillment'),remedy:gid('grant:rc1-remedy')};
+ const grants={identity:gid('grant:rc1-identity'),membership:gid('grant:rc1-membership'),catalog:gid('grant:rc1-catalog'),payment:gid('grant:rc1-payment'),inventory:gid('grant:rc1-inventory'),warehouse:gid('grant:rc1-warehouse'),memberFulfillment:gid('grant:rc1-member-fulfillment'),memberOverclaim:gid('grant:rc1-member-overclaim-probe'),remedy:gid('grant:rc1-remedy'),adminMutation:gid('grant:rc1-admin-mutation'),recovery:gid('grant:rc1-recovery')};
  authorityStore.put({id:grants.identity,grantorId:club,actorId:identityOperator,actions:['identity.bind'],targetPrefix:'participant:',validFrom:t0});
  authorityStore.put({id:grants.membership,grantorId:club,actorId:identityOperator,actions:['membership.verify'],targetPrefix:'membership:',validFrom:t0});
  authorityStore.put({id:grants.catalog,grantorId:club,actorId:catalogOperator,actions:['catalog.specification.publish','catalog.listing.publish','catalog.price.observe','catalog.sales-window.publish','catalog.benchmark.publish','catalog.offer.publish'],targetPrefix:'',validFrom:t0});
@@ -46,7 +46,10 @@ function build(){
  authorityStore.put({id:grants.inventory,grantorId:club,actorId:warehouse,actions:['inventory.receive','inventory.quality.assess','inventory.transform','inventory.receive-derived','inventory.allocate'],targetPrefix:'lot:',validFrom:t0,maxQuantity:10});
  authorityStore.put({id:grants.warehouse,grantorId:club,actorId:warehouse,actions:['fulfillment.pick','fulfillment.pack','fulfillment.ready','fulfillment.handover'],targetPrefix:'',validFrom:t0,maxQuantity:5});
  authorityStore.put({id:grants.memberFulfillment,grantorId:club,actorId:member,actions:['fulfillment.accept','fulfillment.exception'],targetPrefix:'',validFrom:t0,maxQuantity:5});
+ authorityStore.put({id:grants.memberOverclaim,grantorId:club,actorId:member,actions:['fulfillment.accept'],targetPrefix:'obligation:',validFrom:t0,maxQuantity:10});
  authorityStore.put({id:grants.remedy,grantorId:club,actorId:finance,actions:['remedy.create','remedy.complete'],targetPrefix:'obligation:',validFrom:t0,maxQuantity:1});
+ authorityStore.put({id:grants.adminMutation,grantorId:club,actorId:finance,actions:['admin.obligation.annotate'],targetPrefix:'obligation:',validFrom:t0});
+ authorityStore.put({id:grants.recovery,grantorId:club,actorId:finance,actions:['admin.recovery.reconcile'],targetPrefix:'obligation:',validFrom:t0});
  const authority=new AuthorityEvaluator(authorityStore);
  const participants=new InMemoryParticipantDirectory();participants.register({id:member,kind:'PERSON'});participants.register({id:identityOperator,kind:'PERSON'});
  const memberships=new InMemoryMembershipStore(),bindings=new InMemoryIdentityBindingStore(),eligibility=new GovernedEligibilityDecisionStore();
@@ -59,8 +62,8 @@ function build(){
  const resolution=new InMemoryObligationResolutionLedger(),remediesLedger=new InMemoryRemedyLedger(resolution),fulfillmentLedger=new InMemoryFulfillmentLedger(resolution);
  const fulfillment=new GovernedPilotFulfillmentService(authority,inventoryLedger,demand,fulfillmentLedger,remediesLedger);
  const remedies=new GovernedPilotRemedyService(authority,demand,remediesLedger,resolution);
- const economicsLedger=new InMemoryEconomicsLedger(),economics=new GovernedMemberEconomicsService(demand,resolution,economicsLedger,remediesLedger);
- const app=new PilotOrderApplicationService(checkout,remedies,economics,demand);
+ const economicsLedger=new InMemoryEconomicsLedger(),economics=new GovernedMemberEconomicsService(demand,resolution,economicsLedger,remediesLedger,catalogService);
+ const app=new PilotOrderApplicationService(checkout,fulfillment,remedies,economics,demand);
  return {authorityStore,authority,grants,identity,memberships,eligibility,catalog,catalogService,demand,carts,checkout,payments,inventory,inventoryLedger,resolution,remediesLedger,fulfillment,remedies,economics,economicsLedger,app,setNow:v=>{now=v;}};
 }
 
@@ -108,9 +111,12 @@ async function runJourney(){
  f.fulfillment.recordWork(wctx,work('PICKED','pick:rc1'));f.fulfillment.recordWork(wctx,work('PACKED','pack:rc1','pick:rc1'));f.fulfillment.recordWork(wctx,work('READY_FOR_PICKUP','ready:rc1','pack:rc1'));
  f.fulfillment.handover(wctx,{id:'handover:rc1',fulfillmentWorkId:'ready:rc1',obligationId,fromCustodianId:warehouse,toParticipantId:member,placeId:'pickup:rc1',handedOverAt:'2026-09-10T08:36:00Z',evidenceIds:[eid('evidence:rc1-handover')]});
  assert.equal(f.fulfillment.performance(obligationId).state,'OPEN');
+ const overclaimCtx={actorId:member,grantIds:[f.grants.memberOverclaim],at:'2026-09-10T08:41:00Z'};
+ assert.throws(()=>f.app.accept(overclaimCtx,{id:'acceptance:rc1-overclaim-probe',handoverId:'handover:rc1',obligationId,participantId:member,state:'ACCEPTED',quantity:quantity(6,'kg'),acceptedAt:'2026-09-10T08:36:30Z',evidenceIds:[eid('evidence:rc1-acceptance-overclaim')]}),/ACCEPTANCE_QUANTITY_INVALID/);
  const mctx={actorId:member,grantIds:[f.grants.memberFulfillment],at:'2026-09-10T08:41:00Z'};
- assert.throws(()=>f.fulfillment.accept(mctx,{id:'acceptance:rc1-overclaim-probe',handoverId:'handover:rc1',obligationId,participantId:member,state:'ACCEPTED',quantity:quantity(6,'kg'),acceptedAt:'2026-09-10T08:36:30Z',evidenceIds:[eid('evidence:rc1-acceptance-overclaim')]}),/FULFILLMENT_UNAUTHORIZED:LIMIT_EXCEEDED|ACCEPTANCE_QUANTITY_INVALID/);
- f.fulfillment.accept(mctx,{id:'acceptance:rc1',handoverId:'handover:rc1',obligationId,participantId:member,state:'PARTIALLY_ACCEPTED',quantity:quantity(4,'kg'),acceptedAt:'2026-09-10T08:37:00Z',evidenceIds:[eid('evidence:rc1-acceptance')]});
+ f.app.accept(mctx,{id:'acceptance:rc1',handoverId:'handover:rc1',obligationId,participantId:member,state:'PARTIALLY_ACCEPTED',quantity:quantity(4,'kg'),acceptedAt:'2026-09-10T08:37:00Z',evidenceIds:[eid('evidence:rc1-acceptance')]});
+ const preRemedySnapshot=f.app.rebuildMemberOrderProjection('2026-09-10T08:37:30Z');
+ const preRemedyView=preRemedySnapshot.rows.get(String(obligationId));assert.equal(preRemedyView.performedQuantity,4);assert.equal(preRemedyView.remediedQuantity,0);assert.equal(preRemedyView.unresolvedQuantity,1);
  f.fulfillment.recordException(mctx,{id:'exception:rc1-shortfall',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-10T08:38:00Z',evidenceIds:[eid('evidence:rc1-shortfall')],relatedAcceptanceId:'acceptance:rc1'});
  assert.equal(f.resolution.position(commitment.obligation).performedQuantity.amount,4);assert.equal(f.remediesLedger.getRemedy('remedy:rc1-refund'),undefined);
 
@@ -119,14 +125,15 @@ async function runJourney(){
  f.app.completeRemedy(rctx,{id:'completion:rc1-refund',remedyObligationId:'remedy:rc1-refund',quantity:quantity(1,'kg'),completedAt:'2026-09-10T08:43:00Z',evidenceIds:[eid('evidence:rc1-refund-settled')],settlementAmount:money(10000n,'GHS')});
  const position=f.resolution.position(commitment.obligation);assert.equal(position.performedQuantity.amount,4);assert.equal(position.remediedQuantity.amount,1);assert.equal(position.unresolvedQuantity.amount,0);
 
- const comparableMinor=benchmarkDisplay.value.minor*4n/BigInt(benchmarkDisplay.basis.amount);
- f.economicsLedger.defineBenchmark({id:'benchmark:rc1',version:1,purpose:'MEMBER_SAVINGS',specificationId:benchmarkDisplay.specificationId,quantity:quantity(4,benchmarkDisplay.basis.unit),place:benchmarkDisplay.place,serviceLevel:'pickup',transactionLevel:benchmarkDisplay.transactionLevel,validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',normalizationRuleVersion:benchmarkDisplay.methodVersion,availabilityRuleVersion:'availability:v1',observationEvidenceIds:[benchmarkDisplay.priceEvidenceId],definedAt:'2026-09-10T08:10:00Z'});
- f.economicsLedger.recordBenchmarkValuation({id:'valuation:rc1',benchmarkId:'benchmark:rc1',benchmarkVersion:1,obligationId,specificationId:benchmarkDisplay.specificationId,quantity:quantity(4,benchmarkDisplay.basis.unit),place:benchmarkDisplay.place,serviceLevel:'pickup',availability:'EXECUTABLE',comparableValue:money(comparableMinor,benchmarkDisplay.value.currency),evaluatedAt:'2026-09-10T08:50:00Z',evidenceIds:[benchmarkDisplay.priceEvidenceId]});
+ const governedBenchmark=f.economics.recordGovernedSavingsBenchmark({benchmarkId:'benchmark:rc1',benchmarkVersion:1,valuationId:'valuation:rc1',obligationId,listingId:'listing:rc1-rice',offerId,benchmarkDisplayId:'benchmark-display:rc1',catalogAt:'2026-09-10T08:10:00Z',serviceLevel:'pickup',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',availabilityRuleVersion:'availability:v1',evaluatedAt:'2026-09-10T08:50:00Z'});
+ assert.equal(governedBenchmark.valuation.comparableValue.minor,48000n);
  f.economics.recordFulfilledEconomics({id:'member-econ:rc1',obligationId,participantId:member,specificationId:rice,quantity:quantity(4,'kg'),place:benchmarkDisplay.place,serviceLevel:'pickup',goodsOutlay:money(50000n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(10000n,'GHS'),economicEvidenceIds:[receipt.evidenceId,eid('evidence:rc1-refund-settled')],realizedAt:'2026-09-10T08:51:00Z',substitutionEvidenceIds:[]});
  const savings=f.app.calculateSavings({id:'savings:rc1',benchmarkValuationId:'valuation:rc1',memberEconomicsId:'member-econ:rc1',calculatedAt:'2026-09-10T08:52:00Z'});assert.equal(savings.absoluteSavings.minor,8000n);
 
+ const canonical=f.app.canonicalRecords();
+ assert.throws(()=>{canonical[0].payload.participantId='participant:forged';},TypeError);
  const firstSnapshot=f.app.rebuildMemberOrderProjection('2026-09-10T08:53:00Z');assertFresh(firstSnapshot,f.app.canonicalRecords());const firstDigest=snapshotDigest(firstSnapshot);
- const view=firstSnapshot.rows.get(String(obligationId));assert.equal(view.performedQuantity,4);assert.equal(view.remediedQuantity,1);assert.equal(view.unresolvedQuantity,0);assert.equal(view.latestSavingsMinor,8000n);assert.equal(view.sourceRecordIds.length,3);
+ const view=firstSnapshot.rows.get(String(obligationId));assert.equal(view.participantId,String(member));assert.equal(view.performedQuantity,4);assert.equal(view.remediedQuantity,1);assert.equal(view.unresolvedQuantity,0);assert.equal(view.latestSavingsMinor,8000n);assert.equal(view.sourceRecordIds.length,4);
  const rebuilt=f.app.rebuildMemberOrderProjection('2026-09-10T08:54:00Z');assertFresh(rebuilt,f.app.canonicalRecords());assert.equal(snapshotDigest(rebuilt),firstDigest);
  return {f,active,commitment,receipt,position,savings,benchmarkDisplay,projectionSnapshot:rebuilt};
 }
@@ -159,6 +166,24 @@ test('SW1-RC1 every required authority bypass fails closed in integrated state',
  assert.throws(()=>f.remedies.completeRemedy({actorId:finance,grantIds:[],at:'2026-09-10T09:05:30Z'},{id:'completion:rc1-unauthorized',remedyObligationId:'remedy:rc1-refund',quantity:quantity(1,'kg'),completedAt:'2026-09-10T09:05:00Z',evidenceIds:[eid('evidence:unauthorized-remedy-completion')],settlementAmount:money(10000n,'GHS')}),/REMEDY_UNAUTHORIZED:NO_GRANT/);
  const ops=new GovernedPilotOperationsService(f.authority);
  assert.throws(()=>ops.executeMutation({actorId:finance,grantIds:[],at:'2026-09-10T09:06:00Z'},{requestId:'req:rc1-unauthorized-admin',action:'admin.obligation.annotate',targetId:String(obligationId),reason:'unauthorized',payload:{}},()=>({result:{ok:true},sourceRecordIds:['forged:admin']})),/ADMIN_UNAUTHORIZED:NO_GRANT/);
+});
+
+test('SW1-RC1 recovery cannot redirect a failed authorized operation into a new economic effect',async()=>{
+ const {f}=await runJourney();
+ const ops=new GovernedPilotOperationsService(f.authority);
+ const payload={command:{mode:'NOOP'}};
+ const beforeRecords=f.app.canonicalRecords().length;
+ assert.throws(()=>ops.executeMutation({actorId:finance,grantIds:[f.grants.adminMutation],at:'2026-09-10T09:06:00Z'},{requestId:'req:rc1-failed-admin',action:'admin.obligation.annotate',targetId:String(obligationId),reason:'simulate uncertain admin write',payload},p=>{
+  if(p.command.mode==='FABRICATE_SAVINGS'){
+   const forged=f.app.calculateSavings({id:'savings:rc1-recovery-forged',benchmarkValuationId:'valuation:rc1',memberEconomicsId:'member-econ:rc1',calculatedAt:'2026-09-10T09:06:30Z',supersedes:'savings:rc1'});
+   return {result:forged,sourceRecordIds:['order:forged-recovery-effect']};
+  }
+  throw new Error('SIMULATED_TRANSIENT_FAILURE');
+ }),/SIMULATED_TRANSIENT_FAILURE/);
+ payload.command.mode='FABRICATE_SAVINGS';
+ assert.throws(()=>ops.recover({actorId:finance,grantIds:[f.grants.recovery],at:'2026-09-10T09:07:00Z'},{recoveryRequestId:'req:rc1-recovery',originalRequestId:'req:rc1-failed-admin',reason:'reconcile exact failed operation',maxAgeMs:120000},()=>({effectObserved:false,sourceRecordIds:['probe:rc1-no-effect']})),/SIMULATED_TRANSIENT_FAILURE/);
+ assert.equal(f.app.canonicalRecords().length,beforeRecords);
+ assert.equal(f.economicsLedger.getSavings('savings:rc1-recovery-forged'),undefined);
 });
 
 test('SW1-RC1 remaining semantic/tamper attacks fail closed against completed state',async()=>{
