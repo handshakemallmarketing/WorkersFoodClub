@@ -1,30 +1,22 @@
-const DATA_API_URL = 'https://ep-ancient-truth-aewlirhk.apirest.c-2.us-east-2.aws.neon.tech/neondb/rest/v1/preview_health?select=status,database_name,schema_name,governed_table_count';
-
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   }
 
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    return res.status(503).json({ ok: false, status: 'unavailable', error: 'DATABASE_URL_MISSING' });
+  }
+
   try {
-    const response = await fetch(DATA_API_URL, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(3000),
-    });
-
-    if (!response.ok) {
-      return res.status(503).json({
-        ok: false,
-        status: 'unavailable',
-        error: 'NEON_DATA_API_UNAVAILABLE',
-        upstreamStatus: response.status,
-      });
-    }
-
-    const rows = await response.json();
-    const row = Array.isArray(rows) ? rows[0] : null;
+    const { neon } = await import('@neondatabase/serverless');
+    const sql = neon(connectionString, { fetchOptions: { signal: AbortSignal.timeout(3000) } });
+    const rows = await sql`SELECT status, database_name, schema_name, governed_table_count FROM preview_health LIMIT 1`;
+    const row = rows?.[0] ?? null;
     const healthy = row?.status === 'connected' && row?.database_name === 'neondb' && Number(row?.governed_table_count) === 7;
 
+    res.setHeader('Cache-Control', 'no-store');
     return res.status(healthy ? 200 : 503).json({
       ok: healthy,
       status: healthy ? 'connected' : 'degraded',
@@ -33,11 +25,8 @@ export default async function handler(req, res) {
       governedTableCount: Number(row?.governed_table_count ?? 0),
       checkedAt: new Date().toISOString(),
     });
-  } catch {
-    return res.status(503).json({
-      ok: false,
-      status: 'unavailable',
-      error: 'NEON_HEALTH_CHECK_FAILED',
-    });
+  } catch (error) {
+    console.error('Neon health probe failed', { name: error?.name, message: error?.message });
+    return res.status(503).json({ ok: false, status: 'unavailable', error: 'NEON_HEALTH_CHECK_FAILED' });
   }
 }
