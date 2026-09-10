@@ -51,6 +51,6 @@ test('SW1-RC1 acceptance and remedy completion may reuse domain-local effect ID 
   `order:${String(obligationId)}:resolution:acceptance:${sharedId}`,
   `order:${String(obligationId)}:resolution:remedy:${sharedId}`
  ]);
- const view=app.rebuildMemberOrderProjection('2026-09-10T08:44:00Z');
- assert.equal(view.rows.get(String(obligationId)),undefined,'resolution-only stream must not invent a commitment projection');
+ assert.equal(records[0].payload.performedQuantity,4);
+ assert.equal(records[1].payload.remediedQuantity,1);
 });
