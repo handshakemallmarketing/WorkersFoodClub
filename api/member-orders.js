@@ -18,38 +18,25 @@ export default async function handler(req, res) {
              c.accepted_at, c.policy_version, c.authorized_event_id,
              p.payment_id, p.status AS payment_status, p.provider, p.provider_reference,
              p.evidence_id AS payment_evidence_id, p.canonical_event_id AS payment_event_id,
-             p.economic_treatment, p.observed_at AS payment_observed_at
+             p.economic_treatment, p.observed_at AS payment_observed_at,
+             f.fulfillment_id, f.state AS fulfillment_state, f.ready_event_id, f.ready_at,
+             f.acceptance_id, f.acceptance_event_id, f.accepted_quantity, f.shortfall_quantity, f.accepted_at AS fulfillment_accepted_at
         FROM preview_member_commitment c
         JOIN preview_member_offer o ON o.offer_id = c.offer_id
         LEFT JOIN preview_sandbox_payment p ON p.obligation_id = c.obligation_id
+        LEFT JOIN preview_fulfillment f ON f.obligation_id = c.obligation_id
        WHERE c.participant_id = ${PARTICIPANT_ID}
        ORDER BY c.created_at DESC
        LIMIT 50
     `;
 
     const orders = rows.map((row) => ({
-      obligationId: String(row.obligation_id),
-      offerId: String(row.offer_id),
-      offerName: String(row.offer_name),
-      quantity: Number(row.quantity),
-      unit: String(row.unit),
-      committedPriceMinor: Number(row.committed_price_minor),
-      currency: String(row.currency),
-      fulfillmentMethod: String(row.fulfillment_method),
-      state: String(row.state),
-      acceptedAt: String(row.accepted_at),
-      policyVersion: String(row.policy_version),
-      canonicalEventId: String(row.authorized_event_id),
-      payment: row.payment_id === null ? null : {
-        paymentId: String(row.payment_id),
-        status: String(row.payment_status),
-        provider: String(row.provider),
-        providerReference: String(row.provider_reference),
-        evidenceId: String(row.payment_evidence_id),
-        canonicalEventId: String(row.payment_event_id),
-        economicTreatment: String(row.economic_treatment),
-        observedAt: String(row.payment_observed_at),
-      },
+      obligationId: String(row.obligation_id), offerId: String(row.offer_id), offerName: String(row.offer_name),
+      quantity: Number(row.quantity), unit: String(row.unit), committedPriceMinor: Number(row.committed_price_minor),
+      currency: String(row.currency), fulfillmentMethod: String(row.fulfillment_method), state: String(row.state),
+      acceptedAt: String(row.accepted_at), policyVersion: String(row.policy_version), canonicalEventId: String(row.authorized_event_id),
+      payment: row.payment_id === null ? null : { paymentId: String(row.payment_id), status: String(row.payment_status), provider: String(row.provider), providerReference: String(row.provider_reference), evidenceId: String(row.payment_evidence_id), canonicalEventId: String(row.payment_event_id), economicTreatment: String(row.economic_treatment), observedAt: String(row.payment_observed_at) },
+      fulfillment: row.fulfillment_id === null ? null : { fulfillmentId: String(row.fulfillment_id), state: String(row.fulfillment_state), readyEventId: String(row.ready_event_id), readyAt: String(row.ready_at), acceptanceId: row.acceptance_id===null?null:String(row.acceptance_id), acceptanceEventId: row.acceptance_event_id===null?null:String(row.acceptance_event_id), acceptedQuantity: row.accepted_quantity===null?null:Number(row.accepted_quantity), shortfallQuantity: row.shortfall_quantity===null?null:Number(row.shortfall_quantity), acceptedAt: row.fulfillment_accepted_at===null?null:String(row.fulfillment_accepted_at) },
     }));
 
     res.setHeader('Cache-Control', 'no-store');
