@@ -26,8 +26,8 @@ TRUNCATE lineage_transform_output,lineage_transform_input,lineage_transform,line
 INSERT INTO aggregate_version(aggregate_id,version) VALUES('order:rc2:restore',1);
 INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at)
 VALUES('event:rc2:restore','order:rc2:restore',1,'ORDER_ACCEPTED','{"quantity":5,"unit":"kg","participantId":"member:restore"}'::jsonb,'2026-09-10T12:00:00Z');
-INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,fence_generation,result_json,created_at,updated_at)
-VALUES('idem:rc2:restore','cmd:rc2:restore','COMMITTED','worker:rc2',1,'{"status":"ACCEPTED","eventIds":["event:rc2:restore"]}'::jsonb,now(),now());
+INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,result_json,created_at,updated_at)
+VALUES('idem:rc2:restore','cmd:rc2:restore','COMMITTED','worker:rc2','2026-09-10T12:05:00Z',1,'{"status":"ACCEPTED","eventIds":["event:rc2:restore"]}'::jsonb,'2026-09-10T12:00:00Z','2026-09-10T12:00:00Z');
 INSERT INTO lineage_lot(lot_id,quantity,unit,consumed_quantity) VALUES('lot:rc2:restore',5,'kg',0);
 SQL
 
