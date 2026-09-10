@@ -32,9 +32,11 @@ export class GovernedMemberEconomicsService{
   private readonly demand:Pick<InMemoryDemandCommitmentLedger,'getCommitment'|'paymentsFor'>,
   private readonly resolution:InMemoryObligationResolutionLedger,
   private readonly economics:InMemoryEconomicsLedger,
-  private readonly remedies?:Pick<InMemoryRemedyLedger,'completedRemediesFor'>,
+  private readonly remedies?:Pick<InMemoryRemedyLedger,'completedRemediesFor'|'resolutionLedger'>,
   private readonly catalog?:Pick<GovernedPilotCatalogService,'benchmarkForOffer'|'historicalOfferContext'>
- ){}
+ ){
+  if(this.remedies&&this.remedies.resolutionLedger()!==this.resolution) throw new Error('MEMBER_ECONOMICS_REMEDY_RESOLUTION_LEDGER_MISMATCH');
+ }
  recordFulfilledEconomics(input:FulfilledMemberEconomics){
   const commitment=this.demand.getCommitment(input.obligationId);
   if(!commitment) throw new Error('MEMBER_ECONOMICS_OBLIGATION_UNKNOWN');
