@@ -1,33 +1,54 @@
 {
   "slice": "SW1-RC1",
   "status": "GO_RC1",
-  "validatedCodeCommit": "005d931e2900229f6b21bb4020f70998fb7caf93",
+  "validatedCodeCommit": "5dc4a15dce001c56714ea3100d79edb28b8bb4d6",
   "reviewArtifact": "docs/traceability/SW1-RC1-integrated-staging-falsification-review.json",
   "contract": "docs/sw1/SW1-RC1-integrated-staging-falsification-review.md",
   "tests": [
     "tests/node/sw1-rc1.test.mjs",
-    "tests/node/sw1-09-recovery-hardening.test.mjs"
+    "tests/node/sw1-09-recovery-hardening.test.mjs",
+    "tests/node/sw1-rc1-application-composition.test.mjs",
+    "tests/node/sw1-rc1-economics-composition.test.mjs",
+    "tests/node/sw1-rc1-economics-semantics.test.mjs",
+    "tests/node/sw1-rc1-runtime-integrity.test.mjs"
   ],
   "productionCodeRemediation": [
-    "packages/pilot-operations/src/index.ts"
+    "packages/application/src/pilot-order.ts",
+    "packages/economics/src/index.ts",
+    "packages/pilot-catalog/src/index.ts",
+    "packages/pilot-checkout/src/index.ts",
+    "packages/pilot-fulfillment/src/index.ts",
+    "packages/pilot-member-economics/src/index.ts",
+    "packages/pilot-operations/src/index.ts",
+    "packages/pilot-remedies/src/index.ts",
+    "packages/projections/src/index.ts"
   ],
   "constitutionalConformance": {
-    "runId": 34470839715,
-    "jobId": 102850112088,
+    "runNumber": 1008,
+    "runId": 34483117625,
+    "jobId": 102890584547,
     "result": "SUCCESS"
   },
-  "mandatoryJourney": "unbound identity -> verified member -> governed offer/benchmark -> 5kg commitment/payment/allocation -> 4kg performed + 1kg shortfall -> separately authorized 1kg refund -> canonical fulfilled economics -> governed signed savings -> deterministic projection rebuild",
+  "mandatoryJourney": "unbound identity -> verified member -> governed offer/benchmark -> 5kg commitment/payment/allocation -> 4kg performed + 1kg shortfall -> separately authorized 1kg refund -> canonical fulfilled economics -> governed signed savings -> production canonical order-stream projection rebuild",
   "falsificationCoverage": [
-    "authority bypass",
+    "authority bypass across all consequential pilot entrypoints",
     "checkout proof substitution",
-    "payment replay/tamper/signature",
-    "inventory double-use",
-    "fulfillment overclaim",
-    "remedy fabrication",
-    "economics fabrication",
-    "projection authority inversion",
-    "admin recovery fabrication/runtime capability spoof"
+    "payment same-event replay/provider redelivery/tamper/signature",
+    "inventory transform and double-allocation after allocation",
+    "fulfillment acceptance and exception overclaim",
+    "remedy creation/completion fabrication",
+    "economics quantity/outlay/refund/evidence/context fabrication",
+    "governed benchmark temporal/fractional/package identity attacks",
+    "projection payload/map mutation/staleness/lineage attacks",
+    "admin recovery fabrication/runtime dispatch/request-ID/payload attacks",
+    "resolution/demand/catalog composition mismatch",
+    "canonical event-ID collision attacks"
   ],
+  "review": {
+    "directExactCodeHeadReview": "PASS_NO_UNRESOLVED_P0_P1",
+    "exactCodeHeadCodexReview": "UNAVAILABLE_USAGE_LIMIT_NOT_COUNTED_AS_APPROVAL",
+    "priorCodexFindings": "all identified P0/P1 findings on earlier candidate SHAs remediated and code threads resolved"
+  },
   "unresolvedP0P1Findings": [],
   "productionAuthorization": false,
   "authorizes": "entry to SW1-RC2 only",
@@ -35,6 +56,7 @@
     "sandbox payments",
     "predominantly in-memory cumulative domain replay",
     "no live funds/provider activation",
-    "no production launch authorization"
+    "no production launch authorization",
+    "exact-code-head Codex re-review unavailable because code-review usage limit was exhausted and is not counted as approval"
   ]
 }
