@@ -59,12 +59,11 @@
       </section>
 
       <section id="operator" class="view">
-        <div class="section-intro"><div><p class="eyebrow">Pilot operations</p><h2>Operator Console</h2></div><span class="badge warning">Read-only preview</span></div>
+        <div class="section-intro"><div><p class="eyebrow">Pilot operations</p><h2>Operator Console</h2></div><span id="operator-source" class="badge warning">Loading paid orders…</span></div>
+        <div id="operator-orders" class="timeline-card" aria-live="polite"><div class="timeline-row"><span class="timeline-dot"></span><div><strong>Loading fulfillment queue</strong><p>Only payment-confirmed preview orders can enter fulfillment.</p></div><time>Staging</time></div></div>
         <div class="grid two">
-          <article class="card"><span class="kicker">Canonical state</span><h3>Auditable</h3><p>Order, payment, resolution, economics and lineage events are governed by explicit domain controls.</p></article>
-          <article class="card"><span class="kicker">Recovery</span><h3>Fail closed</h3><p>Reserved recovery paths cannot silently rewrite canonical history or redirect consequential effects.</p></article>
-          <article class="card"><span class="kicker">Inventory</span><h3>Conserved</h3><p>Allocated physical inventory cannot simultaneously be consumed by a lineage transform.</p></article>
-          <article class="card"><span class="kicker">Projection</span><h3>Rebuildable</h3><p>Operational views are projections over canonical evidence rather than sources of authority.</p></article>
+          <article class="card"><span class="kicker">Canonical state</span><h3>Auditable</h3><p>Readiness, acceptance and shortfall are recorded as canonical events rather than UI-only state.</p></article>
+          <article class="card"><span class="kicker">Conservation</span><h3>Fail closed</h3><p>Accepted quantity plus shortfall must equal the ready quantity before acceptance can persist.</p></article>
         </div>
       </section>
 
