@@ -26,6 +26,10 @@ export class PilotOrderApplicationService {
  ){
   const resolution=this.fulfillmentService.resolutionLedger();
   if(resolution!==this.remedyService.resolutionLedger()||resolution!==this.economicsService.resolutionLedger()) throw new Error('ORDER_STREAM_RESOLUTION_LEDGER_MISMATCH');
+  const canonicalDemand=this.checkoutService.demandLedger();
+  if(canonicalDemand!==this.demand||canonicalDemand!==this.fulfillmentService.demandLedger()||canonicalDemand!==this.remedyService.demandLedger()||canonicalDemand!==this.economicsService.demandLedger()) throw new Error('ORDER_STREAM_DEMAND_LEDGER_MISMATCH');
+  const canonicalCatalog=this.checkoutService.catalogStore();
+  if(canonicalCatalog!==this.economicsService.catalogStore()) throw new Error('ORDER_STREAM_CATALOG_STORE_MISMATCH');
  }
  private append(recordId:string,occurredAt:string,payload:unknown){
   return this.canonical.append({stream:'orders',sequence:++this.sequence,recordId,occurredAt,payload});
