@@ -112,6 +112,7 @@ const stable=(value:unknown):string=>{
 };
 const requestFingerprint=(ctx:AdminOperationContext,request:AdminOperationRequest)=>stable({actorId:String(ctx.actorId),action:request.action,targetId:request.targetId,reason:request.reason,payload:request.payload});
 const uniqueSources=(ids:readonly string[])=>ids.length===new Set(ids).size&&ids.every(x=>x.trim().length>0);
+const recoveryAction='admin.recovery.reconcile';
 
 export class GovernedPilotOperationsService{
  private readonly requests=new Map<string,StoredRequest<unknown>>();
@@ -143,6 +144,11 @@ export class GovernedPilotOperationsService{
  }
 
  executeMutation<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>):R{
+  if(request.action===recoveryAction) throw new Error('ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN');
+  return this.executeMutationInternal(ctx,request,mutate);
+ }
+
+ private executeMutationInternal<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>):R{
   this.validateRequest(request,ctx);
   const fp=requestFingerprint(ctx,request);
   const prior=this.requests.get(request.requestId) as StoredRequest<R>|undefined;
@@ -172,7 +178,7 @@ export class GovernedPilotOperationsService{
    return effect.result;
   }catch(error){
    const audit=this.appendAudit({requestId:request.requestId,actorId:ctx.actorId,action:request.action,targetId:request.targetId,reason:request.reason,attemptedAt:ctx.at,outcome:'REJECTED',authorityReason:'MUTATION_FAILED',...(decision.grantId?{grantId:decision.grantId}:{}),fingerprint:fp,sourceRecordIds:Object.freeze([])});
-   this.requests.set(request.requestId,Object.freeze({fingerprint:fp,outcome:'REJECTED',auditId:audit.id,targetId:request.targetId,action:request.action,attemptedAt:ctx.at,failureReason:'MUTATION_FAILED',...(request.action==='admin.recovery.reconcile'?{}:{retry})}));
+   this.requests.set(request.requestId,Object.freeze({fingerprint:fp,outcome:'REJECTED',auditId:audit.id,targetId:request.targetId,action:request.action,attemptedAt:ctx.at,failureReason:'MUTATION_FAILED',...(request.action===recoveryAction?{}:{retry})}));
    throw error;
   }
  }
@@ -183,8 +189,8 @@ export class GovernedPilotOperationsService{
   if(!Number.isFinite(input.maxAgeMs)||input.maxAgeMs<0) throw new Error('RECOVERY_MAX_AGE_INVALID');
   const original=this.requests.get(input.originalRequestId);
   if(!original) throw new Error('RECOVERY_ORIGINAL_REQUEST_UNKNOWN');
-  const request:AdminOperationRequest<{originalRequestId:string}>={requestId:input.recoveryRequestId,action:'admin.recovery.reconcile',targetId:original.targetId,reason:input.reason,payload:{originalRequestId:input.originalRequestId}};
-  return this.executeMutation<{originalRequestId:string},RecoveryResult>(ctx,request,():AdminMutationEffect<RecoveryResult>=>{
+  const request:AdminOperationRequest<{originalRequestId:string}>={requestId:input.recoveryRequestId,action:recoveryAction,targetId:original.targetId,reason:input.reason,payload:{originalRequestId:input.originalRequestId}};
+  return this.executeMutationInternal<{originalRequestId:string},RecoveryResult>(ctx,request,():AdminMutationEffect<RecoveryResult>=>{
    const age=Date.parse(ctx.at)-Date.parse(original.attemptedAt);
    if(age<0) throw new Error('RECOVERY_TIME_INVALID');
    if(age>input.maxAgeMs) throw new Error('RECOVERY_STALE');
