@@ -110,6 +110,14 @@ const stable=(value:unknown):string=>{
  const record=value as Record<string,unknown>;
  return `{${Object.keys(record).sort().map(k=>`${JSON.stringify(k)}:${stable(record[k])}`).join(',')}}`;
 };
+const immutableClone=<T>(value:T):T=>{
+ if(value===null||typeof value!=='object') return value;
+ if(Array.isArray(value)) return Object.freeze(value.map(item=>immutableClone(item))) as T;
+ const source=value as Record<string,unknown>;
+ const copy:Record<string,unknown>={};
+ for(const [key,item] of Object.entries(source)) copy[key]=immutableClone(item);
+ return Object.freeze(copy) as T;
+};
 const requestFingerprint=(ctx:AdminOperationContext,request:AdminOperationRequest)=>stable({actorId:String(ctx.actorId),action:request.action,targetId:request.targetId,reason:request.reason,payload:request.payload});
 const uniqueSources=(ids:readonly string[])=>ids.length===new Set(ids).size&&ids.every(x=>x.trim().length>0);
 const recoveryAction='admin.recovery.reconcile';
@@ -149,7 +157,8 @@ export class GovernedPilotOperationsService{
 
  #executeMutationInternal<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>,allowRecovery:boolean):R{
   this.validateRequest(request,ctx);
-  const fp=requestFingerprint(ctx,request);
+  const payloadSnapshot=immutableClone(request.payload);
+  const fp=requestFingerprint(ctx,{...request,payload:payloadSnapshot});
   const prior=this.requests.get(request.requestId) as StoredRequest<R>|undefined;
   if(request.action===recoveryAction&&!allowRecovery){
    const audit=this.appendAudit({requestId:request.requestId,actorId:ctx.actorId,action:request.action,targetId:request.targetId,reason:request.reason,attemptedAt:ctx.at,outcome:'REJECTED',authorityReason:'RECOVERY_ENTRYPOINT_REQUIRED',fingerprint:fp,sourceRecordIds:Object.freeze(prior?[prior.auditId]:[])});
@@ -173,7 +182,7 @@ export class GovernedPilotOperationsService{
    throw new Error(`ADMIN_UNAUTHORIZED:${decision.reason}`);
   }
 
-  const retry=()=>mutate(request.payload);
+  const retry=()=>mutate(payloadSnapshot);
   try{
    const effect=retry();
    if(!uniqueSources(effect.sourceRecordIds)) throw new Error('ADMIN_SOURCE_LINEAGE_INVALID');
