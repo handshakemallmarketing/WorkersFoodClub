@@ -113,7 +113,6 @@ const stable=(value:unknown):string=>{
 const requestFingerprint=(ctx:AdminOperationContext,request:AdminOperationRequest)=>stable({actorId:String(ctx.actorId),action:request.action,targetId:request.targetId,reason:request.reason,payload:request.payload});
 const uniqueSources=(ids:readonly string[])=>ids.length===new Set(ids).size&&ids.every(x=>x.trim().length>0);
 const recoveryAction='admin.recovery.reconcile';
-const recoveryCapability=Symbol('governed-recovery-capability');
 
 export class GovernedPilotOperationsService{
  private readonly requests=new Map<string,StoredRequest<unknown>>();
@@ -145,17 +144,18 @@ export class GovernedPilotOperationsService{
  }
 
  executeMutation<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>):R{
-  return this.executeMutationInternal(ctx,request,mutate);
+  return this.#executeMutationInternal(ctx,request,mutate,false);
  }
 
- private executeMutationInternal<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>,capability?:symbol):R{
+ #executeMutationInternal<T,R>(ctx:AdminOperationContext,request:AdminOperationRequest<T>,mutate:(payload:T)=>AdminMutationEffect<R>,allowRecovery:boolean):R{
   this.validateRequest(request,ctx);
   const fp=requestFingerprint(ctx,request);
-  if(request.action===recoveryAction&&capability!==recoveryCapability){
-   this.appendAudit({requestId:request.requestId,actorId:ctx.actorId,action:request.action,targetId:request.targetId,reason:request.reason,attemptedAt:ctx.at,outcome:'REJECTED',authorityReason:'RECOVERY_ENTRYPOINT_REQUIRED',fingerprint:fp,sourceRecordIds:Object.freeze([])});
+  const prior=this.requests.get(request.requestId) as StoredRequest<R>|undefined;
+  if(request.action===recoveryAction&&!allowRecovery){
+   const audit=this.appendAudit({requestId:request.requestId,actorId:ctx.actorId,action:request.action,targetId:request.targetId,reason:request.reason,attemptedAt:ctx.at,outcome:'REJECTED',authorityReason:'RECOVERY_ENTRYPOINT_REQUIRED',fingerprint:fp,sourceRecordIds:Object.freeze(prior?[prior.auditId]:[])});
+   if(!prior)this.requests.set(request.requestId,Object.freeze({fingerprint:fp,outcome:'REJECTED',auditId:audit.id,targetId:request.targetId,action:request.action,attemptedAt:ctx.at,failureReason:'UNAUTHORIZED'}));
    throw new Error('ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN');
   }
-  const prior=this.requests.get(request.requestId) as StoredRequest<R>|undefined;
   if(prior){
    if(prior.fingerprint!==fp){
     this.appendAudit({requestId:request.requestId,actorId:ctx.actorId,action:request.action,targetId:request.targetId,reason:request.reason,attemptedAt:ctx.at,outcome:'REJECTED',authorityReason:'REQUEST_ID_CONFLICT',fingerprint:fp,sourceRecordIds:Object.freeze([prior.auditId])});
@@ -194,7 +194,7 @@ export class GovernedPilotOperationsService{
   const original=this.requests.get(input.originalRequestId);
   if(!original) throw new Error('RECOVERY_ORIGINAL_REQUEST_UNKNOWN');
   const request:AdminOperationRequest<{originalRequestId:string}>={requestId:input.recoveryRequestId,action:recoveryAction,targetId:original.targetId,reason:input.reason,payload:{originalRequestId:input.originalRequestId}};
-  return this.executeMutationInternal<{originalRequestId:string},RecoveryResult>(ctx,request,():AdminMutationEffect<RecoveryResult>=>{
+  return this.#executeMutationInternal<{originalRequestId:string},RecoveryResult>(ctx,request,():AdminMutationEffect<RecoveryResult>=>{
    const age=Date.parse(ctx.at)-Date.parse(original.attemptedAt);
    if(age<0) throw new Error('RECOVERY_TIME_INVALID');
    if(age>input.maxAgeMs) throw new Error('RECOVERY_STALE');
@@ -214,7 +214,7 @@ export class GovernedPilotOperationsService{
    const sourceRecordIds=Object.freeze([original.auditId,...observed.sourceRecordIds,...retried.sourceRecordIds]);
    if(!uniqueSources(sourceRecordIds)) throw new Error('RECOVERY_SOURCE_LINEAGE_INVALID');
    return {result:Object.freeze({disposition:'RETRIED',sourceRecordIds}),sourceRecordIds};
-  },recoveryCapability);
+  },true);
  }
 
  diagnose(ctx:AdminOperationContext,requestId:string,maxAgeMs:number):OperationDiagnosis{
