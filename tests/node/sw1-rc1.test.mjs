@@ -42,7 +42,7 @@ function build(){
   };
   authorityStore.put({id:grants.identity,grantorId:club,actorId:identityOperator,actions:['identity.bind'],targetPrefix:'participant:',validFrom:t0});
   authorityStore.put({id:grants.membership,grantorId:club,actorId:identityOperator,actions:['membership.verify'],targetPrefix:'membership:',validFrom:t0});
-  authorityStore.put({id:grants.catalog,grantorId:club,actorId:catalogOperator,actions:['catalog.specification.publish','catalog.listing.publish','catalog.price.observe','catalog.sales-window.publish','catalog.benchmark.publish','catalog.offer.publish'],targetPrefix:'',validFrom:t0,maxQuantity:10});
+  authorityStore.put({id:grants.catalog,grantorId:club,actorId:catalogOperator,actions:['catalog.specification.publish','catalog.listing.publish','catalog.price.observe','catalog.sales-window.publish','catalog.benchmark.publish','catalog.offer.publish'],targetPrefix:'',validFrom:t0});
   authorityStore.put({id:grants.payment,grantorId:club,actorId:member,actions:['payment.initiate'],targetPrefix:'obligation:',validFrom:t0,maxQuantity:5});
   authorityStore.put({id:grants.inventory,grantorId:club,actorId:warehouse,actions:['inventory.receive','inventory.quality.assess','inventory.transform','inventory.receive-derived','inventory.allocate'],targetPrefix:'lot:',validFrom:t0,maxQuantity:10});
   authorityStore.put({id:grants.warehouse,grantorId:club,actorId:warehouse,actions:['fulfillment.pick','fulfillment.pack','fulfillment.ready','fulfillment.handover'],targetPrefix:'',validFrom:t0,maxQuantity:5});
