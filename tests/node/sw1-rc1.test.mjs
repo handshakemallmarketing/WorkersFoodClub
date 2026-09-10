@@ -102,7 +102,7 @@ async function runJourney(){
   f.inventory.assessQuality(ictx,{id:'quality:rc1',lotId:bulkLot,state:'ACCEPTED',assessedAt:'2026-09-10T08:26:00Z',evidenceIds:[eid('evidence:rc1-quality')]});
   f.inventory.allocate(ictx,{allocation:{id:'allocation:rc1',lotId:bulkLot,obligationId,specificationId:rice,quantity:quantity(5,'kg'),allocatedAt:'2026-09-10T08:27:00Z',evidenceIds:[eid('evidence:rc1-allocation')]}});
   assert.equal(f.inventory.availability(bulkLot).amount,0);
-  assert.throws(()=>f.inventory.transform(ictx,{id:'transform:rc1-forbidden',kind:'REPACK',inputs:[{lotId:String(bulkLot),quantity:quantity(1,'kg')}],outputs:[{lotId:'lot:rc1-illegal-derived',quantity:quantity(1,'kg')}],lossQuantity:quantity(0,'kg'),occurredAt:'2026-09-10T08:28:00Z',evidenceIds:[eid('evidence:rc1-transform-attempt')]}),/LOT_TRANSFORM_EXCEEDS_AVAILABLE|LOT_OVERALLOCATION|LINEAGE/);
+  assert.throws(()=>f.inventory.transform(ictx,{id:'transform:rc1-forbidden',kind:'REPACK',inputs:[{lotId:String(bulkLot),quantity:quantity(1,'kg')}],outputs:[{lotId:'lot:rc1-illegal-derived',quantity:quantity(1,'kg')}],lossQuantity:quantity(0,'kg'),occurredAt:'2026-09-10T08:28:00Z',evidenceIds:[eid('evidence:rc1-transform-attempt')]}),/TRANSFORMATION_INPUT_EXCEEDS_AVAILABLE/);
 
   const wctx={actorId:warehouse,grantIds:[f.grants.warehouse],at:'2026-09-10T08:40:00Z'};
   const work=(state,workId,supersedes)=>({id:workId,allocationId:'allocation:rc1',lotId:bulkLot,obligationId,specificationId:rice,quantity:quantity(5,'kg'),state,operatorId:warehouse,placeId:'pickup:rc1',occurredAt:'2026-09-10T08:35:00Z',evidenceIds:[eid(`evidence:${workId}`)],...(supersedes?{supersedes}:{})});
