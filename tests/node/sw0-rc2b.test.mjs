@@ -40,6 +40,12 @@ test('RC3-B02 revoked real authority cannot ratify transfer policy',()=>{
  assert.throws(()=>r.ratify(policy()),/TRANSFER_POLICY_UNAUTHORIZED/);
 });
 
+test('RC3-B02 ratification checks trusted current time rather than caller effectiveFrom',()=>{
+ const s=new InMemoryAuthorityStore();s.put({id:gid('grant:transfer'),grantorId:pid('participant:founder'),actorId:pid('participant:board'),actions:['RatifyTransferPolicy'],targetPrefix:'policy:',validFrom:'2026-09-01T00:00:00Z'});s.revoke(gid('grant:transfer'),'2026-09-08T03:05:00Z');
+ const r=new GovernedTransferPolicyRegistry(new AuthorityEvaluator(s),()=> '2026-09-08T03:10:00Z');
+ assert.throws(()=>r.ratify(policy({effectiveFrom:'2026-09-08T03:00:00Z'})),/TRANSFER_POLICY_UNAUTHORIZED/);
+});
+
 test('RC3-B02 wrong actor cannot reuse a valid transfer-policy grant',()=>{
  const s=new InMemoryAuthorityStore();s.put({id:gid('grant:transfer'),grantorId:pid('participant:founder'),actorId:pid('participant:board'),actions:['RatifyTransferPolicy'],targetPrefix:'policy:',validFrom:'2026-09-01T00:00:00Z'});const r=new GovernedTransferPolicyRegistry(new AuthorityEvaluator(s));
  assert.throws(()=>r.ratify(policy({authorizedBy:pid('participant:attacker')})),/TRANSFER_POLICY_UNAUTHORIZED/);
@@ -56,8 +62,8 @@ test('RC3-B02 wrong target scope cannot ratify transfer policy',()=>{
 });
 
 test('RC3-B02 not-yet-valid and expired grants cannot ratify transfer policy',()=>{
- const future=new InMemoryAuthorityStore();future.put({id:gid('grant:transfer'),grantorId:pid('participant:founder'),actorId:pid('participant:board'),actions:['RatifyTransferPolicy'],targetPrefix:'policy:',validFrom:'2026-09-09T00:00:00Z'});assert.throws(()=>new GovernedTransferPolicyRegistry(new AuthorityEvaluator(future)).ratify(policy()),/TRANSFER_POLICY_UNAUTHORIZED/);
- const expired=new InMemoryAuthorityStore();expired.put({id:gid('grant:transfer'),grantorId:pid('participant:founder'),actorId:pid('participant:board'),actions:['RatifyTransferPolicy'],targetPrefix:'policy:',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-08T02:59:59Z'});assert.throws(()=>new GovernedTransferPolicyRegistry(new AuthorityEvaluator(expired)).ratify(policy()),/TRANSFER_POLICY_UNAUTHORIZED/);
+ const future=new InMemoryAuthorityStore();future.put({id:gid('grant:transfer'),grantorId:pid('participant:founder'),actorId:pid('participant:board'),actions:['RatifyTransferPolicy'],targetPrefix:'policy:',validFrom:'2026-09-09T00:00:00Z'});assert.throws(()=>new GovernedTransferPolicyRegistry(new AuthorityEvaluator(future),()=> '2026-09-08T03:00:00Z').ratify(policy()),/TRANSFER_POLICY_UNAUTHORIZED/);
+ const expired=new InMemoryAuthorityStore();expired.put({id:gid('grant:transfer'),grantorId:pid('participant:founder'),actorId:pid('participant:board'),actions:['RatifyTransferPolicy'],targetPrefix:'policy:',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-08T02:59:59Z'});assert.throws(()=>new GovernedTransferPolicyRegistry(new AuthorityEvaluator(expired),()=> '2026-09-08T03:00:00Z').ratify(policy()),/TRANSFER_POLICY_UNAUTHORIZED/);
 });
 
 test('RC3-B02 a grant scoped to one policy cannot be reused cross-policy',()=>{
