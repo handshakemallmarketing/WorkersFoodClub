@@ -18,7 +18,8 @@ import {InMemoryObligationResolutionLedger} from '../../dist/packages/resolution
 import {GovernedPilotFulfillmentService} from '../../dist/packages/pilot-fulfillment/src/index.js';
 import {GovernedPilotRemedyService} from '../../dist/packages/pilot-remedies/src/index.js';
 import {InMemoryEconomicsLedger} from '../../dist/packages/economics/src/index.js';
-import {GovernedMemberEconomicsService} from '../../dist/packages/pilot-member-economics/src/index.js';
+import {CanonicalRecordLog,RebuildableProjection,snapshotDigest,assertFresh} from '../../dist/packages/projections/src/index.js';
+import {GovernedMemberEconomicsService,memberOrderProjection} from '../../dist/packages/pilot-member-economics/src/index.js';
 
 const id=x=>asId(x), pid=id, gid=id, eid=id, sid=id, oid=id, cid=id, lot=id;
 const club=pid('participant:food-club');
@@ -81,7 +82,7 @@ async function runJourney(){
   const marketEvidence=eid('evidence:rc1-market');
   f.catalogService.recordPriceObservation(cctx,{evidenceId:marketEvidence,specificationId:rice,price:money(60000n,'GHS'),basis:quantity(5,'kg'),place:'Accra Retail',observedAt:'2026-09-10T08:06:00Z',transactionLevel:'RETAIL',conditions:['cash']},{sourceId:'market-survey:rc1',upstreamIdentity:'retailer:rc1'});
   f.catalogService.createSalesWindow(cctx,{id:'window:rc1',validFrom:'2026-09-10T08:00:00Z',validUntil:'2026-09-11T18:00:00Z',pickupPlace:'pickup:rc1',active:true,policyVersion:'sales-window-v1',createdBy:catalogOperator});
-  f.catalogService.defineBenchmarkDisplay(cctx,{id:'benchmark-display:rc1',specificationId:rice,priceEvidenceId:marketEvidence,methodVersion:'retail-reference-v1'});
+  const benchmarkDisplay=f.catalogService.defineBenchmarkDisplay(cctx,{id:'benchmark-display:rc1',specificationId:rice,priceEvidenceId:marketEvidence,methodVersion:'retail-reference-v1'});
   const offer={id:offerId,offerorId:club,specificationId:rice,quantity:quantity(5,'kg'),memberPrice:money(50000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'pickup:rc1',validFrom:'2026-09-10T08:10:00Z',validUntil:'2026-09-11T12:00:00Z',priceEvidenceIds:[marketEvidence],policyVersions:['member-price-v1']};
   f.catalogService.publishOffer(cctx,{salesWindowId:'window:rc1',benchmarkDisplayId:'benchmark-display:rc1',offer});
 
@@ -121,24 +122,40 @@ async function runJourney(){
   f.remedies.completeRemedy(rctx,{id:'completion:rc1-refund',remedyObligationId:'remedy:rc1-refund',quantity:quantity(1,'kg'),completedAt:'2026-09-10T08:43:00Z',evidenceIds:[eid('evidence:rc1-refund-settled')],settlementAmount:money(10000n,'GHS')});
   const position=f.resolution.position(commitment.obligation); assert.equal(position.performedQuantity.amount,4); assert.equal(position.remediedQuantity.amount,1); assert.equal(position.unresolvedQuantity.amount,0);
 
-  f.economicsLedger.defineBenchmark({id:'benchmark:rc1',version:1,purpose:'MEMBER_SAVINGS',specificationId:rice,quantity:quantity(4,'kg'),place:'Accra',serviceLevel:'pickup',transactionLevel:'RETAIL',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',normalizationRuleVersion:'norm:v1',availabilityRuleVersion:'availability:v1',observationEvidenceIds:[marketEvidence],definedAt:'2026-09-10T08:10:00Z'});
-  f.economicsLedger.recordBenchmarkValuation({id:'valuation:rc1',benchmarkId:'benchmark:rc1',benchmarkVersion:1,obligationId,specificationId:rice,quantity:quantity(4,'kg'),place:'Accra',serviceLevel:'pickup',availability:'EXECUTABLE',comparableValue:money(48000n,'GHS'),evaluatedAt:'2026-09-10T08:50:00Z',evidenceIds:[marketEvidence]});
-  f.economics.recordFulfilledEconomics({id:'member-econ:rc1',obligationId,participantId:member,specificationId:rice,quantity:quantity(4,'kg'),place:'Accra',serviceLevel:'pickup',goodsOutlay:money(50000n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(10000n,'GHS'),economicEvidenceIds:[receipt.evidenceId,eid('evidence:rc1-refund-settled')],realizedAt:'2026-09-10T08:51:00Z',substitutionEvidenceIds:[]});
+  const comparableMinor=benchmarkDisplay.value.minor*4n/BigInt(benchmarkDisplay.basis.amount);
+  f.economicsLedger.defineBenchmark({id:'benchmark:rc1',version:1,purpose:'MEMBER_SAVINGS',specificationId:benchmarkDisplay.specificationId,quantity:quantity(4,benchmarkDisplay.basis.unit),place:benchmarkDisplay.place,serviceLevel:'pickup',transactionLevel:benchmarkDisplay.transactionLevel,validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',normalizationRuleVersion:benchmarkDisplay.methodVersion,availabilityRuleVersion:'availability:v1',observationEvidenceIds:[benchmarkDisplay.priceEvidenceId],definedAt:'2026-09-10T08:10:00Z'});
+  f.economicsLedger.recordBenchmarkValuation({id:'valuation:rc1',benchmarkId:'benchmark:rc1',benchmarkVersion:1,obligationId,specificationId:benchmarkDisplay.specificationId,quantity:quantity(4,benchmarkDisplay.basis.unit),place:benchmarkDisplay.place,serviceLevel:'pickup',availability:'EXECUTABLE',comparableValue:money(comparableMinor,benchmarkDisplay.value.currency),evaluatedAt:'2026-09-10T08:50:00Z',evidenceIds:[benchmarkDisplay.priceEvidenceId]});
+  f.economics.recordFulfilledEconomics({id:'member-econ:rc1',obligationId,participantId:member,specificationId:rice,quantity:quantity(4,'kg'),place:benchmarkDisplay.place,serviceLevel:'pickup',goodsOutlay:money(50000n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(10000n,'GHS'),economicEvidenceIds:[receipt.evidenceId,eid('evidence:rc1-refund-settled')],realizedAt:'2026-09-10T08:51:00Z',substitutionEvidenceIds:[]});
   const savings=f.economics.calculateSavings({id:'savings:rc1',benchmarkValuationId:'valuation:rc1',memberEconomicsId:'member-econ:rc1',calculatedAt:'2026-09-10T08:52:00Z'});
   assert.equal(savings.absoluteSavings.minor,8000n);
-  return {f,active,commitment,receipt,position,savings};
+
+  const canonical=new CanonicalRecordLog();
+  canonical.append({stream:'orders',sequence:1,recordId:'order:rc1-committed',occurredAt:commitment.acceptedAt,payload:{kind:'ORDER_COMMITTED',obligationId:String(obligationId),participantId:String(member),specificationId:String(rice),quantity:commitment.obligation.quantity.amount,unit:commitment.obligation.quantity.unit}});
+  canonical.append({stream:'orders',sequence:2,recordId:'order:rc1-resolution',occurredAt:'2026-09-10T08:43:00Z',payload:{kind:'ORDER_RESOLUTION',obligationId:String(obligationId),performedQuantity:position.performedQuantity.amount,remediedQuantity:position.remediedQuantity.amount,unresolvedQuantity:position.unresolvedQuantity.amount,unit:position.performedQuantity.unit}});
+  canonical.append({stream:'orders',sequence:3,recordId:'order:rc1-savings',occurredAt:savings.calculatedAt,payload:{kind:'ORDER_SAVINGS',obligationId:String(obligationId),entryId:savings.id,minor:savings.absoluteSavings.minor,currency:savings.absoluteSavings.currency}});
+  const projection=new RebuildableProjection(memberOrderProjection);
+  const firstSnapshot=projection.rebuild(canonical.all(),'2026-09-10T08:53:00Z');
+  assertFresh(firstSnapshot,canonical.all());
+  const firstDigest=snapshotDigest(firstSnapshot);
+  const view=firstSnapshot.rows.get(String(obligationId));
+  assert.equal(view.performedQuantity,4); assert.equal(view.remediedQuantity,1); assert.equal(view.unresolvedQuantity,0); assert.equal(view.latestSavingsMinor,8000n); assert.equal(view.sourceRecordIds.length,3);
+  projection.drop();
+  const rebuilt=projection.rebuild(canonical.all(),'2026-09-10T08:54:00Z');
+  assertFresh(rebuilt,canonical.all()); assert.equal(snapshotDigest(rebuilt),firstDigest);
+  return {f,active,commitment,receipt,position,savings,benchmarkDisplay,projectionSnapshot:rebuilt};
 }
 
 test('SW1-RC1 integrated replay preserves the mandatory 5kg -> 4kg performance + 1kg refund conservation path',async()=>{
-  const {active,commitment,receipt,position,savings}=await runJourney();
+  const {active,commitment,receipt,position,savings,benchmarkDisplay,projectionSnapshot}=await runJourney();
   assert.equal(active.participant.id,member); assert.equal(commitment.obligation.id,obligationId); assert.equal(receipt.economicTreatment,'RESTRICTED_MEMBER_PREPAYMENT');
   assert.equal(position.performedQuantity.amount,4); assert.equal(position.remediedQuantity.amount,1); assert.equal(position.unresolvedQuantity.amount,0); assert.equal(savings.absoluteSavings.minor,8000n);
+  assert.equal(benchmarkDisplay.value.minor,60000n); assert.equal(projectionSnapshot.rows.get(String(obligationId)).latestSavingsMinor,8000n);
 });
 
 test('SW1-RC1 integrated state rejects forged payment and economics mutation attempts',async()=>{
-  const {f,receipt}=await runJourney();
+  const {f,receipt,benchmarkDisplay}=await runJourney();
   const intent=f.payments.createIntent({actorId:member,grantIds:[f.grants.payment],at:'2026-09-10T09:00:00Z'},{obligationId,participantId:member,offer:f.catalog.getOffer(offerId),idempotencyKey:'rc1-payment'});
   const tampered=JSON.stringify({providerReference:intent.providerReference,status:'CONFIRMED',amountMinor:'1',currency:'GHS',occurredAt:'2026-09-10T09:01:00Z'});
   assert.throws(()=>f.payments.reconcileWebhook({eventId:'event:rc1-tampered',rawBody:tampered,signature:`sandbox:rc1-secret:${tampered}`,receivedAt:'2026-09-10T09:02:00Z'}),/PAYMENT_AMOUNT_MISMATCH/);
-  assert.throws(()=>f.economics.recordFulfilledEconomics({id:'member-econ:rc1-forged',obligationId,participantId:member,specificationId:rice,quantity:quantity(5,'kg'),place:'Accra',serviceLevel:'pickup',goodsOutlay:money(1n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(10000n,'GHS'),economicEvidenceIds:[receipt.evidenceId,eid('evidence:rc1-refund-settled')],realizedAt:'2026-09-10T09:03:00Z',substitutionEvidenceIds:[]}),/MEMBER_ECONOMICS_NOT_ACTUAL_PERFORMANCE|MEMBER_ECONOMICS_OUTLAY_NOT_CANONICAL/);
+  assert.throws(()=>f.economics.recordFulfilledEconomics({id:'member-econ:rc1-forged',obligationId,participantId:member,specificationId:rice,quantity:quantity(5,'kg'),place:benchmarkDisplay.place,serviceLevel:'pickup',goodsOutlay:money(1n,'GHS'),mandatoryCharges:money(0n,'GHS'),refundApplied:money(10000n,'GHS'),economicEvidenceIds:[receipt.evidenceId,eid('evidence:rc1-refund-settled')],realizedAt:'2026-09-10T09:03:00Z',substitutionEvidenceIds:[]}),/MEMBER_ECONOMICS_NOT_ACTUAL_PERFORMANCE|MEMBER_ECONOMICS_OUTLAY_NOT_CANONICAL/);
 });
