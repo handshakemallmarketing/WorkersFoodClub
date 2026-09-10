@@ -1,0 +1,17 @@
+{
+  "slice":"SW1-09",
+  "status":"IMPLEMENTED_PENDING_CI_AND_REVIEW",
+  "purpose":"Govern pilot administrative intervention, audit visibility and bounded recovery without creating a parallel authority or canonical ledger.",
+  "canonMappings":[
+    {"invariantId":"INV-001","claim":"Administrative UI or role does not authorize consequential mutation; every mutation resolves through AuthorityEvaluator."},
+    {"invariantId":"INV-024","claim":"Operational recovery does not silently rewrite canonical history; it reconciles an existing request and retains source lineage."},
+    {"invariantId":"INV-027","claim":"Accepted admin and recovery requests are replay-safe; conflicting request-id reuse fails closed."},
+    {"invariantId":"INV-029","claim":"Audit views are explicitly non-authoritative and disclose source lineage and freshness/staleness."},
+    {"invariantId":"INV-030","claim":"SW1-09 adds an operational façade over existing canonical boundaries and does not introduce new canonical meanings."}
+  ],
+  "code":["packages/pilot-operations/src/index.ts"],
+  "tests":["tests/node/sw1-09.test.mjs"],
+  "evidence":["evidence/releases/SW1-09.json"],
+  "negativePaths":["unauthorized mutation","conflicting request reuse","blind retry after uncertain failure","stale recovery","stale audit view"],
+  "productionBoundary":"No production launch, live funds/provider activation, blanket administrator authority, or claim of complete distributed transaction fencing."
+}
