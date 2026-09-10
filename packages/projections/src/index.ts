@@ -5,6 +5,14 @@ export interface ProjectionDefinition<T>{readonly name:string;readonly key:(reco
 
 const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
 const ordered=(records:readonly CanonicalProjectionRecord[])=>[...records].sort((a,b)=>a.sequence-b.sequence||a.recordId.localeCompare(b.recordId));
+const immutableClone=<T>(value:T):T=>{
+ if(value===null||typeof value!=='object') return value;
+ if(Array.isArray(value)) return Object.freeze(value.map(x=>immutableClone(x))) as T;
+ const source=value as Record<string,unknown>;
+ const copy:Record<string,unknown>={};
+ for(const [key,item] of Object.entries(source)) copy[key]=immutableClone(item);
+ return Object.freeze(copy) as T;
+};
 
 export class CanonicalRecordLog{
  private readonly records:CanonicalProjectionRecord[]=[];private readonly recordIds=new Set<string>();private readonly sequences=new Set<number>();
@@ -12,7 +20,7 @@ export class CanonicalRecordLog{
   if(!record.stream.trim()||!record.recordId.trim()||record.sequence<=0||!Number.isInteger(record.sequence)||!validTime(record.occurredAt)) throw new Error('CANONICAL_RECORD_INVALID');
   if(this.recordIds.has(record.recordId)) throw new Error('CANONICAL_RECORD_ID_DUPLICATE');
   if(this.sequences.has(record.sequence)) throw new Error('CANONICAL_SEQUENCE_DUPLICATE');
-  const frozen=Object.freeze({...record});this.records.push(frozen);this.recordIds.add(record.recordId);this.sequences.add(record.sequence);return frozen;
+  const frozen=Object.freeze({...record,payload:immutableClone(record.payload)});this.records.push(frozen);this.recordIds.add(record.recordId);this.sequences.add(record.sequence);return frozen;
  }
  all():readonly CanonicalProjectionRecord[]{return Object.freeze(ordered(this.records));}
 }
