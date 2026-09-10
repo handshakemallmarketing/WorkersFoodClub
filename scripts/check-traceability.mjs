@@ -16,9 +16,14 @@ for(const inv of canon.invariants){
  if(m.rule!==inv.rule) throw new Error(`${inv.id} traceability rule drift`);
  if(inv.status!=='RED' && !m.proof?.trim()) throw new Error(`${inv.id} non-red mapping missing proof`);
 }
+const declaredReleaseFiles=[...(releaseIndex.evidenceFiles??[])];
+if(declaredReleaseFiles.length===0) throw new Error('release index has no evidence files');
+if(new Set(declaredReleaseFiles).size!==declaredReleaseFiles.length) throw new Error('release index contains duplicate evidence file');
+const newestIndexedFile=declaredReleaseFiles.at(-1);
+const newestIndexedSlice=newestIndexedFile.replace(/\.json$/,'');
+if(releaseIndex.head!==newestIndexedSlice) throw new Error(`release index head stale: head=${releaseIndex.head} newestIndexed=${newestIndexedSlice}`);
 const actualReleaseFiles=fs.readdirSync('evidence/releases').filter(x=>x.endsWith('.json')).sort();
-const indexedReleaseFiles=[...(releaseIndex.evidenceFiles??[])].sort();
-if(new Set(indexedReleaseFiles).size!==indexedReleaseFiles.length) throw new Error('release index contains duplicate evidence file');
+const indexedReleaseFiles=[...declaredReleaseFiles].sort();
 if(JSON.stringify(actualReleaseFiles)!==JSON.stringify(indexedReleaseFiles)){
  const missing=actualReleaseFiles.filter(x=>!indexedReleaseFiles.includes(x));
  const stale=indexedReleaseFiles.filter(x=>!actualReleaseFiles.includes(x));
