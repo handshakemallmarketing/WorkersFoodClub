@@ -9,76 +9,32 @@ function formatOrderPrice(order){return `${escapeHtml(order.currency)} ${(order.
 function makeRequestId(){return crypto.randomUUID();}
 
 function renderOffers(offers){
-  const grid=document.getElementById('offer-grid');
-  const source=document.getElementById('offers-source');
+  const grid=document.getElementById('offer-grid');const source=document.getElementById('offers-source');
   if(!Array.isArray(offers)||offers.length===0){grid.innerHTML='<article class="offer-card muted"><div class="offer-icon">—</div><div><h3>No offers available</h3><p>No staging offers are open at this time.</p></div><button class="secondary small" disabled>Unavailable</button></article>';source.textContent='Neon · 0 offers';return;}
-  grid.innerHTML=offers.map((offer)=>{
-    const open=offer.status==='OPEN';
-    const icon=(offer.name||'?').trim().charAt(0).toUpperCase();
-    const fulfillment=offer.fulfillmentMethod==='PICKUP'?'pickup fulfillment':'delivery fulfillment';
-    const state=open?'Open in staging':offer.status==='COMING_SOON'?'Not open':'Closed';
-    return `<article class="offer-card${open?'':' muted'}"><div class="offer-icon">${escapeHtml(icon)}</div><div><h3>${escapeHtml(offer.name)}</h3><p>${escapeHtml(offer.description)} · ${escapeHtml(fulfillment)}</p><div class="offer-meta"><strong>${formatPrice(offer)}</strong><span>${escapeHtml(state)}</span></div></div><button class="${open?'primary':'secondary'} small" ${open?`data-commit-offer="${escapeHtml(offer.offerId)}"`:'disabled'}>${open?'Commit in sandbox':'Unavailable'}</button></article>`;
-  }).join('');
+  grid.innerHTML=offers.map((offer)=>{const open=offer.status==='OPEN';const icon=(offer.name||'?').trim().charAt(0).toUpperCase();const fulfillment=offer.fulfillmentMethod==='PICKUP'?'pickup fulfillment':'delivery fulfillment';const state=open?'Open in staging':offer.status==='COMING_SOON'?'Not open':'Closed';return `<article class="offer-card${open?'':' muted'}"><div class="offer-icon">${escapeHtml(icon)}</div><div><h3>${escapeHtml(offer.name)}</h3><p>${escapeHtml(offer.description)} · ${escapeHtml(fulfillment)}</p><div class="offer-meta"><strong>${formatPrice(offer)}</strong><span>${escapeHtml(state)}</span></div></div><button class="${open?'primary':'secondary'} small" ${open?`data-commit-offer="${escapeHtml(offer.offerId)}"`:'disabled'}>${open?'Commit in sandbox':'Unavailable'}</button></article>`;}).join('');
   source.textContent=`Neon live · ${offers.length} offer${offers.length===1?'':'s'}`;
 }
 
-async function refreshOffers(){
-  const source=document.getElementById('offers-source');
-  try{
-    const response=await fetch('/api/member-offers',{headers:{Accept:'application/json'},cache:'no-store'});
-    const data=await response.json();
-    if(!response.ok||data.ok!==true)throw new Error('offers unavailable');
-    source.className='badge neutral';
-    renderOffers(data.offers);
-  }catch{
-    source.textContent='Neon offers unavailable';source.className='badge danger';
-    document.getElementById('offer-grid').innerHTML='<article class="offer-card muted"><div class="offer-icon">!</div><div><h3>Offers unavailable</h3><p>The staging catalog could not be read from Neon.</p></div><button class="secondary small" disabled>Retry after refresh</button></article>';
-  }
-}
+async function refreshOffers(){const source=document.getElementById('offers-source');try{const response=await fetch('/api/member-offers',{headers:{Accept:'application/json'},cache:'no-store'});const data=await response.json();if(!response.ok||data.ok!==true)throw new Error('offers unavailable');source.className='badge neutral';renderOffers(data.offers);}catch{source.textContent='Neon offers unavailable';source.className='badge danger';document.getElementById('offer-grid').innerHTML='<article class="offer-card muted"><div class="offer-icon">!</div><div><h3>Offers unavailable</h3><p>The staging catalog could not be read from Neon.</p></div><button class="secondary small" disabled>Retry after refresh</button></article>';}}
 
 function renderOrders(orders){
-  const list=document.getElementById('orders-list');
-  const source=document.getElementById('orders-source');
-  source.textContent=`Neon live · ${orders.length} order${orders.length===1?'':'s'}`;source.className='badge neutral';
+  const list=document.getElementById('orders-list');const source=document.getElementById('orders-source');source.textContent=`Neon live · ${orders.length} order${orders.length===1?'':'s'}`;source.className='badge neutral';
   if(!orders.length){list.innerHTML='<div class="timeline-row"><span class="timeline-dot"></span><div><strong>No sandbox commitments yet</strong><p>Choose an open member offer and commit in sandbox.</p></div><time>Staging</time></div>';return;}
-  list.innerHTML=orders.map(order=>`<div class="timeline-row"><span class="timeline-dot done"></span><div><strong>${escapeHtml(order.offerName)} · ${escapeHtml(order.state)}</strong><p>${escapeHtml(order.quantity)} ${escapeHtml(order.unit)} · ${formatOrderPrice(order)} · ${escapeHtml(order.fulfillmentMethod.toLowerCase())}</p><p class="order-evidence">Canonical event: ${escapeHtml(order.canonicalEventId)} · ${escapeHtml(order.policyVersion)}</p></div><time>${new Date(order.acceptedAt).toLocaleString()}</time></div>`).join('');
+  list.innerHTML=orders.map(order=>{
+    const paid=order.payment?.status==='CONFIRMED';
+    const paymentBlock=paid?`<p class="order-evidence">Payment: CONFIRMED · ${escapeHtml(order.payment.provider)} · ${escapeHtml(order.payment.providerReference)}</p><p class="order-evidence">Payment event: ${escapeHtml(order.payment.canonicalEventId)} · ${escapeHtml(order.payment.economicTreatment)}</p>`:`<button class="primary small" data-pay-obligation="${escapeHtml(order.obligationId)}">Pay in sandbox</button>`;
+    return `<div class="timeline-row"><span class="timeline-dot done"></span><div><strong>${escapeHtml(order.offerName)} · ${paid?'PAYMENT CONFIRMED':escapeHtml(order.state)}</strong><p>${escapeHtml(order.quantity)} ${escapeHtml(order.unit)} · ${formatOrderPrice(order)} · ${escapeHtml(order.fulfillmentMethod.toLowerCase())}</p><p class="order-evidence">Commitment event: ${escapeHtml(order.canonicalEventId)} · ${escapeHtml(order.policyVersion)}</p>${paymentBlock}</div><time>${new Date(paid?order.payment.observedAt:order.acceptedAt).toLocaleString()}</time></div>`;
+  }).join('');
 }
 
-async function refreshOrders(){
-  const source=document.getElementById('orders-source');
-  try{
-    const response=await fetch('/api/member-orders',{headers:{Accept:'application/json'},cache:'no-store'});
-    const data=await response.json();
-    if(!response.ok||data.ok!==true)throw new Error('orders unavailable');
-    renderOrders(data.orders);
-  }catch{
-    source.textContent='Neon orders unavailable';source.className='badge danger';
-    document.getElementById('orders-list').innerHTML='<div class="timeline-row"><span class="timeline-dot"></span><div><strong>Orders unavailable</strong><p>The staging order projection could not be read from Neon.</p></div><time>Retry</time></div>';
-  }
-}
+async function refreshOrders(){const source=document.getElementById('orders-source');try{const response=await fetch('/api/member-orders',{headers:{Accept:'application/json'},cache:'no-store'});const data=await response.json();if(!response.ok||data.ok!==true)throw new Error('orders unavailable');renderOrders(data.orders);}catch{source.textContent='Neon orders unavailable';source.className='badge danger';document.getElementById('orders-list').innerHTML='<div class="timeline-row"><span class="timeline-dot"></span><div><strong>Orders unavailable</strong><p>The staging order projection could not be read from Neon.</p></div><time>Retry</time></div>';}}
 
-async function commitSandbox(offerId,button){
-  const original=button.textContent;button.disabled=true;button.textContent='Committing…';
-  try{
-    const response=await fetch('/api/commit-sandbox',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({offerId,requestId:makeRequestId()})});
-    const data=await response.json();
-    if(!response.ok||data.ok!==true)throw new Error(data.error||'commit failed');
-    button.textContent=data.commitment.idempotent?'Already committed':'Committed ✓';
-    await refreshOrders();activate('orders');
-  }catch(error){
-    button.disabled=false;button.textContent=original;alert(`Sandbox commitment failed: ${error.message}`);
-  }
-}
+async function commitSandbox(offerId,button){const original=button.textContent;button.disabled=true;button.textContent='Committing…';try{const response=await fetch('/api/commit-sandbox',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({offerId,requestId:makeRequestId()})});const data=await response.json();if(!response.ok||data.ok!==true)throw new Error(data.error||'commit failed');button.textContent=data.commitment.idempotent?'Already committed':'Committed ✓';await refreshOrders();activate('orders');}catch(error){button.disabled=false;button.textContent=original;alert(`Sandbox commitment failed: ${error.message}`);}}
+
+async function paySandbox(obligationId,button){const original=button.textContent;button.disabled=true;button.textContent='Paying…';try{const response=await fetch('/api/pay-sandbox',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({obligationId,requestId:makeRequestId()})});const data=await response.json();if(!response.ok||data.ok!==true)throw new Error(data.error||'payment failed');button.textContent=data.payment.idempotent?'Already paid':'Paid ✓';await refreshOrders();}catch(error){button.disabled=false;button.textContent=original;alert(`Sandbox payment failed: ${error.message}`);}}
 
 document.getElementById('offer-grid').addEventListener('click',(event)=>{const button=event.target.closest('[data-commit-offer]');if(button)commitSandbox(button.dataset.commitOffer,button);});
+document.getElementById('orders-list').addEventListener('click',(event)=>{const button=event.target.closest('[data-pay-obligation]');if(button)paySandbox(button.dataset.payObligation,button);});
 
-async function refreshDatabaseHealth(){
-  const badge=document.getElementById('db-status');const metric=document.getElementById('db-metric');
-  try{
-    const response=await fetch('/api/db-health',{headers:{Accept:'application/json'},cache:'no-store'});const data=await response.json();
-    if(response.ok&&data.ok===true){badge.textContent=`Neon connected · ${data.governedTableCount}/7`;badge.className='badge neutral';metric.textContent='Neon PostgreSQL · live';return;}
-    throw new Error('degraded');
-  }catch{badge.textContent='Neon unavailable';badge.className='badge danger';metric.textContent='Database unavailable';}
-}
-refreshDatabaseHealth();refreshOffers();refreshOrders();
-setInterval(refreshDatabaseHealth,30000);setInterval(refreshOffers,30000);setInterval(refreshOrders,30000);
+async function refreshDatabaseHealth(){const badge=document.getElementById('db-status');const metric=document.getElementById('db-metric');try{const response=await fetch('/api/db-health',{headers:{Accept:'application/json'},cache:'no-store'});const data=await response.json();if(response.ok&&data.ok===true){badge.textContent=`Neon connected · ${data.governedTableCount}/7`;badge.className='badge neutral';metric.textContent='Neon PostgreSQL · live';return;}throw new Error('degraded');}catch{badge.textContent='Neon unavailable';badge.className='badge danger';metric.textContent='Database unavailable';}}
+refreshDatabaseHealth();refreshOffers();refreshOrders();setInterval(refreshDatabaseHealth,30000);setInterval(refreshOffers,30000);setInterval(refreshOrders,30000);
