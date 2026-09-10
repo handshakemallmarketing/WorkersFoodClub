@@ -91,8 +91,9 @@ async function runJourney(){
  const intent=f.payments.createIntent({actorId:member,grantIds:[f.grants.payment],at:'2026-09-10T08:18:00Z'},{obligationId,participantId:member,offer,idempotencyKey:'rc1-payment'});
  const paymentBody=JSON.stringify({providerReference:intent.providerReference,status:'CONFIRMED',amountMinor:'50000',currency:'GHS',occurredAt:'2026-09-10T08:19:00Z'});
  const receipt=f.payments.reconcileWebhook({eventId:'event:rc1-payment',rawBody:paymentBody,signature:`sandbox:rc1-secret:${paymentBody}`,receivedAt:'2026-09-10T08:20:00Z'});
+ const sameEventReplay=f.payments.reconcileWebhook({eventId:'event:rc1-payment',rawBody:paymentBody,signature:`sandbox:rc1-secret:${paymentBody}`,receivedAt:'2026-09-10T08:20:30Z'});
  const redelivery=f.payments.reconcileWebhook({eventId:'event:rc1-payment-redelivery',rawBody:paymentBody,signature:`sandbox:rc1-secret:${paymentBody}`,receivedAt:'2026-09-10T08:21:00Z'});
- assert.equal(redelivery.evidenceId,receipt.evidenceId);assert.equal(f.demand.paymentsFor(obligationId).length,1);
+ assert.equal(sameEventReplay.evidenceId,receipt.evidenceId);assert.equal(redelivery.evidenceId,receipt.evidenceId);assert.equal(f.demand.paymentsFor(obligationId).length,1);
 
  const ictx={actorId:warehouse,grantIds:[f.grants.inventory],at:'2026-09-10T08:30:00Z'};
  f.inventory.receiveLot(ictx,{lot:{id:bulkLot,specificationId:rice,quantity:quantity(5,'kg')},ownerId:club,custodianId:warehouse,placeId:'warehouse:rc1',receivedAt:'2026-09-10T08:25:00Z',receiptEvidenceIds:[eid('evidence:rc1-receipt')]});
@@ -100,6 +101,7 @@ async function runJourney(){
  f.inventory.allocate(ictx,{allocation:{id:'allocation:rc1',lotId:bulkLot,obligationId,specificationId:rice,quantity:quantity(5,'kg'),allocatedAt:'2026-09-10T08:27:00Z',evidenceIds:[eid('evidence:rc1-allocation')]}});
  assert.equal(f.inventory.availability(bulkLot).amount,0);
  assert.throws(()=>f.inventory.transform(ictx,{id:'transform:rc1-forbidden',kind:'REPACK',inputs:[{lotId:String(bulkLot),quantity:quantity(1,'kg')}],outputs:[{lotId:'lot:rc1-illegal-derived',quantity:quantity(1,'kg')}],lossQuantity:quantity(0,'kg'),occurredAt:'2026-09-10T08:28:00Z',evidenceIds:[eid('evidence:rc1-transform-attempt')]}),/TRANSFORMATION_INPUT_EXCEEDS_AVAILABLE/);
+ assert.throws(()=>f.inventory.allocate(ictx,{allocation:{id:'allocation:rc1-double',lotId:bulkLot,obligationId,specificationId:rice,quantity:quantity(1,'kg'),allocatedAt:'2026-09-10T08:28:30Z',evidenceIds:[eid('evidence:rc1-double-allocation')]}}),/LOT_OVERALLOCATION/);
 
  const wctx={actorId:warehouse,grantIds:[f.grants.warehouse],at:'2026-09-10T08:40:00Z'};
  const work=(state,workId,supersedes)=>({id:workId,allocationId:'allocation:rc1',lotId:bulkLot,obligationId,specificationId:rice,quantity:quantity(5,'kg'),state,operatorId:warehouse,placeId:'pickup:rc1',occurredAt:'2026-09-10T08:35:00Z',evidenceIds:[eid(`evidence:${workId}`)],...(supersedes?{supersedes}:{})});
@@ -107,6 +109,7 @@ async function runJourney(){
  f.fulfillment.handover(wctx,{id:'handover:rc1',fulfillmentWorkId:'ready:rc1',obligationId,fromCustodianId:warehouse,toParticipantId:member,placeId:'pickup:rc1',handedOverAt:'2026-09-10T08:36:00Z',evidenceIds:[eid('evidence:rc1-handover')]});
  assert.equal(f.fulfillment.performance(obligationId).state,'OPEN');
  const mctx={actorId:member,grantIds:[f.grants.memberFulfillment],at:'2026-09-10T08:41:00Z'};
+ assert.throws(()=>f.fulfillment.accept(mctx,{id:'acceptance:rc1-overclaim-probe',handoverId:'handover:rc1',obligationId,participantId:member,state:'ACCEPTED',quantity:quantity(6,'kg'),acceptedAt:'2026-09-10T08:36:30Z',evidenceIds:[eid('evidence:rc1-acceptance-overclaim')]}),/FULFILLMENT_UNAUTHORIZED:QUANTITY_LIMIT|ACCEPTANCE_QUANTITY_INVALID/);
  f.fulfillment.accept(mctx,{id:'acceptance:rc1',handoverId:'handover:rc1',obligationId,participantId:member,state:'PARTIALLY_ACCEPTED',quantity:quantity(4,'kg'),acceptedAt:'2026-09-10T08:37:00Z',evidenceIds:[eid('evidence:rc1-acceptance')]});
  f.fulfillment.recordException(mctx,{id:'exception:rc1-shortfall',obligationId,participantId:member,kind:'SHORTFALL',affectedQuantity:quantity(1,'kg'),occurredAt:'2026-09-10T08:38:00Z',evidenceIds:[eid('evidence:rc1-shortfall')],relatedAcceptanceId:'acceptance:rc1'});
  assert.equal(f.resolution.position(commitment.obligation).performedQuantity.amount,4);assert.equal(f.remediesLedger.getRemedy('remedy:rc1-refund'),undefined);
@@ -153,6 +156,7 @@ test('SW1-RC1 every required authority bypass fails closed in integrated state',
  assert.throws(()=>f.inventory.receiveLot({actorId:warehouse,grantIds:[],at:'2026-09-10T09:03:00Z'},{lot:{id:lot('lot:rc1-unauthorized'),specificationId:rice,quantity:quantity(1,'kg')},ownerId:club,custodianId:warehouse,placeId:'warehouse:rc1',receivedAt:'2026-09-10T09:02:30Z',receiptEvidenceIds:[eid('evidence:unauthorized-receipt')]}),/INVENTORY_UNAUTHORIZED:NO_GRANT/);
  assert.throws(()=>f.fulfillment.recordWork({actorId:warehouse,grantIds:[],at:'2026-09-10T09:04:00Z'},{id:'pick:rc1-unauthorized',allocationId:'allocation:rc1',lotId:bulkLot,obligationId,specificationId:rice,quantity:quantity(5,'kg'),state:'PICKED',operatorId:warehouse,placeId:'pickup:rc1',occurredAt:'2026-09-10T09:03:30Z',evidenceIds:[eid('evidence:unauthorized-pick')]}),/FULFILLMENT_UNAUTHORIZED:NO_GRANT/);
  assert.throws(()=>f.remedies.createRemedy({actorId:finance,grantIds:[],at:'2026-09-10T09:05:00Z'},{id:'remedy:rc1-unauthorized',sourceExceptionId:'exception:rc1-shortfall',originalObligationId:obligationId,participantId:member,kind:'REFUND',quantity:quantity(1,'kg'),createdAt:'2026-09-10T09:04:30Z',authorizedEventId:'event:unauthorized-remedy',evidenceIds:[eid('evidence:unauthorized-remedy')],economicClassification:'REMEDY_SETTLEMENT'}),/REMEDY_UNAUTHORIZED:NO_GRANT/);
+ assert.throws(()=>f.remedies.completeRemedy({actorId:finance,grantIds:[],at:'2026-09-10T09:05:30Z'},{id:'completion:rc1-unauthorized',remedyObligationId:'remedy:rc1-refund',quantity:quantity(1,'kg'),completedAt:'2026-09-10T09:05:00Z',evidenceIds:[eid('evidence:unauthorized-remedy-completion')],settlementAmount:money(10000n,'GHS')}),/REMEDY_UNAUTHORIZED:NO_GRANT/);
  const ops=new GovernedPilotOperationsService(f.authority);
  assert.throws(()=>ops.executeMutation({actorId:finance,grantIds:[],at:'2026-09-10T09:06:00Z'},{requestId:'req:rc1-unauthorized-admin',action:'admin.obligation.annotate',targetId:String(obligationId),reason:'unauthorized',payload:{}},()=>({result:{ok:true},sourceRecordIds:['forged:admin']})),/ADMIN_UNAUTHORIZED:NO_GRANT/);
 });
