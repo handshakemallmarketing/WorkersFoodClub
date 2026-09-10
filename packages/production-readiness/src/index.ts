@@ -65,6 +65,52 @@ export class SafeOperationalLogger{
  all():readonly unknown[]{return Object.freeze([...this.entries]);}
 }
 
+export type PrivacySensitivity='PUBLIC'|'INTERNAL'|'PERSONAL'|'SENSITIVE';
+export type PrivacyDisposition='DELETE'|'TOMBSTONE'|'RETAIN_CANONICAL';
+export interface DataClassPolicy {readonly dataClass:string;readonly purpose:string;readonly sensitivity:PrivacySensitivity;readonly retentionDays:number|null;readonly disposition:PrivacyDisposition;readonly broadProjectionAllowed:boolean;readonly operationalLogAllowed:boolean;}
+
+const DATA_POLICY:readonly DataClassPolicy[]=Object.freeze([
+ Object.freeze({dataClass:'AUTH_IDENTITY_REFERENCE',purpose:'authentication linkage',sensitivity:'PERSONAL',retentionDays:365,disposition:'TOMBSTONE',broadProjectionAllowed:false,operationalLogAllowed:false}),
+ Object.freeze({dataClass:'ELIGIBILITY_EVIDENCE_REFERENCE',purpose:'membership verification lineage',sensitivity:'SENSITIVE',retentionDays:365,disposition:'TOMBSTONE',broadProjectionAllowed:false,operationalLogAllowed:false}),
+ Object.freeze({dataClass:'ELIGIBILITY_DOCUMENT_RAW',purpose:'temporary eligibility verification',sensitivity:'SENSITIVE',retentionDays:30,disposition:'DELETE',broadProjectionAllowed:false,operationalLogAllowed:false}),
+ Object.freeze({dataClass:'PARTICIPANT_OPERATIONAL_ID',purpose:'transaction and fulfillment attribution',sensitivity:'PERSONAL',retentionDays:null,disposition:'RETAIN_CANONICAL',broadProjectionAllowed:true,operationalLogAllowed:true}),
+ Object.freeze({dataClass:'PAYMENT_EVIDENCE',purpose:'payment reconciliation and financial evidence',sensitivity:'PERSONAL',retentionDays:null,disposition:'RETAIN_CANONICAL',broadProjectionAllowed:false,operationalLogAllowed:false}),
+ Object.freeze({dataClass:'INVENTORY_FULFILLMENT_EVIDENCE',purpose:'physical conservation and fulfillment evidence',sensitivity:'INTERNAL',retentionDays:null,disposition:'RETAIN_CANONICAL',broadProjectionAllowed:true,operationalLogAllowed:true}),
+ Object.freeze({dataClass:'SECRET_CREDENTIAL',purpose:'external system authentication',sensitivity:'SENSITIVE',retentionDays:null,disposition:'DELETE',broadProjectionAllowed:false,operationalLogAllowed:false}),
+ Object.freeze({dataClass:'AUDIT_METADATA',purpose:'security and consequential-operation audit',sensitivity:'INTERNAL',retentionDays:730,disposition:'TOMBSTONE',broadProjectionAllowed:false,operationalLogAllowed:true})
+]);
+
+export class PrivacyRetentionPolicy{
+ all():readonly DataClassPolicy[]{return DATA_POLICY;}
+ policyFor(dataClass:string):DataClassPolicy{
+  const policy=DATA_POLICY.find(p=>p.dataClass===dataClass);
+  if(!policy) throw new Error(`DATA_CLASS_POLICY_UNKNOWN:${dataClass}`);
+  return policy;
+ }
+ assertProjectionAllowed(dataClass:string):void{
+  if(!this.policyFor(dataClass).broadProjectionAllowed) throw new Error(`DATA_CLASS_FORBIDDEN_IN_BROAD_PROJECTION:${dataClass}`);
+ }
+ assertOperationalLogAllowed(dataClass:string):void{
+  if(!this.policyFor(dataClass).operationalLogAllowed) throw new Error(`DATA_CLASS_FORBIDDEN_IN_OPERATIONAL_LOG:${dataClass}`);
+ }
+ disposition(dataClass:string,ageDays:number):PrivacyDisposition|'RETAIN_UNTIL_DUE'{
+  if(!Number.isFinite(ageDays)||ageDays<0) throw new Error('RETENTION_AGE_INVALID');
+  const policy=this.policyFor(dataClass);
+  if(policy.retentionDays===null) return policy.disposition;
+  return ageDays>=policy.retentionDays?policy.disposition:'RETAIN_UNTIL_DUE';
+ }
+}
+
+export class PrivacyExportGate{
+ authorize(input:{dataClass:string;actorScoped:boolean;purpose:string},policy=new PrivacyRetentionPolicy()):Readonly<{authorized:true;dataClass:string;purpose:string}>{
+  const item=policy.policyFor(input.dataClass);
+  if(!input.actorScoped) throw new Error('PRIVACY_EXPORT_SCOPE_REQUIRED');
+  if(!nonBlank(input.purpose)) throw new Error('PRIVACY_EXPORT_PURPOSE_REQUIRED');
+  if(item.dataClass==='SECRET_CREDENTIAL') throw new Error('SECRET_EXPORT_FORBIDDEN');
+  return Object.freeze({authorized:true as const,dataClass:item.dataClass,purpose:input.purpose.trim()});
+ }
+}
+
 export class ProductionReadinessGate{
  authorize(input:{envelope:ProductionEnvelope;evidence:readonly ReadinessEvidence[];unresolvedFindings?:readonly {severity:'P0'|'P1'|'P2';id:string}[]}):ProductionAuthorization{
   const {envelope}=input;
