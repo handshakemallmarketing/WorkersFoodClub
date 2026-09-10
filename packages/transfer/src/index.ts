@@ -75,14 +75,15 @@ function triggerType(rule:TransferRule):string{
 
 export class GovernedTransferPolicyRegistry {
   private readonly versions=new Map<string,Map<number,TransactionTransferPolicy>>();
-  constructor(private readonly authority:Pick<AuthorityEvaluator,'evaluate'>){}
+  constructor(private readonly authority:Pick<AuthorityEvaluator,'evaluate'>,private readonly clock:()=>string=()=>new Date().toISOString()){}
 
   ratify(policy:TransactionTransferPolicy,_untrustedAuthorization?:TransferPolicyAuthorization):TransactionTransferPolicy{
     if(!policy.id.trim()||policy.version<1||!Number.isInteger(policy.version)||!policy.transactionType.trim()) throw new Error('TRANSFER_POLICY_IDENTITY_INVALID');
     if(policy.status!=='RATIFIED') throw new Error('TRANSFER_POLICY_NOT_RATIFIED');
     if(!validTime(policy.effectiveFrom)||policy.evidenceIds.length===0) throw new Error('TRANSFER_POLICY_EVIDENCE_REQUIRED');
     validateRule(policy.title);validateRule(policy.risk);
-    const decision=this.authority.evaluate({actorId:policy.authorizedBy,action:'RatifyTransferPolicy',targetId:policy.id,at:policy.effectiveFrom,grantIds:[policy.authorityGrantId as AuthorityGrantId]});
+    const ratificationAt=this.clock();if(!validTime(ratificationAt)) throw new Error('TRANSFER_RATIFICATION_TIME_INVALID');
+    const decision=this.authority.evaluate({actorId:policy.authorizedBy,action:'RatifyTransferPolicy',targetId:policy.id,at:ratificationAt,grantIds:[policy.authorityGrantId as AuthorityGrantId]});
     if(!decision.allowed||decision.grantId!==policy.authorityGrantId) throw new Error('TRANSFER_POLICY_UNAUTHORIZED');
     const byVersion=this.versions.get(policy.id)??new Map<number,TransactionTransferPolicy>();
     if(byVersion.has(policy.version)) throw new Error('TRANSFER_POLICY_VERSION_DUPLICATE');
