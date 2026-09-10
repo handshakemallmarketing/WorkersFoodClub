@@ -1,0 +1,17 @@
+{
+  "slice":"SW1-09",
+  "status":"PENDING_CI_AND_INDEPENDENT_REVIEW",
+  "implementedAt":"2026-09-10",
+  "scope":[
+    "governed administrative command envelope",
+    "accepted/rejected/replayed operational audit records",
+    "non-authoritative audit views with lineage and freshness disclosure",
+    "bounded authorized recovery with stale and duplicate-effect protections"
+  ],
+  "code":["packages/pilot-operations/src/index.ts"],
+  "tests":["tests/node/sw1-09.test.mjs"],
+  "traceability":"docs/traceability/SW1-09-pilot-operations-admin-audit-recovery.json",
+  "requiredChecks":["canon:check","traceability:check","typecheck","test:kernel","constitutional-conformance"],
+  "productionAuthorization":false,
+  "limitations":["in-memory operational façade","no live provider activation","no claim of distributed transaction fencing"]
+}
