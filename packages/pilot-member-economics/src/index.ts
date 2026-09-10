@@ -10,6 +10,16 @@ const sameQuantity=(a:Quantity,b:Quantity)=>a.unit===b.unit&&a.amount===b.amount
 const sameMoney=(a:Money,b:Money)=>a.currency===b.currency&&a.minor===b.minor;
 const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
 const sameEvidence=(actual:readonly EvidenceId[],expected:readonly EvidenceId[])=>actual.length===expected.length&&new Set(actual.map(String)).size===actual.length&&actual.every(id=>expected.some(x=>String(x)===String(id)));
+const decimalFraction=(value:number)=>{
+ if(!Number.isFinite(value)||value<=0) throw new Error('GOVERNED_BENCHMARK_QUANTITY_MISMATCH');
+ const [mantissa,exponentText]=value.toString().toLowerCase().split('e');
+ const exponent=Number(exponentText??'0');
+ const [whole,fraction='']=mantissa!.split('.');
+ const numeratorBase=BigInt(`${whole}${fraction}`);
+ const shift=exponent-fraction.length;
+ return shift>=0?{numerator:numeratorBase*(10n**BigInt(shift)),denominator:1n}:{numerator:numeratorBase,denominator:10n**BigInt(-shift)};
+};
+const prorateMinor=(minor:bigint,actual:number,basis:number)=>{const a=decimalFraction(actual),b=decimalFraction(basis);return minor*a.numerator*b.denominator/(a.denominator*b.numerator);};
 
 export class GovernedMemberEconomicsService{
  constructor(
@@ -17,13 +27,14 @@ export class GovernedMemberEconomicsService{
   private readonly resolution:InMemoryObligationResolutionLedger,
   private readonly economics:InMemoryEconomicsLedger,
   private readonly remedies?:Pick<InMemoryRemedyLedger,'completedRemediesFor'>,
-  private readonly catalog?:Pick<GovernedPilotCatalogService,'catalogView'>
+  private readonly catalog?:Pick<GovernedPilotCatalogService,'catalogView'|'benchmarkForOffer'>
  ){}
  recordFulfilledEconomics(input:FulfilledMemberEconomics){
   const commitment=this.demand.getCommitment(input.obligationId);
   if(!commitment) throw new Error('MEMBER_ECONOMICS_OBLIGATION_UNKNOWN');
   if(input.participantId!==commitment.participantId) throw new Error('MEMBER_ECONOMICS_PARTICIPANT_MISMATCH');
   if(input.specificationId!==commitment.obligation.specificationId) throw new Error('MEMBER_ECONOMICS_SPECIFICATION_MISMATCH');
+  if(this.catalog){const benchmark=this.catalog.benchmarkForOffer(commitment.offerId);if(!benchmark)throw new Error('MEMBER_ECONOMICS_BENCHMARK_CONTEXT_UNKNOWN');if(input.place!==benchmark.place||input.serviceLevel!=='pickup')throw new Error('MEMBER_ECONOMICS_COMPARISON_CONTEXT_NOT_CANONICAL');}
   const position=this.resolution.position({id:commitment.obligation.id,quantity:commitment.obligation.quantity});
   const completed=this.remedies?.completedRemediesFor(input.obligationId)??[];
   const replacements=completed.filter(x=>x.remedy.kind==='REPLACEMENT').reduce((n,x)=>n+x.completion.quantity.amount,0);
@@ -50,12 +61,12 @@ export class GovernedMemberEconomicsService{
   if(!validTime(input.realizedAt)||Date.parse(input.realizedAt)<Date.parse(commitment.acceptedAt)) throw new Error('MEMBER_ECONOMICS_TIME_INVALID');
   return this.economics.recordFulfilledMemberEconomics(input);
  }
- recordGovernedSavingsBenchmark(input:{benchmarkId:string;benchmarkVersion:number;valuationId:string;obligationId:ObligationId;listingId:string;offerId:any;benchmarkDisplayId:string;catalogAt:string;serviceLevel:string;validFrom:string;validUntil:string;availabilityRuleVersion:string;evaluatedAt:string}){
+ recordGovernedSavingsBenchmark(input:{benchmarkId:string;benchmarkVersion:number;valuationId:string;obligationId:ObligationId;listingId:string;offerId:any;benchmarkDisplayId:string}){
   if(!this.catalog) throw new Error('GOVERNED_BENCHMARK_CATALOG_REQUIRED');
   const commitment=this.demand.getCommitment(input.obligationId);
   if(!commitment) throw new Error('GOVERNED_BENCHMARK_OBLIGATION_UNKNOWN');
   if(commitment.offerId!==input.offerId) throw new Error('GOVERNED_BENCHMARK_OFFER_MISMATCH');
-  const view=this.catalog.catalogView({listingId:input.listingId,offerId:input.offerId,benchmarkDisplayId:input.benchmarkDisplayId,at:input.catalogAt});
+  const view=this.catalog.catalogView({listingId:input.listingId,offerId:input.offerId,benchmarkDisplayId:input.benchmarkDisplayId,at:commitment.acceptedAt});
   const benchmark=view.benchmark;
   if(benchmark.specificationId!==commitment.obligation.specificationId) throw new Error('GOVERNED_BENCHMARK_SPECIFICATION_MISMATCH');
   const position=this.resolution.position({id:commitment.obligation.id,quantity:commitment.obligation.quantity});
@@ -63,11 +74,11 @@ export class GovernedMemberEconomicsService{
   const replacements=completed.filter(x=>x.remedy.kind==='REPLACEMENT').reduce((n,x)=>n+x.completion.quantity.amount,0);
   const actualQuantity=position.performedQuantity.amount+replacements;
   if(actualQuantity<=0||position.performedQuantity.unit!==benchmark.basis.unit||benchmark.basis.amount<=0) throw new Error('GOVERNED_BENCHMARK_QUANTITY_MISMATCH');
-  const comparableMinor=benchmark.value.minor*BigInt(actualQuantity)/BigInt(benchmark.basis.amount);
+  const comparableMinor=prorateMinor(benchmark.value.minor,actualQuantity,benchmark.basis.amount);
   if(comparableMinor<=0n) throw new Error('GOVERNED_BENCHMARK_VALUATION_INVALID');
   const quantity:Object=Object.freeze({amount:actualQuantity,unit:benchmark.basis.unit});
-  const method=this.economics.defineBenchmark({id:input.benchmarkId,version:input.benchmarkVersion,purpose:'MEMBER_SAVINGS',specificationId:benchmark.specificationId,quantity:quantity as Quantity,place:benchmark.place,serviceLevel:input.serviceLevel,transactionLevel:benchmark.transactionLevel,validFrom:input.validFrom,validUntil:input.validUntil,normalizationRuleVersion:benchmark.methodVersion,availabilityRuleVersion:input.availabilityRuleVersion,observationEvidenceIds:[benchmark.priceEvidenceId],definedAt:input.catalogAt});
-  const valuation=this.economics.recordBenchmarkValuation({id:input.valuationId,benchmarkId:method.id,benchmarkVersion:method.version,obligationId:input.obligationId,specificationId:benchmark.specificationId,quantity:quantity as Quantity,place:benchmark.place,serviceLevel:input.serviceLevel,availability:'EXECUTABLE',comparableValue:Object.freeze({minor:comparableMinor,currency:benchmark.value.currency}),evaluatedAt:input.evaluatedAt,evidenceIds:[benchmark.priceEvidenceId]});
+  const method=this.economics.defineBenchmark({id:input.benchmarkId,version:input.benchmarkVersion,purpose:'MEMBER_SAVINGS',specificationId:benchmark.specificationId,quantity:quantity as Quantity,place:benchmark.place,serviceLevel:'pickup',transactionLevel:benchmark.transactionLevel,validFrom:view.offer.validFrom,validUntil:view.offer.validUntil,normalizationRuleVersion:benchmark.methodVersion,availabilityRuleVersion:'catalog-offer-executable-v1',observationEvidenceIds:[benchmark.priceEvidenceId],definedAt:commitment.acceptedAt});
+  const valuation=this.economics.recordBenchmarkValuation({id:input.valuationId,benchmarkId:method.id,benchmarkVersion:method.version,obligationId:input.obligationId,specificationId:benchmark.specificationId,quantity:quantity as Quantity,place:benchmark.place,serviceLevel:'pickup',availability:'EXECUTABLE',comparableValue:Object.freeze({minor:comparableMinor,currency:benchmark.value.currency}),evaluatedAt:commitment.acceptedAt,evidenceIds:[benchmark.priceEvidenceId]});
   return Object.freeze({method,valuation,benchmark});
  }
  calculateSavings(input:{id:string;benchmarkValuationId:string;memberEconomicsId:string;calculatedAt:string;supersedes?:string}):SavingsEntry{
