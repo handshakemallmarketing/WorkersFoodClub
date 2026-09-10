@@ -101,6 +101,7 @@ export class GovernedMemberEconomicsService{
  calculateSavings(input:{id:string;benchmarkValuationId:string;memberEconomicsId:string;calculatedAt:string;supersedes?:string}):SavingsEntry{
   return this.economics.calculateSavings(input);
  }
+ resolutionLedger(){return this.resolution;}
 }
 
 export interface MemberOrderOperationalView{
