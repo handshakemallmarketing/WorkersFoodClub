@@ -19,10 +19,29 @@ function setup(){
  return {service:new GovernedPilotOperationsService(new AuthorityEvaluator(store)),adminGrant,recoveryGrant};
 }
 
-test('SW1-RC1 direct use of the reserved recovery action cannot fabricate a new effect',()=>{
+const forgedRequest={requestId:'req:forged-recovery',action:'admin.recovery.reconcile',targetId:target,reason:'try direct recovery mutation',payload:{}};
+
+test('SW1-RC1 direct use of the reserved recovery action cannot fabricate a new effect and is audited',()=>{
  const {service,recoveryGrant}=setup(); let effects=0;
- assert.throws(()=>service.executeMutation({actorId:actor,grantIds:[recoveryGrant],at},{requestId:'req:forged-recovery',action:'admin.recovery.reconcile',targetId:target,reason:'try direct recovery mutation',payload:{}},()=>({result:{ok:true},sourceRecordIds:[`effect:${++effects}`]})),/ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN/);
+ const ctx={actorId:actor,grantIds:[recoveryGrant],at};
+ assert.throws(()=>service.executeMutation(ctx,forgedRequest,()=>({result:{ok:true},sourceRecordIds:[`effect:${++effects}`]})),/ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN/);
  assert.equal(effects,0);
+ const rejected=service.auditLog().at(-1);
+ assert.equal(rejected.outcome,'REJECTED');
+ assert.equal(rejected.authorityReason,'RECOVERY_ENTRYPOINT_REQUIRED');
+ assert.equal(rejected.requestId,forgedRequest.requestId);
+});
+
+test('SW1-RC1 runtime caller cannot spoof the module-private recovery capability symbol',()=>{
+ const {service,recoveryGrant}=setup(); let effects=0;
+ const ctx={actorId:actor,grantIds:[recoveryGrant],at};
+ assert.equal(typeof service.executeMutationInternal,'function');
+ assert.throws(()=>service.executeMutationInternal(ctx,{...forgedRequest,requestId:'req:spoofed-recovery'},()=>({result:{ok:true},sourceRecordIds:[`effect:${++effects}`]}),Symbol('governed-recovery-capability')),/ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN/);
+ assert.equal(effects,0);
+ const rejected=service.auditLog().at(-1);
+ assert.equal(rejected.outcome,'REJECTED');
+ assert.equal(rejected.authorityReason,'RECOVERY_ENTRYPOINT_REQUIRED');
+ assert.equal(rejected.requestId,'req:spoofed-recovery');
 });
 
 test('SW1-RC1 governed recover retries only the exact stored failed operation',()=>{
