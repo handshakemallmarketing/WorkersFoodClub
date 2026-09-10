@@ -9,7 +9,7 @@ const actor=pid('participant:admin-1');
 const otherActor=pid('participant:admin-2');
 const target='obligation:sw1-09';
 const at='2026-09-10T10:00:00Z';
-function setup(){
+function setup(auditSources=[]){
  const store=new InMemoryAuthorityStore();
  const adminGrant=gid('grant:admin');
  const recoveryGrant=gid('grant:recovery');
@@ -17,7 +17,7 @@ function setup(){
  store.put({id:adminGrant,grantorId:pid('participant:club'),actorId:actor,actions:['admin.obligation.annotate'],targetPrefix:'obligation:',validFrom:'2026-09-10T00:00:00Z'});
  store.put({id:recoveryGrant,grantorId:pid('participant:club'),actorId:actor,actions:['admin.recovery.reconcile'],targetPrefix:'obligation:',validFrom:'2026-09-10T00:00:00Z'});
  store.put({id:auditGrant,grantorId:pid('participant:club'),actorId:actor,actions:['admin.audit.read'],targetPrefix:'obligation:',validFrom:'2026-09-10T00:00:00Z'});
- return {service:new GovernedPilotOperationsService(new AuthorityEvaluator(store)),adminGrant,recoveryGrant,auditGrant};
+ return {service:new GovernedPilotOperationsService(new AuthorityEvaluator(store),auditSources),adminGrant,recoveryGrant,auditGrant};
 }
 const effect=(result,id)=>({result,sourceRecordIds:[id]});
 
@@ -80,12 +80,36 @@ test('SW1-09 stale recovery fails closed and is audited as rejected',()=>{
  assert.equal(service.auditLog().at(-1).authorityReason,'MUTATION_FAILED');
 });
 
-test('SW1-09 audit view requires authority, is non-authoritative, and discloses lineage and freshness',()=>{
+test('SW1-09 stuck-work diagnosis is separately read-authorized and identifies retryable uncertain work',()=>{
  const {service,adminGrant,auditGrant}=setup();
- service.executeMutation({actorId:actor,grantIds:[adminGrant],at},{requestId:'req:view',action:'admin.obligation.annotate',targetId:target,reason:'audit source',payload:{}},()=>effect({ok:true},'canonical:audit-source'));
+ assert.throws(()=>service.executeMutation({actorId:actor,grantIds:[adminGrant],at},{requestId:'req:stuck',action:'admin.obligation.annotate',targetId:target,reason:'provider operation',payload:{}},()=>{throw new Error('TIMEOUT');}),/TIMEOUT/);
+ assert.throws(()=>service.diagnose({actorId:actor,grantIds:[],at:'2026-09-10T10:02:00Z'},'req:stuck',60_000),/AUDIT_VIEW_UNAUTHORIZED/);
+ const diagnosis=service.diagnose({actorId:actor,grantIds:[auditGrant],at:'2026-09-10T10:02:00Z'},'req:stuck',60_000);
+ assert.equal(diagnosis.retryable,true); assert.equal(diagnosis.stale,true); assert.equal(diagnosis.authoritative,false); assert.equal(diagnosis.failureReason,'MUTATION_FAILED');
+});
+
+test('SW1-09 audit view exposes current state and canonical lineage across all prescribed pilot domains',()=>{
+ const domains=['MEMBER','OBLIGATION','PAYMENT','INVENTORY','FULFILLMENT','REMEDY','ECONOMICS'];
+ const auditSources=domains.map((domain,index)=>({
+  domain,
+  read:targetId=>({domain,targetId,currentState:{status:`${domain}:CURRENT`},sourceRecordIds:[`canonical:${domain.toLowerCase()}:1`],observedAt:`2026-09-10T10:00:0${index}Z`})
+ }));
+ const {service,adminGrant,auditGrant}=setup(auditSources);
+ service.executeMutation({actorId:actor,grantIds:[adminGrant],at},{requestId:'req:view',action:'admin.obligation.annotate',targetId:target,reason:'audit source',payload:{}},()=>effect({ok:true},'canonical:admin-mutation'));
  assert.throws(()=>service.auditView({actorId:actor,grantIds:[],at:'2026-09-10T10:00:30Z'},target,60_000),/AUDIT_VIEW_UNAUTHORIZED/);
  const fresh=service.auditView({actorId:actor,grantIds:[auditGrant],at:'2026-09-10T10:00:30Z'},target,60_000);
- assert.equal(fresh.authoritative,false); assert.equal(fresh.stale,false); assert.equal(fresh.sourceRecordIds.length,1); assert.deepEqual(fresh.records[0].sourceRecordIds,['canonical:audit-source']);
+ assert.equal(fresh.authoritative,false); assert.equal(fresh.stale,false); assert.equal(fresh.domainSnapshots.length,7); assert.deepEqual(fresh.domainSnapshots.map(x=>x.domain),domains);
+ assert.equal(fresh.operationalRecords.length,1); assert.deepEqual(fresh.operationalRecords[0].sourceRecordIds,['canonical:admin-mutation']);
+ assert.ok(fresh.sourceRecordIds.includes('canonical:payment:1')); assert.ok(fresh.sourceRecordIds.includes('canonical:economics:1'));
  const stale=service.auditView({actorId:actor,grantIds:[auditGrant],at:'2026-09-10T10:10:00Z'},target,60_000);
- assert.equal(stale.stale,true); assert.equal(stale.records.length,1);
+ assert.equal(stale.stale,true); assert.equal(stale.domainSnapshots.length,7);
+});
+
+test('SW1-09 rejects semantically mismatched or future-dated audit-source state',()=>{
+ const mismatch={domain:'PAYMENT',read:targetId=>({domain:'INVENTORY',targetId,currentState:{},sourceRecordIds:['canonical:mismatch'],observedAt:at})};
+ const {service:badDomain,auditGrant}=setup([mismatch]);
+ assert.throws(()=>badDomain.auditView({actorId:actor,grantIds:[auditGrant],at:'2026-09-10T10:00:30Z'},target,60_000),/AUDIT_SOURCE_SEMANTIC_MISMATCH/);
+ const future={domain:'PAYMENT',read:targetId=>({domain:'PAYMENT',targetId,currentState:{},sourceRecordIds:['canonical:future'],observedAt:'2026-09-10T11:00:00Z'})};
+ const {service:badTime,auditGrant:auditGrant2}=setup([future]);
+ assert.throws(()=>badTime.auditView({actorId:actor,grantIds:[auditGrant2],at:'2026-09-10T10:00:30Z'},target,60_000),/AUDIT_SOURCE_TIME_INVALID/);
 });
