@@ -117,5 +117,6 @@ export class GovernedPilotFulfillmentService {
 
  performance(obligationId:ObligationId){return this.fulfillment.performance(this.order(obligationId));}
  resolutionLedger(){return this.fulfillment.resolutionLedger();}
+ demandLedger(){return this.demand;}
  getException(id:string){return this.remedies.getException(id);}
 }
