@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm add --lockfile=false @neondatabase/serverless@1.1.0 && pnpm run build",
+  "buildCommand": "pnpm add -w --lockfile=false @neondatabase/serverless@1.1.0 && pnpm run build",
   "outputDirectory": "public"
 }
