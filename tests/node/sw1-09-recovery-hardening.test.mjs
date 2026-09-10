@@ -21,7 +21,7 @@ function setup(){
 
 const forgedRequest={requestId:'req:forged-recovery',action:'admin.recovery.reconcile',targetId:target,reason:'try direct recovery mutation',payload:{}};
 
-test('SW1-RC1 direct use of the reserved recovery action cannot fabricate a new effect and is audited',()=>{
+test('SW1-RC1 direct use of reserved recovery action cannot fabricate an effect and is terminally audited',()=>{
  const {service,recoveryGrant}=setup(); let effects=0;
  const ctx={actorId:actor,grantIds:[recoveryGrant],at};
  assert.throws(()=>service.executeMutation(ctx,forgedRequest,()=>({result:{ok:true},sourceRecordIds:[`effect:${++effects}`]})),/ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN/);
@@ -32,16 +32,24 @@ test('SW1-RC1 direct use of the reserved recovery action cannot fabricate a new 
  assert.equal(rejected.requestId,forgedRequest.requestId);
 });
 
-test('SW1-RC1 runtime caller cannot spoof the module-private recovery capability symbol',()=>{
- const {service,recoveryGrant}=setup(); let effects=0;
- const ctx={actorId:actor,grantIds:[recoveryGrant],at};
- assert.equal(typeof service.executeMutationInternal,'function');
- assert.throws(()=>service.executeMutationInternal(ctx,{...forgedRequest,requestId:'req:spoofed-recovery'},()=>({result:{ok:true},sourceRecordIds:[`effect:${++effects}`]}),Symbol('governed-recovery-capability')),/ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN/);
- assert.equal(effects,0);
- const rejected=service.auditLog().at(-1);
- assert.equal(rejected.outcome,'REJECTED');
- assert.equal(rejected.authorityReason,'RECOVERY_ENTRYPOINT_REQUIRED');
- assert.equal(rejected.requestId,'req:spoofed-recovery');
+test('SW1-RC1 recovery implementation is ECMAScript-private and cannot be monkey-patched or capability-captured',()=>{
+ const {service}=setup();
+ assert.equal(service.executeMutationInternal,undefined);
+ assert.equal(Object.getOwnPropertyNames(Object.getPrototypeOf(service)).includes('executeMutationInternal'),false);
+});
+
+test('SW1-RC1 rejected direct recovery request ID cannot later be reused by governed recover',()=>{
+ const {service,adminGrant,recoveryGrant}=setup(); let effects=0;
+ assert.throws(()=>service.executeMutation({actorId:actor,grantIds:[adminGrant],at},{requestId:'req:failed-for-reuse',action:'admin.obligation.annotate',targetId:target,reason:'original operation',payload:{note:'canonical'}},()=>{
+  effects++;
+  if(effects===1) throw new Error('PROVIDER_TIMEOUT');
+  return {result:{ok:true},sourceRecordIds:['canonical:retried-effect']};
+ }),/PROVIDER_TIMEOUT/);
+ const recoveryReason='confirmed no effect';
+ const direct={requestId:'req:sealed-recovery',action:'admin.recovery.reconcile',targetId:target,reason:recoveryReason,payload:{originalRequestId:'req:failed-for-reuse'}};
+ assert.throws(()=>service.executeMutation({actorId:actor,grantIds:[recoveryGrant],at:'2026-09-10T10:30:30Z'},direct,()=>({result:{ok:true},sourceRecordIds:['forged:new-effect']})),/ADMIN_RECOVERY_DIRECT_MUTATION_FORBIDDEN/);
+ assert.throws(()=>service.recover({actorId:actor,grantIds:[recoveryGrant],at:'2026-09-10T10:31:00Z'},{recoveryRequestId:'req:sealed-recovery',originalRequestId:'req:failed-for-reuse',reason:recoveryReason,maxAgeMs:120000},()=>({effectObserved:false,sourceRecordIds:['provider:probe:no-effect']})),/ADMIN_REQUEST_REJECTED:PREVIOUSLY_REJECTED/);
+ assert.equal(effects,1);
 });
 
 test('SW1-RC1 governed recover retries only the exact stored failed operation',()=>{
