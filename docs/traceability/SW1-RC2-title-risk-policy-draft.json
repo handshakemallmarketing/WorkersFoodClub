@@ -4,13 +4,17 @@
   "policyId":"GH-PILOT-TITLE-RISK",
   "version":1,
   "transactionType":"GH_PILOT_MEMBER_FOOD_ORDER",
-  "status":"GOVERNANCE_APPROVED_PENDING_EXECUTABLE_AUTHORITY_BINDING",
+  "status":"GOVERNANCE_APPROVED_EXECUTABLE_BINDING_PENDING_CONFORMANCE",
   "approvedBinding":{"title":"ACCEPTANCE","risk":"ACCEPTANCE"},
   "governanceDecision":"RATIFIED_AS_WRITTEN",
+  "governanceActor":"participant:willie-adofo",
+  "governanceActorDisplayName":"Willie Adofo — Founder / Governance Authority",
+  "authorityGrantId":"grant:willie-adofo:transfer-policy-governance:v1",
   "governanceEvidence":"docs/governance/GH-PILOT-TITLE-RISK-v1-ratification.json",
-  "proof":["docs/policies/GH-PILOT-TITLE-RISK-v1.md","docs/governance/GH-PILOT-TITLE-RISK-v1-ratification.json","tests/node/sw1-rc2-title-risk-draft.test.mjs","tests/node/sw1-rc2-title-risk-quantity.test.mjs","tests/node/sw1-rc2-title-risk-fulfillment-integration.test.mjs","packages/transfer/src/index.ts"],
+  "proof":["docs/policies/GH-PILOT-TITLE-RISK-v1.md","docs/governance/TRANSFER_POLICY_GOVERNANCE-v1.md","docs/governance/GH-PILOT-TITLE-RISK-v1-ratification.json","docs/governance/GH-PILOT-TITLE-RISK-v1-authority-grant.json","docs/governance/GH-PILOT-TITLE-RISK-v1-governance-approval.json","packages/transfer/src/index.ts","packages/transfer-governance/src/index.ts","tests/node/sw1-rc2-title-risk-quantity.test.mjs","tests/node/sw1-rc2-title-risk-integration.test.mjs","tests/node/sw1-rc2-title-risk-governance-binding.test.mjs"],
   "quantitySemantics":"PROVEN_IN_CODE_AND_INTEGRATED_FULFILLMENT_EVIDENCE",
+  "authorityBinding":"IMPLEMENTED_PENDING_EXACT_HEAD_CONFORMANCE",
   "closed":false,
-  "remaining":["validate and bind the approving governance actor to a TRANSFER_POLICY_GOVERNANCE authority grant for this exact policy","enter the exact approved policy version into the executable governed registry","external Ghana legal/policy evidence if required","all other SW1-RC2 production-readiness domains"],
-  "notClaimed":["production authorization","legal advice","universal Ghana title/risk rule","closure of RC2-LEGAL-001 before executable authority binding"]
+  "remaining":["exact-head conformance proving executable governance binding","external Ghana legal/policy evidence if required","all other SW1-RC2 production-readiness domains"],
+  "notClaimed":["production authorization","legal advice","universal Ghana title/risk rule","closure of RC2-LEGAL-001 before conformance proves executable binding"]
 }
