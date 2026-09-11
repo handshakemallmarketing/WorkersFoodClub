@@ -1,0 +1,24 @@
+{
+  "slice": "SW1-RC2",
+  "control": "RC2-RUN-001",
+  "status": "PASS",
+  "domain": "incident-recovery",
+  "artifact": "docs/sw1/SW1-RC2-operator-incident-recovery-runbooks.md",
+  "assertions": [
+    "ambiguous payment outcome is reconciled by provider query and never guessed",
+    "duplicate/replayed provider callbacks remain idempotent and additive",
+    "refund timeout/redelivery never causes blind duplicate refund",
+    "stuck authorized operations preserve original semantic target and authority lineage",
+    "database restore targets an isolated clean database and never overwrites active production",
+    "secret compromise/rotation preserves environment isolation and forbids secret logging",
+    "unauthorized access is contained without deleting canonical consequential history",
+    "projection corruption is repaired by deterministic rebuild from canonical state",
+    "inventory/fulfillment discrepancies use additive evidence and governed exception/remedy flows",
+    "all recovery instructions prohibit direct canonical rewrites"
+  ],
+  "executableEvidence": [
+    "tests/node/sw1-rc2-runbooks.test.mjs"
+  ],
+  "releasePromotion": false,
+  "note": "This closes the inspectable runbook control only. It does not authorize production, close payment-provider or title/risk-policy blockers, or promote SW1-RC2 release evidence."
+}
