@@ -21,8 +21,8 @@ jobs:
   rehearsal:
     runs-on: ubuntu-latest
     env:
-      TARGET_PREVIEW_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_url || 'https://workers-food-club-kp2cfb3ro-food-club.vercel.app' }}
-      TARGET_EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || '2f26c567c3a7b24f766ed93823b45a80744746fc' }}
+      TARGET_PREVIEW_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_url || 'https://workers-food-club-git-sw1-rc2-production-readi-0760c2-food-club.vercel.app' }}
+      TARGET_EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || '788df6e1ed867da3ded5621fdf52f75f71332b99' }}
     steps:
       - uses: actions/checkout@v4
         with:
