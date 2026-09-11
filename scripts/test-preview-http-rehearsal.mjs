@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 
 const rawBase=process.env.PREVIEW_BASE_URL?.replace(/\/$/,'');
 const expectedSha=process.env.EXPECTED_COMMIT_SHA;
-const bypassSecret=process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+const trustedOidcToken=process.env.VERCEL_TRUSTED_OIDC_TOKEN;
 if(!rawBase)throw new Error('PREVIEW_BASE_URL required');
 if(!expectedSha)throw new Error('EXPECTED_COMMIT_SHA required');
 assert.match(expectedSha,/^[0-9a-f]{40}$/,'EXPECTED_COMMIT_SHA must be a full 40-character Git SHA');
@@ -18,7 +18,7 @@ const base=target.origin;
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 function headers(extra={}){
   const h={accept:'application/json',...extra};
-  if(bypassSecret)h['x-vercel-protection-bypass']=bypassSecret;
+  if(trustedOidcToken)h['x-vercel-trusted-oidc-idp-token']=trustedOidcToken;
   return h;
 }
 async function json(path,init={}){
@@ -45,11 +45,14 @@ for(let i=0;i<30;i++){
       build=r.body;
       break;
     }
-    if((r.status===401||r.status===403)&&!bypassSecret){
-      throw new Error(`preview is protected by Vercel authentication (HTTP ${r.status}); configure VERCEL_AUTOMATION_BYPASS_SECRET for the manual RC2 rehearsal workflow`);
+    if((r.status===401||r.status===403)&&!trustedOidcToken){
+      throw new Error(`preview is protected by Vercel authentication (HTTP ${r.status}); GitHub Actions OIDC token is missing`);
+    }
+    if((r.status===401||r.status===403)&&trustedOidcToken){
+      throw new Error(`Vercel rejected the GitHub Actions trusted-source OIDC token (HTTP ${r.status}); response=${JSON.stringify(r.body??null)}`);
     }
   }catch(error){
-    if(error?.message?.includes('protected by Vercel authentication')||error?.message?.includes('not the immutable VERCEL_URL'))throw error;
+    if(error?.message?.includes('protected by Vercel authentication')||error?.message?.includes('rejected the GitHub Actions trusted-source OIDC token')||error?.message?.includes('not the immutable VERCEL_URL'))throw error;
   }
   await sleep(5000);
 }
@@ -135,6 +138,7 @@ assert.deepEqual(finalStable,stable);
 
 console.log(JSON.stringify({
   ok:true,
+  authentication:{mode:'vercel-trusted-source-oidc'},
   target:{origin:base,deploymentUrl:build.deploymentUrl,deploymentId:build.deploymentId,branchUrl:build.branchUrl??null},
   expectedCommitSha:expectedSha,
   runtimeCommitSha:build.commitSha,
