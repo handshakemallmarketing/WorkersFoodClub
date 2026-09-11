@@ -14,12 +14,20 @@ let build;
 for(let i=0;i<30;i++){
   try{
     const r=await json('/api/build-info');
-    if(r.status===200&&r.body?.commitSha===expectedSha){build=r.body;break;}
+    if(r.status===200&&r.body?.ok===true&&r.body?.environment==='preview'){
+      if(r.body?.commitSha&&r.body.commitSha!==expectedSha){
+        await sleep(5000);
+        continue;
+      }
+      build=r.body;
+      break;
+    }
   }catch{}
   await sleep(5000);
 }
-assert.ok(build,`preview never reached expected commit ${expectedSha}`);
+assert.ok(build,`preview runtime never became ready after exact-head Vercel status succeeded for ${expectedSha}`);
 assert.equal(build.environment,'preview');
+if(build.commitSha)assert.equal(build.commitSha,expectedSha);
 
 const health=await json('/api/db-health');
 assert.equal(health.status,200);
@@ -103,4 +111,4 @@ assert.deepEqual({
   remedyStatus:finalOrder.remedy?.status
 },stable);
 
-console.log(JSON.stringify({ok:true,commitSha:expectedSha,obligationId,attacks:['malformed-obligation','malformed-request-id','payment-replay','fulfillment-ready-replay','acceptance-regression','refund-authorization-replay','refund-completion-replay','unknown-refund-target'],stable},null,2));
+console.log(JSON.stringify({ok:true,expectedCommitSha:expectedSha,runtimeCommitSha:build.commitSha??null,obligationId,attacks:['malformed-obligation','malformed-request-id','payment-replay','fulfillment-ready-replay','acceptance-regression','refund-authorization-replay','refund-completion-replay','unknown-refund-target'],stable},null,2));
