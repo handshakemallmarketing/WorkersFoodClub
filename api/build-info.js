@@ -5,6 +5,9 @@ export default function handler(req,res){
     ok:true,
     environment:process.env.VERCEL_ENV||'unknown',
     commitSha:process.env.VERCEL_GIT_COMMIT_SHA||null,
-    branch:process.env.VERCEL_GIT_COMMIT_REF||null
+    branch:process.env.VERCEL_GIT_COMMIT_REF||null,
+    deploymentUrl:process.env.VERCEL_URL||null,
+    branchUrl:process.env.VERCEL_BRANCH_URL||null,
+    deploymentId:process.env.VERCEL_DEPLOYMENT_ID||null
   });
 }
