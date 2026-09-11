@@ -34,6 +34,23 @@ jobs:
           script: |
             const token = await core.getIDToken();
             core.setSecret(token);
+            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+            const safeClaims = {
+              iss: payload.iss ?? null,
+              aud: payload.aud ?? null,
+              sub: payload.sub ?? null,
+              repository: payload.repository ?? null,
+              repository_id: payload.repository_id ?? null,
+              repository_owner: payload.repository_owner ?? null,
+              repository_owner_id: payload.repository_owner_id ?? null,
+              ref: payload.ref ?? null,
+              ref_type: payload.ref_type ?? null,
+              event_name: payload.event_name ?? null,
+              workflow: payload.workflow ?? null,
+              workflow_ref: payload.workflow_ref ?? null,
+              job_workflow_ref: payload.job_workflow_ref ?? null
+            };
+            core.info(`OIDC_SAFE_CLAIMS=${JSON.stringify(safeClaims)}`);
             core.setOutput('token', token);
       - name: Attack exact immutable Vercel deployment
         env:
