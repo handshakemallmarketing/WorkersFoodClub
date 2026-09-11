@@ -1,0 +1,67 @@
+{
+  "slice": "SW1-RC2",
+  "capability": "MEMBER_COMMUNICATIONS",
+  "status": "KERNEL_IMPLEMENTED_PROVIDER_ADAPTERS_PENDING",
+  "productionAuthorization": false,
+  "implementation": {
+    "kernel": "packages/communications/src/index.ts",
+    "tests": "tests/node/sw1-rc2-member-communications.test.mjs",
+    "classes": ["TRANSACTIONAL", "PROMOTIONAL"],
+    "initialChannels": ["IN_APP", "EMAIL"],
+    "extensibleChannels": ["SMS", "WHATSAPP"]
+  },
+  "transactionalEvents": [
+    "PAYMENT_CONFIRMED",
+    "PAYMENT_FAILED",
+    "REFUND_AUTHORIZED",
+    "REFUND_PROCESSING",
+    "REFUND_COMPLETED",
+    "REFUND_FAILED",
+    "ORDER_READY",
+    "PICKUP_REMINDER",
+    "FULFILLMENT_EXCEPTION",
+    "SUBSCRIPTION_DUE",
+    "SUBSCRIPTION_OVERDUE"
+  ],
+  "promotionalEvents": [
+    "DEAL_AVAILABLE",
+    "DISCOUNT_AVAILABLE",
+    "DEMAND_COMMITMENT_PROGRESS"
+  ],
+  "invariants": [
+    "transactional communications are not suppressed merely because promotional consent is absent",
+    "promotional communications require explicit promotional opt-in",
+    "channel suppression is enforced independently of communication class",
+    "canonical event plus template version plus channel is idempotent",
+    "notification delivery failure never mutates or rolls back the triggering financial or fulfillment event",
+    "failed deliveries retain retry count and failure evidence",
+    "delivery state transitions are ordered QUEUED -> SENT -> DELIVERED",
+    "promotional frequency caps apply without blocking transactional notices",
+    "member/event binding fails closed on mismatch",
+    "templates are versioned and communication records retain template identity"
+  ],
+  "memberExperience": {
+    "payment": "Food Club communicates canonical payment state; provider receipts are corroborating evidence, not the member-facing source of truth.",
+    "refund": "REFUND_PROCESSING and REFUND_COMPLETED are separate communications; completion cannot be announced while provider/canonical state remains pending.",
+    "subscription": "fee reminders and overdue notices are transactional service communications",
+    "dealsAndDiscounts": "promotional and consent-governed",
+    "demandFormation": "group-buy commitment progress is promotional and cannot use invented scarcity or bypass promotional consent"
+  },
+  "remainingProductionWork": [
+    "durable PostgreSQL communication outbox/store adapter",
+    "member communication preference and consent persistence with change history",
+    "in-app notification read model and member timeline",
+    "email provider adapter with delivery/retry/dead-letter evidence",
+    "subscription reminder scheduler using governed due-date policy",
+    "provider callbacks/delivery receipts mapped to communication records",
+    "privacy/minimization and retention policy for communication destinations and provider message identifiers",
+    "optional SMS and WhatsApp adapters after channel-specific consent and provider governance are defined"
+  ],
+  "notClaimed": [
+    "production email delivery is configured",
+    "WhatsApp or SMS delivery is configured",
+    "promotional consent has been migrated for existing members",
+    "communication delivery success changes financial truth",
+    "production release authorization"
+  ]
+}
