@@ -101,6 +101,31 @@ type StoredRequest<R>={
 };
 
 const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
+const assertCanonicalPayload=(value:unknown,seen=new WeakSet<object>()):void=>{
+ if(value===null) return;
+ const type=typeof value;
+ if(type==='string'||type==='boolean') return;
+ if(type==='number'){
+  if(!Number.isFinite(value)) throw new Error('ADMIN_PAYLOAD_NOT_CANONICAL');
+  return;
+ }
+ if(type!=='object') throw new Error('ADMIN_PAYLOAD_NOT_CANONICAL');
+ const object=value as object;
+ if(seen.has(object)) throw new Error('ADMIN_PAYLOAD_NOT_CANONICAL');
+ seen.add(object);
+ if(Array.isArray(value)){
+  for(let index=0;index<value.length;index++){
+   if(!Object.prototype.hasOwnProperty.call(value,index)) throw new Error('ADMIN_PAYLOAD_NOT_CANONICAL');
+   assertCanonicalPayload(value[index],seen);
+  }
+  seen.delete(object);
+  return;
+ }
+ const prototype=Object.getPrototypeOf(value);
+ if(prototype!==Object.prototype&&prototype!==null) throw new Error('ADMIN_PAYLOAD_NOT_CANONICAL');
+ for(const key of Object.keys(value as Record<string,unknown>)) assertCanonicalPayload((value as Record<string,unknown>)[key],seen);
+ seen.delete(object);
+};
 const stable=(value:unknown):string=>{
  if(value===null||typeof value!=='object'){
   const encoded=JSON.stringify(value);
@@ -143,6 +168,7 @@ export class GovernedPilotOperationsService{
   if(!request.targetId.trim()) throw new Error('ADMIN_TARGET_REQUIRED');
   if(!request.reason.trim()) throw new Error('ADMIN_REASON_REQUIRED');
   if(!validTime(ctx.at)) throw new Error('ADMIN_TIME_INVALID');
+  assertCanonicalPayload(request.payload);
  }
 
  private authorizeRead(ctx:AdminOperationContext,targetId:string){
