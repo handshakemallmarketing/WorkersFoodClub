@@ -1,0 +1,15 @@
+{
+  "decisionId":"decision:gh-pilot-title-risk:v1:2026-09-11",
+  "policyId":"GH-PILOT-TITLE-RISK",
+  "version":1,
+  "transactionType":"GH_PILOT_MEMBER_FOOD_ORDER",
+  "title":{"dimension":"TITLE","trigger":"ACCEPTANCE"},
+  "risk":{"dimension":"RISK","trigger":"ACCEPTANCE"},
+  "authorizedBy":"participant:willie-adofo",
+  "authorityGrantId":"grant:willie-adofo:transfer-policy-governance:v1",
+  "decisionAt":"2026-09-11T19:33:00Z",
+  "evidenceIds":["evidence:gh-pilot-title-risk-v1-ratification"],
+  "decision":"RATIFIED_AS_WRITTEN",
+  "approverDisplayName":"Willie Adofo — Founder / Governance Authority",
+  "sourceDecision":"docs/governance/GH-PILOT-TITLE-RISK-v1-ratification.json"
+}
