@@ -8,9 +8,10 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/002_canonical_event_store.sql
 "${PSQL[@]}" -f packages/durability/sql/003_command_fencing.sql
 "${PSQL[@]}" -f packages/durability/sql/004_physical_lineage.sql
+"${PSQL[@]}" -f packages/durability/sql/005_member_communications.sql
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution;
+TRUNCATE communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
 SQL
 
 # INV-027: durable result survives a fresh connection.
@@ -100,4 +101,21 @@ bad_output=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_lot WHERE lot_id='l
 c_used=$("${PSQL[@]}" -Atc "SELECT consumed_quantity FROM lineage_lot WHERE lot_id='lot:c'")
 [[ "$bad_transform" == "0" && "$bad_output" == "0" && "$c_used" == "0" ]] || { echo "failed lineage transform leaked partial state" >&2; exit 1; }
 
-echo "live PostgreSQL durability, fencing and explicit lineage proof passed"
+# RC2-COMMS: preferences/consent survive connection boundaries and the outbox dedupe key is durable.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_communication_consent_event(member_id,consent_version,promotional_opt_in,transactional_channels,promotional_channels,suppressed_channels,occurred_at)
+VALUES('member:live',1,false,ARRAY['IN_APP','EMAIL'],ARRAY['EMAIL'],ARRAY[]::text[],now());
+INSERT INTO member_communication_preferences(member_id,transactional_channels,promotional_opt_in,promotional_channels,suppressed_channels,consent_version,consent_updated_at)
+VALUES('member:live',ARRAY['IN_APP','EMAIL'],false,ARRAY['EMAIL'],ARRAY[]::text[],1,now());
+INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count)
+VALUES('communication:live','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','Payment confirmed','GHS 1.00 confirmed','QUEUED',now(),now(),0);
+SQL
+consent=$("${PSQL[@]}" -Atc "SELECT consent_version||':'||promotional_opt_in FROM member_communication_preferences WHERE member_id='member:live'")
+[[ "$consent" == "1:false" ]] || { echo "communication preferences did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count) VALUES('communication:duplicate','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','dup','dup','QUEUED',now(),now(),0)" >/dev/null 2>&1; then
+  echo "communication durable dedupe unexpectedly allowed duplicate" >&2; exit 1
+fi
+claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
+[[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
+
+ echo "live PostgreSQL durability, fencing, explicit lineage and communications proof passed"
