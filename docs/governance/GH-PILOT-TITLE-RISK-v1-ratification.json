@@ -12,7 +12,9 @@
   "approvedPolicyHead":"4f999224890cc78600a232b76c423245d13876e8",
   "approvedBinding":{"title":"ACCEPTANCE","risk":"ACCEPTANCE"},
   "scope":"Ghana Workers Food Club pilot business-governance policy",
+  "executableAuthorityBinding":"PROVEN",
+  "conformanceEvidence":{"workflow":"constitutional-conformance","runNumber":1181,"runId":34641283180,"jobId":103401277182,"headSha":"99e1b592a33ccdffbbf0f87069e26f151c1ef73f","conclusion":"success"},
   "productionAuthorization":false,
-  "remainingValidation":["prove executable authority and exact-decision binding under conformance","record any Ghana external legal/policy review required for production","satisfy all other SW1-RC2 production-readiness domains"],
+  "remainingValidation":["record any Ghana external legal/policy review required for production","satisfy all other SW1-RC2 production-readiness domains"],
   "notClaimed":["legal advice","statutory interpretation","universal Ghana title/risk rule","production release authorization"]
 }
