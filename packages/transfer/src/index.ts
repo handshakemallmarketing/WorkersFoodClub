@@ -16,6 +16,15 @@ export interface QuantityTransferEvent extends TransferEvent {
   readonly quantity?:Quantity;
 }
 
+export interface AcceptanceTransferSource {
+  readonly id:string;
+  readonly obligationId:string;
+  readonly state:'ACCEPTED'|'REJECTED'|'PARTIALLY_ACCEPTED';
+  readonly quantity:Quantity;
+  readonly acceptedAt:string;
+  readonly evidenceIds:readonly EvidenceId[];
+}
+
 export interface TransferRule {
   readonly dimension:TransferDimension;
   readonly trigger:TransferTrigger;
@@ -68,6 +77,24 @@ export interface QuantityTransferEvaluation extends TransferEvaluation {
 
 const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
 const at=(v:string)=>new Date(v).getTime();
+
+export function transferEventFromAcceptance(input:AcceptanceTransferSource):QuantityTransferEvent|undefined{
+  if(!input.id.trim()||!input.obligationId.trim()||!validTime(input.acceptedAt)||input.evidenceIds.length===0) throw new Error('TRANSFER_ACCEPTANCE_SOURCE_INVALID');
+  if(!Number.isFinite(input.quantity.amount)||input.quantity.amount<0||!input.quantity.unit.trim()) throw new Error('TRANSFER_ACCEPTANCE_QUANTITY_INVALID');
+  if(input.state==='REJECTED'){
+    if(input.quantity.amount!==0) throw new Error('TRANSFER_REJECTED_ACCEPTANCE_QUANTITY_INVALID');
+    return undefined;
+  }
+  if(input.quantity.amount<=0) throw new Error('TRANSFER_ACCEPTANCE_QUANTITY_INVALID');
+  return Object.freeze({
+    id:input.id,
+    transactionId:input.obligationId,
+    type:'ACCEPTANCE',
+    occurredAt:input.acceptedAt,
+    evidenceIds:Object.freeze([...input.evidenceIds]),
+    quantity:Object.freeze({...input.quantity})
+  });
+}
 
 function validateRule(rule:TransferRule):void{
   if(rule.trigger==='NAMED_EVENT'){
