@@ -1,0 +1,84 @@
+{
+  "slice": "SW1-RC2",
+  "status": "PARTIAL_GREEN",
+  "productionAuthorization": false,
+  "reviewBranch": "sw1-rc2-production-readiness-falsification",
+  "reviewedHeadBeforeEvidenceCommit": "d16dc99a15af38ec07f7d60e210df99c008e990e",
+  "environment": {
+    "hosting": "Vercel preview",
+    "database": "Neon PostgreSQL",
+    "databaseProject": "wispy-dawn-96331519",
+    "databaseBranch": "production",
+    "payments": "SANDBOX_MOMO only",
+    "liveFunds": false
+  },
+  "ci": {
+    "workflow": "constitutional-conformance",
+    "runNumber": 1124,
+    "result": "SUCCESS",
+    "commit": "d16dc99a15af38ec07f7d60e210df99c008e990e"
+  },
+  "integratedJourney": {
+    "obligationId": "preview:obligation:1dce8fdf-808f-4b4b-8251-02186694d502",
+    "participantId": "preview:member:001",
+    "offer": "Premium Rice",
+    "committedQuantity": {"amount": 5, "unit": "kg"},
+    "committedPrice": {"minor": 12000, "currency": "GHS"},
+    "performedQuantity": {"amount": 4, "unit": "kg"},
+    "shortfallQuantity": {"amount": 1, "unit": "kg"},
+    "refund": {"minor": 2400, "currency": "GHS", "provider": "SANDBOX_MOMO", "providerReference": "sandbox-refund:c1a4fef1-accc-474c-be16-f525cdb9c286"},
+    "finalCommitmentState": "FULFILLED",
+    "finalAggregateVersion": 7,
+    "canonicalEventCount": 7,
+    "contiguousEventCountMatchesAggregateVersion": true,
+    "remedyCount": 1,
+    "completedRemedyCount": 1
+  },
+  "canonicalEventChain": [
+    {"version":1,"type":"PURCHASE_COMMITTED","eventId":"preview:event:1c7977e5-81d6-4403-bb98-b49ac130a638"},
+    {"version":2,"type":"PAYMENT_CONFIRMED","eventId":"preview:event:fcd27f08-6b18-4bf7-8f3c-66249add841f"},
+    {"version":3,"type":"FULFILLMENT_READY","eventId":"preview:event:e9d98ca0-3d7a-40e7-9848-f1f4ff33424d"},
+    {"version":4,"type":"FULFILLMENT_ACCEPTED","eventId":"preview:event:19b6764a-8a88-47b0-ae3f-9efdfe141690"},
+    {"version":5,"type":"FULFILLMENT_EXCEPTION","eventId":"preview:event:db0b9856-6592-49cd-925f-2671a0a52de3"},
+    {"version":6,"type":"REMEDY_AUTHORIZED","eventId":"preview:event:a45c7775-891c-4908-aaa9-e87f16feddf1"},
+    {"version":7,"type":"REMEDY_COMPLETED","eventId":"preview:event:fd984554-9cce-4d6f-b94d-5fbae1f39471"}
+  ],
+  "verifiedControls": [
+    "Vercel preview reads and writes through server-side DATABASE_URL; browser does not receive database credentials",
+    "all preview write endpoints reject VERCEL_ENV=production",
+    "request IDs are UUID-v4 validated before consequential mutation",
+    "obligation identifiers are format-validated before payment, fulfillment and remedy mutations",
+    "commitment, payment, fulfillment, exception and remedy effects are persisted with canonical event lineage",
+    "partial acceptance conserves quantity: 4 kg performed + 1 kg shortfall = 5 kg ready",
+    "shortfall is represented by a separate canonical FULFILLMENT_EXCEPTION event",
+    "refund is not auto-created by acceptance; REMEDY_AUTHORIZED is a separate command/event",
+    "refund completion is a separate command/event and uses sandbox provider evidence",
+    "completed remedy transitions the preview obligation to FULFILLED only after the separate remedy completes",
+    "refund amount is proportionate to the original committed price: 1/5 of GHS 120.00 = GHS 24.00",
+    "database uniqueness constraints prevent more than one remedy for the same source exception and duplicate request/command/event/provider-reference identifiers"
+  ],
+  "adversarialAssessment": [
+    {"attack":"duplicate refund completion after COMPLETED","expected":"idempotent readback; no second refund/event","sourceControl":"complete-refund.js returns the existing COMPLETED remedy before mutation","status":"SOURCE_PROVEN_NOT_HTTP_REPLAYED"},
+    {"attack":"refund before authorization","expected":"REFUND_NOT_AUTHORIZED","sourceControl":"complete-refund.js requires an existing AUTHORIZED remedy","status":"SOURCE_PROVEN"},
+    {"attack":"refund without shortfall/rejection","expected":"NO_REFUNDABLE_EXCEPTION","sourceControl":"authorize-refund.js selects only SHORTFALL/REJECTION exceptions with affected_quantity > 0","status":"SOURCE_PROVEN"},
+    {"attack":"production execution of preview payment/fulfillment/remedy endpoints","expected":"403 fail closed","sourceControl":"VERCEL_ENV production guards","status":"SOURCE_PROVEN_NOT_PRODUCTION_INVOKED"},
+    {"attack":"malformed obligation/request substitution","expected":"400 before database mutation","sourceControl":"identifier validators on write endpoints","status":"SOURCE_PROVEN"},
+    {"attack":"quantity over-acceptance","expected":"400 ACCEPTED_QUANTITY_EXCEEDS_READY","sourceControl":"accept-fulfillment.js compares acceptedQuantity to readyQuantity","status":"SOURCE_PROVEN"},
+    {"attack":"state regression after acceptance/remedy completion","expected":"no reopening or duplicate terminal effects","sourceControl":"READY/AUTHORIZED preconditions plus terminal idempotent readback","status":"SOURCE_PROVEN_NOT_HTTP_REPLAYED"}
+  ],
+  "knownIncidentDuringRehearsal": {
+    "finding": "The first partial-acceptance implementation attempted two sibling aggregate_version updates in one SQL statement; PostgreSQL advanced only once and the FULFILLMENT_EXCEPTION event did not materialize.",
+    "remediation": "accept-fulfillment.js now advances by two atomically when shortfall exists and assigns acceptance to final_version-1 and exception to final_version.",
+    "historicalRepair": "The missing FULFILLMENT_EXCEPTION event was additively inserted as version 5 and aggregate_version advanced from 4 to 5 before remedy execution.",
+    "result": "The final observed chain is contiguous versions 1 through 7."
+  },
+  "remainingRC2RehearsalWork": [
+    "Execute live HTTP replay tests against the deployed preview for duplicate refund/payment/commit requests using captured request IDs rather than only source-level proof.",
+    "Inject forged/tampered production-provider callbacks after an exact live provider is selected; sandbox evidence cannot close RC2-PAY-001.",
+    "Exercise wrong-scope/expired authorization in the production authentication boundary; the current public preview uses fixed preview actors and is not production auth evidence.",
+    "Execute production-like secret/config misbinding and redaction probes across deployed runtime logs.",
+    "Tie backup/restore rehearsal, incident runbooks, title/risk policy and exact provider evidence into one final RC2 candidate."
+  ],
+  "verdict": "PARTIAL_GREEN_PREVIEW_REHEARSAL",
+  "releaseEffect": "No RC2 release promotion. SW1-RC1 remains authoritative and live funds remain unauthorized."
+}
