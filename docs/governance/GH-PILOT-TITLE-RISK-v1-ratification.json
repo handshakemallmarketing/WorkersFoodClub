@@ -1,0 +1,29 @@
+{
+  "policyId": "GH-PILOT-TITLE-RISK",
+  "version": 1,
+  "transactionType": "GH_PILOT_MEMBER_FOOD_ORDER",
+  "decision": "RATIFIED_AS_WRITTEN",
+  "decisionRecordedAt": "2026-09-11T19:33:00Z",
+  "decisionSource": "Governance actor approval recorded in project conversation: 'Ratified as written'",
+  "approvedPolicyPath": "docs/policies/GH-PILOT-TITLE-RISK-v1.md",
+  "approvedPolicyHead": "4f999224890cc78600a232b76c423245d13876e8",
+  "approvedBinding": {
+    "title": "ACCEPTANCE",
+    "risk": "ACCEPTANCE"
+  },
+  "scope": "Ghana Workers Food Club pilot business-governance policy",
+  "productionAuthorization": false,
+  "remainingValidation": [
+    "validate and bind the governance actor to a TRANSFER_POLICY_GOVERNANCE authority grant for this exact policy",
+    "enter the exact ratified version into the executable governed policy registry",
+    "record any Ghana external legal/policy review required for production",
+    "satisfy all other SW1-RC2 production-readiness domains"
+  ],
+  "notClaimed": [
+    "legal advice",
+    "statutory interpretation",
+    "universal Ghana title/risk rule",
+    "production release authorization",
+    "closure of RC2-LEGAL-001 until executable authority binding and remaining required evidence are complete"
+  ]
+}
