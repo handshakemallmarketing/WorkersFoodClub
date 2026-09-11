@@ -1,0 +1,48 @@
+{
+  "slice": "SW1-RC2",
+  "finding": "RC2-PAY-001",
+  "providerCandidate": "PAYSTACK",
+  "status": "BLOCKED_LIVE_PROVIDER_EVIDENCE",
+  "productionAuthorization": false,
+  "implementation": {
+    "adapter": "packages/pilot-payments/src/paystack.ts",
+    "tests": "tests/node/sw1-rc2-paystack-provider.test.mjs",
+    "providerNeutralCanonicalBoundaryPreserved": true,
+    "liveFundsDefault": "FAIL_CLOSED",
+    "liveEnableRequirement": "environment=live + sk_live_* + liveEnabled=true"
+  },
+  "providerContract": {
+    "country": "Ghana",
+    "currency": "GHS",
+    "mobileMoneyProviders": ["mtn", "atl", "vod"],
+    "webhookAuthenticity": "x-paystack-signature HMAC-SHA512 over exact raw body using secret key",
+    "successWebhook": "charge.success",
+    "reconciliation": "GET /transaction/verify/:reference",
+    "refundCreate": "POST /refund",
+    "refundQuery": "GET /refund/:id"
+  },
+  "provedByExecutableTests": [
+    "live mode fails closed until explicitly authorized",
+    "test/live credential class separation",
+    "Ghana MoMo charge request binds canonical reference, amount and provider",
+    "charge initiation never becomes canonical payment truth by itself",
+    "exact raw-body HMAC-SHA512 verification",
+    "tampered body and bad signature fail closed",
+    "authenticated unsupported events fail closed",
+    "pending provider outcomes remain nonterminal",
+    "success verification normalizes to confirmed terminal provider evidence",
+    "provider reference rebinding fails closed",
+    "refund lifecycle is queried and remains transaction-bound",
+    "provider error messages cannot echo secret credentials"
+  ],
+  "remainingClosureEvidence": [
+    "verified Ghana Paystack merchant account",
+    "real Paystack test-mode provider exchange captured from Paystack rather than mocks",
+    "production/live credential provisioning under approved secret management",
+    "live webhook delivery authenticity evidence from exact merchant integration",
+    "timeout-after-provider-success rehearsal against Paystack test environment",
+    "refund retry/redelivery rehearsal against Paystack provider environment",
+    "operator reconciliation procedure linked to Paystack transaction/refund query APIs"
+  ],
+  "verdict": "The Paystack production-provider seam is implemented and adversarially testable, but RC2-PAY-001 remains P1 and live member funds remain unauthorized until real provider evidence and merchant credentials are obtained."
+}
