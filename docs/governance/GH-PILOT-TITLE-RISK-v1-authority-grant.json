@@ -1,0 +1,11 @@
+{
+  "id":"grant:willie-adofo:transfer-policy-governance:v1",
+  "grantorId":"participant:willie-adofo",
+  "actorId":"participant:willie-adofo",
+  "actions":["RatifyTransferPolicy"],
+  "targetPrefix":"GH-PILOT-TITLE-RISK",
+  "validFrom":"2026-09-11T19:33:00Z",
+  "scope":"TRANSFER_POLICY_GOVERNANCE",
+  "governanceActorDisplayName":"Willie Adofo — Founder / Governance Authority",
+  "sourceCharter":"docs/governance/TRANSFER_POLICY_GOVERNANCE-v1.md"
+}
