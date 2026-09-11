@@ -27,7 +27,10 @@ test('GH pilot proposed binding keeps payment, settlement and handover from manu
  assert.equal(after.titleTransferred,true);assert.equal(after.riskTransferred,true);assert.equal(after.titleEventId,'acceptance:1');assert.equal(after.riskEventId,'acceptance:1');
 });
 
-test('partial acceptance is explicitly a remaining production-policy blocker',()=>{
- assert.match(draft,/MUST NOT be represented as fully executable for partial quantities/);
- assert.match(draft,/partially accepted order MUST remain outside production title\/risk authorization/);
+test('quantity-aware semantics are required for partial-quantity production decisions while ratification remains blocked',()=>{
+ assert.match(draft,/transfer evaluator now exposes an additive quantity-aware path/i);
+ assert.match(draft,/Partial acceptance therefore transfers only the accepted quantity/i);
+ assert.match(draft,/legacy boolean evaluator.*MUST NOT be used as the production source of truth for partial-quantity title\/risk decisions/i);
+ assert.match(draft,/quantity-aware transfer semantics remain green under conformance and integrated pilot evidence/i);
+ assert.match(draft,/Status: DRAFT — NOT RATIFIED/);
 });
