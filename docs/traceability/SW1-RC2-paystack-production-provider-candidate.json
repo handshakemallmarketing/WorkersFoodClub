@@ -2,14 +2,19 @@
   "slice": "SW1-RC2",
   "finding": "RC2-PAY-001",
   "providerCandidate": "PAYSTACK",
-  "status": "BLOCKED_LIVE_PROVIDER_EVIDENCE",
+  "status": "REAL_PROVIDER_REHEARSAL_HARNESS_READY_PENDING_EXCHANGE",
   "productionAuthorization": false,
   "implementation": {
     "adapter": "packages/pilot-payments/src/paystack.ts",
-    "tests": "tests/node/sw1-rc2-paystack-provider.test.mjs",
+    "adapterTests": "tests/node/sw1-rc2-paystack-provider.test.mjs",
+    "rehearsalHarness": "packages/paystack-rehearsal/src/index.ts",
+    "previewEndpoint": "api/paystack-rehearsal.js",
+    "rehearsalTests": "tests/node/sw1-rc2-paystack-rehearsal.test.mjs",
     "providerNeutralCanonicalBoundaryPreserved": true,
     "liveFundsDefault": "FAIL_CLOSED",
-    "liveEnableRequirement": "environment=live + sk_live_* + liveEnabled=true"
+    "liveEnableRequirement": "environment=live + sk_live_* + liveEnabled=true",
+    "rehearsalRuntimeRequirement": "VERCEL_ENV=preview + PAYSTACK_SECRET_KEY=sk_test_*",
+    "productionEndpointBehavior": "FAIL_CLOSED"
   },
   "providerContract": {
     "country": "Ghana",
@@ -33,16 +38,22 @@
     "success verification normalizes to confirmed terminal provider evidence",
     "provider reference rebinding fails closed",
     "refund lifecycle is queried and remains transaction-bound",
-    "provider error messages cannot echo secret credentials"
+    "provider error messages cannot echo secret credentials",
+    "real-provider rehearsal endpoint refuses non-preview environments",
+    "real-provider rehearsal requires an sk_test_* credential",
+    "rehearsal references are namespace-bounded to wfc-rc2-*",
+    "default rehearsal initiation is bounded to GHS 1.00 MTN test-mode Mobile Money",
+    "rehearsal output never includes the Paystack secret"
   ],
   "remainingClosureEvidence": [
+    "successful exact-head Vercel deployment containing the rehearsal harness",
     "verified Ghana Paystack merchant account",
     "real Paystack test-mode provider exchange captured from Paystack rather than mocks",
-    "production/live credential provisioning under approved secret management",
     "live webhook delivery authenticity evidence from exact merchant integration",
     "timeout-after-provider-success rehearsal against Paystack test environment",
     "refund retry/redelivery rehearsal against Paystack provider environment",
-    "operator reconciliation procedure linked to Paystack transaction/refund query APIs"
+    "operator reconciliation procedure linked to Paystack transaction/refund query APIs",
+    "production/live credential provisioning under approved secret management before any future live-funds authorization"
   ],
-  "verdict": "The Paystack production-provider seam is implemented and adversarially testable, but RC2-PAY-001 remains P1 and live member funds remain unauthorized until real provider evidence and merchant credentials are obtained."
+  "verdict": "The production-provider seam and a preview-only real-provider rehearsal harness are implemented. RC2-PAY-001 remains P1 and live member funds remain unauthorized until exact-head deployment and real Paystack provider evidence are captured."
 }
