@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OBLIGATION_ID_RE=/^preview:obligation:[0-9a-f-]{36}$/i;
 const OPERATOR_ID='preview:operator:001';
+const PREVIEW_PICKUP_PLACE='preview:pickup:001';
 
 export default async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
@@ -17,12 +18,12 @@ export default async function handler(req,res){
   const fulfillmentId=`preview:fulfillment:${randomUUID()}`,eventId=`preview:event:${randomUUID()}`,commandId=`preview:command:${randomUUID()}`;
   const rows=await sql`
    WITH payable AS (
-    SELECT c.obligation_id,c.participant_id,c.quantity,c.unit,c.committed_pickup_place
+    SELECT c.obligation_id,c.participant_id,c.quantity,c.unit
       FROM preview_member_commitment c JOIN preview_sandbox_payment p ON p.obligation_id=c.obligation_id
      WHERE c.obligation_id=${obligationId} AND p.status='CONFIRMED' FOR UPDATE OF c
    ), f AS (
     INSERT INTO preview_fulfillment(fulfillment_id,obligation_id,ready_request_id,ready_event_id,operator_id,ready_quantity,unit,pickup_place,state,ready_at)
-    SELECT ${fulfillmentId},obligation_id,${requestId},${eventId},${OPERATOR_ID},quantity,unit,committed_pickup_place,'READY',now() FROM payable RETURNING *
+    SELECT ${fulfillmentId},obligation_id,${requestId},${eventId},${OPERATOR_ID},quantity,unit,${PREVIEW_PICKUP_PLACE},'READY',now() FROM payable RETURNING *
    ), cmd AS (
     INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,result_json,created_at,updated_at)
     SELECT ${requestId},${commandId},'COMMITTED','vercel-preview',now(),1,jsonb_build_object('status','READY','obligationId',obligation_id,'fulfillmentId',fulfillment_id,'eventIds',jsonb_build_array(${eventId}::text)),now(),now() FROM f RETURNING command_id
