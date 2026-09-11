@@ -6,8 +6,9 @@
   "transactionType":"GH_PILOT_MEMBER_FOOD_ORDER",
   "status":"DRAFT_NOT_RATIFIED",
   "proposedBinding":{"title":"ACCEPTANCE","risk":"ACCEPTANCE"},
-  "proof":["docs/policies/GH-PILOT-TITLE-RISK-v1.md","tests/node/sw1-rc2-title-risk-draft.test.mjs","packages/transfer/src/index.ts"],
+  "proof":["docs/policies/GH-PILOT-TITLE-RISK-v1.md","tests/node/sw1-rc2-title-risk-draft.test.mjs","tests/node/sw1-rc2-title-risk-quantity.test.mjs","packages/transfer/src/index.ts"],
+  "quantitySemantics":"PROVEN_IN_CODE_PENDING_INTEGRATED_EVIDENCE",
   "closed":false,
-  "remaining":["authorized governance ratification","external Ghana legal/policy evidence if required","quantity-aware transfer semantics or explicit production exclusion of partial acceptance"],
+  "remaining":["authorized governance ratification","external Ghana legal/policy evidence if required","integrated pilot evidence binding fulfillment acceptance quantities to quantity-aware transfer evaluation"],
   "notClaimed":["production authorization","legal advice","universal Ghana title/risk rule","closure of RC2-LEGAL-001"]
 }

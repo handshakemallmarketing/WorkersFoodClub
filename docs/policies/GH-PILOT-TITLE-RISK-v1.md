@@ -29,7 +29,9 @@ This policy separates payment, custody, title, physical-loss risk, acceptance, e
 - transactionType = GH_PILOT_MEMBER_FOOD_ORDER
 
 ## Quantity semantics
-The current transfer evaluator is transaction-level. Therefore this policy MUST NOT be represented as fully executable for partial quantities until the application binds accepted and excepted quantities to separately evaluable governed transfer subjects, or the transfer evaluator is extended with quantity-aware semantics. Until then, a partially accepted order MUST remain outside production title/risk authorization under this policy.
+The transfer evaluator now exposes an additive quantity-aware path. Every trigger event that contributes to title or risk must carry a positive quantity in the transaction unit. Matching trigger quantities accumulate monotonically, cannot exceed the governed transaction total, and preserve the contributing event IDs. Non-trigger events such as settlement, handover, exceptions and refund completion cannot increase title/risk quantity under this policy. Partial acceptance therefore transfers only the accepted quantity; later replacement acceptance may complete the remainder without rewriting earlier events.
+
+The legacy boolean evaluator remains available for earlier slices but MUST NOT be used as the production source of truth for partial-quantity title/risk decisions.
 
 ## Ratification condition
 This document remains DRAFT and cannot satisfy production TITLE_RISK_POLICY evidence until:
@@ -37,7 +39,7 @@ This document remains DRAFT and cannot satisfy production TITLE_RISK_POLICY evid
 - a valid TRANSFER_POLICY_GOVERNANCE grant exists for this exact policy;
 - ratification evidence is recorded;
 - the executable policy registry contains the exact ratified version;
-- partial-quantity semantics are proven or partial acceptance is explicitly excluded from the production transaction envelope; and
+- quantity-aware transfer semantics remain green under conformance and integrated pilot evidence; and
 - any required Ghana legal review is recorded as external evidence rather than inferred by code.
 
 ## Non-claims
