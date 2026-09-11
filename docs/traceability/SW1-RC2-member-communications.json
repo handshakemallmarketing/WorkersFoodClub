@@ -1,16 +1,19 @@
 {
   "slice": "SW1-RC2",
   "capability": "MEMBER_COMMUNICATIONS",
-  "status": "DURABLE_CORE_IMPLEMENTED_PROVIDER_DELIVERY_PENDING",
+  "status": "DURABLE_CORE_AND_CANONICAL_PROJECTION_IMPLEMENTED_PROVIDER_DELIVERY_PENDING",
   "productionAuthorization": false,
   "implementation": {
     "kernel": "packages/communications/src/index.ts",
     "kernelTests": "tests/node/sw1-rc2-member-communications.test.mjs",
+    "canonicalProjection": "packages/communications/src/canonical.ts",
+    "canonicalProjectionTests": "tests/node/sw1-rc2-canonical-communications.test.mjs",
     "durableSchema": "packages/durability/sql/005_member_communications.sql",
     "durableRepository": "packages/communications/src/postgres.ts",
     "scheduler": "packages/communications/src/scheduler.ts",
     "durabilityTests": "tests/node/sw1-rc2-communications-durability.test.mjs",
     "postgresHarness": "scripts/test-postgres-durability.sh",
+    "previewInboxApi": "api/member-notifications.js",
     "classes": ["TRANSACTIONAL", "PROMOTIONAL"],
     "initialChannels": ["IN_APP", "EMAIL"],
     "extensibleChannels": ["SMS", "WHATSAPP"]
@@ -28,11 +31,7 @@
     "SUBSCRIPTION_DUE",
     "SUBSCRIPTION_OVERDUE"
   ],
-  "promotionalEvents": [
-    "DEAL_AVAILABLE",
-    "DISCOUNT_AVAILABLE",
-    "DEMAND_COMMITMENT_PROGRESS"
-  ],
+  "promotionalEvents": ["DEAL_AVAILABLE", "DISCOUNT_AVAILABLE", "DEMAND_COMMITMENT_PROGRESS"],
   "invariants": [
     "transactional communications are not suppressed merely because promotional consent is absent",
     "promotional communications require explicit promotional opt-in",
@@ -49,7 +48,9 @@
     "parallel dispatch claims use PostgreSQL row locking with SKIP LOCKED and a bounded lease",
     "provider delivery evidence is bound to the exact leased communication record and provider message identifier",
     "in-app communications are projected from the same durable outbox rather than a separate source of truth",
-    "subscription reminder event identifiers are deterministic so repeated scheduler runs cannot manufacture duplicate reminders"
+    "subscription reminder event identifiers are deterministic so repeated scheduler runs cannot manufacture duplicate reminders",
+    "only accepted canonical domain events can project transactional member communications; provider-like callback event names do not manufacture member-facing financial truth",
+    "financial communication projection fails closed when required amount or provider-reference evidence is incomplete"
   ],
   "memberExperience": {
     "payment": "Food Club communicates canonical payment state; provider receipts are corroborating evidence, not the member-facing source of truth.",
@@ -63,11 +64,13 @@
     "preferencePersistenceAcrossConnectionBoundary": true,
     "durableOutboxDedupeConstraintExercised": true,
     "outboxLeaseClaimExercised": true,
+    "canonicalProjectionAdversariallyTested": true,
+    "previewInboxSyntaxCoveredByConformance": true,
     "exactHeadRequiredBeforePromotion": true
   },
   "remainingProductionWork": [
-    "wire canonical payment, refund, order and fulfillment events into the durable enqueue path",
-    "expose the durable in-app inbox through authenticated member APIs and UI",
+    "invoke the canonical projection and durable enqueue path from committed payment, refund, order and fulfillment event processing",
+    "replace the preview-scoped fixed member inbox identity with the production authenticated member identity boundary before production use",
     "select and configure a production email provider adapter plus callback/delivery-receipt verification",
     "run the subscription reminder scheduler as an authenticated production job with observable retry behavior",
     "prove communication durability and dispatch behavior on the actual staging/production PostgreSQL environment, including concurrent workers and restart recovery",
@@ -77,6 +80,7 @@
   ],
   "notClaimed": [
     "production email delivery is configured",
+    "the preview inbox endpoint is a production authentication boundary",
     "the member-facing in-app inbox UI is deployed",
     "the production scheduler job is enabled",
     "WhatsApp or SMS delivery is configured",
