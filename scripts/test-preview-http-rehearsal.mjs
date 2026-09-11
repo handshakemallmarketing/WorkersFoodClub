@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 
-const base=process.env.PREVIEW_BASE_URL?.replace(/\/$/,'');
+const rawBase=process.env.PREVIEW_BASE_URL?.replace(/\/$/,'');
 const expectedSha=process.env.EXPECTED_COMMIT_SHA;
 const bypassSecret=process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-if(!base)throw new Error('PREVIEW_BASE_URL required');
+if(!rawBase)throw new Error('PREVIEW_BASE_URL required');
 if(!expectedSha)throw new Error('EXPECTED_COMMIT_SHA required');
+assert.match(expectedSha,/^[0-9a-f]{40}$/,'EXPECTED_COMMIT_SHA must be a full 40-character Git SHA');
+
+const target=new URL(rawBase);
+assert.equal(target.protocol,'https:','PREVIEW_BASE_URL must use https');
+assert.equal(target.pathname,'/','PREVIEW_BASE_URL must be a deployment origin without a path');
+assert.equal(target.search,'','PREVIEW_BASE_URL must not contain a query string');
+assert.equal(target.hash,'','PREVIEW_BASE_URL must not contain a fragment');
+const base=target.origin;
 
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 function headers(extra={}){
@@ -30,7 +38,10 @@ for(let i=0;i<30;i++){
     const r=await json('/api/build-info');
     lastProbe=r;
     if(r.status===200&&r.body?.ok===true&&r.body?.environment==='preview'){
-      if(r.body?.commitSha&&r.body.commitSha!==expectedSha){await sleep(5000);continue;}
+      if(r.body?.commitSha!==expectedSha){await sleep(5000);continue;}
+      if(r.body?.deploymentUrl!==target.host){
+        throw new Error(`PREVIEW_BASE_URL is not the immutable VERCEL_URL for this deployment: supplied=${target.host} runtime=${r.body?.deploymentUrl??null}`);
+      }
       build=r.body;
       break;
     }
@@ -38,13 +49,15 @@ for(let i=0;i<30;i++){
       throw new Error(`preview is protected by Vercel authentication (HTTP ${r.status}); configure VERCEL_AUTOMATION_BYPASS_SECRET for the manual RC2 rehearsal workflow`);
     }
   }catch(error){
-    if(error?.message?.includes('protected by Vercel authentication'))throw error;
+    if(error?.message?.includes('protected by Vercel authentication')||error?.message?.includes('not the immutable VERCEL_URL'))throw error;
   }
   await sleep(5000);
 }
 assert.ok(build,`preview runtime never became ready for ${expectedSha}; last probe=${JSON.stringify(lastProbe??null)}`);
 assert.equal(build.environment,'preview');
-if(build.commitSha)assert.equal(build.commitSha,expectedSha);
+assert.equal(build.commitSha,expectedSha,'runtime commit SHA must be present and exact');
+assert.equal(build.deploymentUrl,target.host,'target host must equal immutable runtime VERCEL_URL');
+assert.match(build.deploymentId??'',/^dpl_[A-Za-z0-9]+$/,'runtime VERCEL_DEPLOYMENT_ID must be present');
 
 const health=await json('/api/db-health');
 assert.equal(health.status,200);
@@ -55,9 +68,25 @@ assert.equal(before.status,200);
 const order=before.body.orders.find(o=>o.remedy?.status==='COMPLETED');
 assert.ok(order,'completed remedy order required for rehearsal');
 const obligationId=order.obligationId;
-const stable={commitmentEventId:order.canonicalEventId,paymentEventId:order.payment?.canonicalEventId,readyEventId:order.fulfillment?.readyEventId,acceptanceEventId:order.fulfillment?.acceptanceEventId,authorizeEventId:order.remedy?.authorizeEventId,completionEventId:order.remedy?.completionEventId,providerReference:order.remedy?.providerReference,state:order.state,fulfillmentState:order.fulfillment?.state,remedyStatus:order.remedy?.status};
+const stable={
+  commitmentEventId:order.canonicalEventId,
+  paymentEventId:order.payment?.canonicalEventId,
+  readyEventId:order.fulfillment?.readyEventId,
+  acceptanceEventId:order.fulfillment?.acceptanceEventId,
+  exceptionEventId:order.fulfillment?.exceptionEventId,
+  authorizeEventId:order.remedy?.authorizeEventId,
+  completionEventId:order.remedy?.completionEventId,
+  providerReference:order.remedy?.providerReference,
+  state:order.state,
+  fulfillmentState:order.fulfillment?.state,
+  remedyStatus:order.remedy?.status
+};
+for(const [key,value] of Object.entries(stable))assert.ok(value!==null&&value!==undefined&&value!=='',`stable ${key} must be present before attack`);
+assert.equal(stable.state,'FULFILLED');
+assert.equal(stable.remedyStatus,'COMPLETED');
 
-for(const path of ['/api/pay-sandbox','/api/fulfillment-ready','/api/accept-fulfillment','/api/authorize-refund','/api/complete-refund']){
+const mutationPaths=['/api/pay-sandbox','/api/fulfillment-ready','/api/accept-fulfillment','/api/authorize-refund','/api/complete-refund'];
+for(const path of mutationPaths){
   const r=await post(path,{obligationId:'not-an-obligation',requestId:randomUUID(),acceptedQuantity:999});
   assert.equal(r.status,400,`${path} malformed obligation must fail 400`);
 }
@@ -89,6 +118,27 @@ const after=await json('/api/member-orders');
 assert.equal(after.status,200);
 const finalOrder=after.body.orders.find(o=>o.obligationId===obligationId);
 assert.ok(finalOrder);
-assert.deepEqual({commitmentEventId:finalOrder.canonicalEventId,paymentEventId:finalOrder.payment?.canonicalEventId,readyEventId:finalOrder.fulfillment?.readyEventId,acceptanceEventId:finalOrder.fulfillment?.acceptanceEventId,authorizeEventId:finalOrder.remedy?.authorizeEventId,completionEventId:finalOrder.remedy?.completionEventId,providerReference:finalOrder.remedy?.providerReference,state:finalOrder.state,fulfillmentState:finalOrder.fulfillment?.state,remedyStatus:finalOrder.remedy?.status},stable);
+const finalStable={
+  commitmentEventId:finalOrder.canonicalEventId,
+  paymentEventId:finalOrder.payment?.canonicalEventId,
+  readyEventId:finalOrder.fulfillment?.readyEventId,
+  acceptanceEventId:finalOrder.fulfillment?.acceptanceEventId,
+  exceptionEventId:finalOrder.fulfillment?.exceptionEventId,
+  authorizeEventId:finalOrder.remedy?.authorizeEventId,
+  completionEventId:finalOrder.remedy?.completionEventId,
+  providerReference:finalOrder.remedy?.providerReference,
+  state:finalOrder.state,
+  fulfillmentState:finalOrder.fulfillment?.state,
+  remedyStatus:finalOrder.remedy?.status
+};
+assert.deepEqual(finalStable,stable);
 
-console.log(JSON.stringify({ok:true,expectedCommitSha:expectedSha,runtimeCommitSha:build.commitSha??null,obligationId,attacks:['malformed-obligation','malformed-request-id','payment-replay','fulfillment-ready-replay','acceptance-regression','refund-authorization-replay','refund-completion-replay','unknown-refund-target'],stable},null,2));
+console.log(JSON.stringify({
+  ok:true,
+  target:{origin:base,deploymentUrl:build.deploymentUrl,deploymentId:build.deploymentId,branchUrl:build.branchUrl??null},
+  expectedCommitSha:expectedSha,
+  runtimeCommitSha:build.commitSha,
+  obligationId,
+  attacks:['malformed-obligation','malformed-request-id','payment-replay','fulfillment-ready-replay','acceptance-regression','refund-authorization-replay','refund-completion-replay','unknown-refund-target'],
+  stable
+},null,2));
