@@ -2,7 +2,7 @@
   "slice": "SW1-RC2",
   "finding": "RC2-PAY-001",
   "providerCandidate": "PAYSTACK",
-  "status": "REAL_PROVIDER_REHEARSAL_HARNESS_READY_PENDING_EXCHANGE",
+  "status": "REAL_PROVIDER_TEST_EXCHANGE_PROVEN_ADDITIONAL_PROVIDER_EVIDENCE_PENDING",
   "productionAuthorization": false,
   "implementation": {
     "adapter": "packages/pilot-payments/src/paystack.ts",
@@ -26,6 +26,14 @@
     "refundCreate": "POST /refund",
     "refundQuery": "GET /refund/:id"
   },
+  "realProviderEvidence": {
+    "evidenceFile": "docs/traceability/SW1-RC2-paystack-real-provider-evidence-2026-09-11.json",
+    "testedCommit": "2f26c567c3a7b24f766ed93823b45a80744746fc",
+    "workflowRunId": 34655253994,
+    "artifactId": 10284339887,
+    "artifactDigest": "sha256:93ef541f4e2e450af9bdca37f3b341cb64ad882f1ffaf19933477dc7aeff0926",
+    "result": "GHS 1.00 MTN TEST MOBILE MONEY INITIATED_AND_CONFIRMED_BY_REAL_PAYSTACK"
+  },
   "provedByExecutableTests": [
     "live mode fails closed until explicitly authorized",
     "test/live credential class separation",
@@ -46,14 +54,11 @@
     "rehearsal output never includes the Paystack secret"
   ],
   "remainingClosureEvidence": [
-    "successful exact-head Vercel deployment containing the rehearsal harness",
-    "verified Ghana Paystack merchant account",
-    "real Paystack test-mode provider exchange captured from Paystack rather than mocks",
     "live webhook delivery authenticity evidence from exact merchant integration",
-    "timeout-after-provider-success rehearsal against Paystack test environment",
-    "refund retry/redelivery rehearsal against Paystack provider environment",
+    "delayed timeout/requery evidence against Paystack test environment",
+    "refund creation plus provider refund-status retry/redelivery evidence against Paystack",
     "operator reconciliation procedure linked to Paystack transaction/refund query APIs",
     "production/live credential provisioning under approved secret management before any future live-funds authorization"
   ],
-  "verdict": "The production-provider seam and a preview-only real-provider rehearsal harness are implemented. RC2-PAY-001 remains P1 and live member funds remain unauthorized until exact-head deployment and real Paystack provider evidence are captured."
+  "verdict": "A real Paystack test-mode Ghana Mobile Money exchange is now proven on the exact RC2 Preview commit, including provider-confirmed verification. RC2-PAY-001 remains P1 because webhook authenticity, delayed requery/refund provider evidence, operator reconciliation, and any future live credential controls are not yet all proven. Live member funds remain unauthorized."
 }
