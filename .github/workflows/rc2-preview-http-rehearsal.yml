@@ -31,4 +31,15 @@ jobs:
           PREVIEW_BASE_URL: ${{ inputs.preview_url }}
           EXPECTED_COMMIT_SHA: ${{ inputs.expected_sha }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: node scripts/test-preview-http-rehearsal.mjs
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/test-preview-http-rehearsal.mjs | tee rc2-preview-http-rehearsal-evidence.json
+      - name: Upload rehearsal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc2-preview-http-rehearsal-${{ inputs.expected_sha }}
+          path: rc2-preview-http-rehearsal-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
