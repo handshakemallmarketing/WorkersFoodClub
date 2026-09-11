@@ -4,11 +4,13 @@
   "policyId":"GH-PILOT-TITLE-RISK",
   "version":1,
   "transactionType":"GH_PILOT_MEMBER_FOOD_ORDER",
-  "status":"DRAFT_NOT_RATIFIED",
-  "proposedBinding":{"title":"ACCEPTANCE","risk":"ACCEPTANCE"},
-  "proof":["docs/policies/GH-PILOT-TITLE-RISK-v1.md","tests/node/sw1-rc2-title-risk-draft.test.mjs","tests/node/sw1-rc2-title-risk-quantity.test.mjs","packages/transfer/src/index.ts"],
-  "quantitySemantics":"PROVEN_IN_CODE_PENDING_INTEGRATED_EVIDENCE",
+  "status":"GOVERNANCE_APPROVED_PENDING_EXECUTABLE_AUTHORITY_BINDING",
+  "approvedBinding":{"title":"ACCEPTANCE","risk":"ACCEPTANCE"},
+  "governanceDecision":"RATIFIED_AS_WRITTEN",
+  "governanceEvidence":"docs/governance/GH-PILOT-TITLE-RISK-v1-ratification.json",
+  "proof":["docs/policies/GH-PILOT-TITLE-RISK-v1.md","docs/governance/GH-PILOT-TITLE-RISK-v1-ratification.json","tests/node/sw1-rc2-title-risk-draft.test.mjs","tests/node/sw1-rc2-title-risk-quantity.test.mjs","tests/node/sw1-rc2-title-risk-fulfillment-integration.test.mjs","packages/transfer/src/index.ts"],
+  "quantitySemantics":"PROVEN_IN_CODE_AND_INTEGRATED_FULFILLMENT_EVIDENCE",
   "closed":false,
-  "remaining":["authorized governance ratification","external Ghana legal/policy evidence if required","integrated pilot evidence binding fulfillment acceptance quantities to quantity-aware transfer evaluation"],
-  "notClaimed":["production authorization","legal advice","universal Ghana title/risk rule","closure of RC2-LEGAL-001"]
+  "remaining":["validate and bind the approving governance actor to a TRANSFER_POLICY_GOVERNANCE authority grant for this exact policy","enter the exact approved policy version into the executable governed registry","external Ghana legal/policy evidence if required","all other SW1-RC2 production-readiness domains"],
+  "notClaimed":["production authorization","legal advice","universal Ghana title/risk rule","closure of RC2-LEGAL-001 before executable authority binding"]
 }
