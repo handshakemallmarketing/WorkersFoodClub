@@ -1,0 +1,13 @@
+{
+  "slice":"SW1-RC2",
+  "finding":"RC2-LEGAL-001",
+  "policyId":"GH-PILOT-TITLE-RISK",
+  "version":1,
+  "transactionType":"GH_PILOT_MEMBER_FOOD_ORDER",
+  "status":"DRAFT_NOT_RATIFIED",
+  "proposedBinding":{"title":"ACCEPTANCE","risk":"ACCEPTANCE"},
+  "proof":["docs/policies/GH-PILOT-TITLE-RISK-v1.md","tests/node/sw1-rc2-title-risk-draft.test.mjs","packages/transfer/src/index.ts"],
+  "closed":false,
+  "remaining":["authorized governance ratification","external Ghana legal/policy evidence if required","quantity-aware transfer semantics or explicit production exclusion of partial acceptance"],
+  "notClaimed":["production authorization","legal advice","universal Ghana title/risk rule","closure of RC2-LEGAL-001"]
+}
