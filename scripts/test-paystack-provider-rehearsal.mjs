@@ -36,5 +36,42 @@ for(let attempt=1;attempt<=6;attempt+=1){
 
 const finalVerification=verificationAttempts.at(-1);
 if(!finalVerification?.ok||finalVerification?.rehearsal?.provider!=='PAYSTACK') throw new Error('PAYSTACK_VERIFICATION_EVIDENCE_INVALID');
+if(finalVerification?.rehearsal?.state!=='CONFIRMED') throw new Error(`PAYSTACK_PROVIDER_NOT_CONFIRMED:${finalVerification?.rehearsal?.state??'missing'}`);
 
-console.log(JSON.stringify({rehearsal:'SW1-RC2-PAYSTACK-REAL-PROVIDER',expectedCommitSha:expectedSha,runtimeCommitSha:runtimeSha,previewBaseUrl:base,startedAt,completedAt:new Date().toISOString(),initiation,verificationAttempts,liveFundsAuthorized:false,secretExposed:false},null,2));
+const delayedRequeryStartedAt=new Date().toISOString();
+await new Promise(resolve=>setTimeout(resolve,2000));
+const delayedRequery=await json('/api/paystack-rehearsal',{method:'POST',body:JSON.stringify({action:'verify',reference})});
+if(delayedRequery?.ok!==true||delayedRequery?.rehearsal?.state!=='CONFIRMED'||delayedRequery?.rehearsal?.reference!==reference) throw new Error('PAYSTACK_DELAYED_REQUERY_EVIDENCE_INVALID');
+
+const refund=await json('/api/paystack-rehearsal',{method:'POST',body:JSON.stringify({action:'refund',reference})});
+if(refund?.ok!==true||refund?.rehearsal?.provider!=='PAYSTACK'||refund?.rehearsal?.reference!==reference) throw new Error('PAYSTACK_REFUND_EVIDENCE_INVALID');
+const refundId=String(refund?.rehearsal?.refundId??'');
+if(!/^[A-Za-z0-9_-]{1,128}$/.test(refundId)) throw new Error('PAYSTACK_REFUND_ID_INVALID');
+
+const refundStatusAttempts=[];
+for(let attempt=1;attempt<=6;attempt+=1){
+  if(attempt>1) await new Promise(resolve=>setTimeout(resolve,5000));
+  const status=await json('/api/paystack-rehearsal',{method:'POST',body:JSON.stringify({action:'refund-status',refundId})});
+  refundStatusAttempts.push({attempt,observedAt:new Date().toISOString(),...status});
+  const state=status?.rehearsal?.state;
+  if(state==='PROCESSED'||state==='FAILED'||state==='NEEDS_ATTENTION') break;
+}
+
+const finalRefundStatus=refundStatusAttempts.at(-1);
+if(!finalRefundStatus?.ok||finalRefundStatus?.rehearsal?.provider!=='PAYSTACK'||finalRefundStatus?.rehearsal?.refundId!==refundId) throw new Error('PAYSTACK_REFUND_STATUS_EVIDENCE_INVALID');
+
+console.log(JSON.stringify({
+  rehearsal:'SW1-RC2-PAYSTACK-REAL-PROVIDER',
+  expectedCommitSha:expectedSha,
+  runtimeCommitSha:runtimeSha,
+  previewBaseUrl:base,
+  startedAt,
+  completedAt:new Date().toISOString(),
+  initiation,
+  verificationAttempts,
+  delayedRequery:{startedAt:delayedRequeryStartedAt,observedAt:new Date().toISOString(),...delayedRequery},
+  refund,
+  refundStatusAttempts,
+  liveFundsAuthorized:false,
+  secretExposed:false
+},null,2));
