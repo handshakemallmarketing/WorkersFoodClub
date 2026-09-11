@@ -30,21 +30,22 @@ export default async function handler(req,res){
    ), cmd AS (
     INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,result_json,created_at,updated_at)
     SELECT ${requestId},${commandId},'COMMITTED','vercel-preview',now(),1,jsonb_build_object('status',${state}::text,'obligationId',obligation_id,'acceptanceId',${acceptanceId}::text,'eventIds',CASE WHEN ${shortfall}>0 THEN jsonb_build_array(${acceptEventId}::text,${exceptionEventId}::text) ELSE jsonb_build_array(${acceptEventId}::text) END),now(),now() FROM upd RETURNING command_id
-   ), ver1 AS (
-    UPDATE aggregate_version av SET version=av.version+1 FROM upd u WHERE av.aggregate_id=u.obligation_id RETURNING av.aggregate_id,av.version
+   ), ver AS (
+    UPDATE aggregate_version av SET version=av.version+(CASE WHEN ${shortfall}>0 THEN 2 ELSE 1 END)
+      FROM upd u WHERE av.aggregate_id=u.obligation_id
+      RETURNING av.aggregate_id,av.version AS final_version
    ), ev1 AS (
     INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at)
-    SELECT ${acceptEventId},u.obligation_id,v.version,'FULFILLMENT_ACCEPTED',jsonb_build_object('participantId',${PARTICIPANT_ID}::text,'state',u.state,'acceptedQuantity',jsonb_build_object('amount',u.accepted_quantity,'unit',u.unit),'shortfallQuantity',jsonb_build_object('amount',u.shortfall_quantity,'unit',u.unit),'authorizedCommandId',${commandId}::text,'environment','preview'),u.accepted_at FROM upd u JOIN ver1 v ON v.aggregate_id=u.obligation_id RETURNING event_id
-   ), ver2 AS (
-    UPDATE aggregate_version av SET version=av.version+1 FROM upd u WHERE av.aggregate_id=u.obligation_id AND ${shortfall}>0 RETURNING av.aggregate_id,av.version
+    SELECT ${acceptEventId},u.obligation_id,(CASE WHEN ${shortfall}>0 THEN v.final_version-1 ELSE v.final_version END),'FULFILLMENT_ACCEPTED',jsonb_build_object('participantId',${PARTICIPANT_ID}::text,'state',u.state,'acceptedQuantity',jsonb_build_object('amount',u.accepted_quantity,'unit',u.unit),'shortfallQuantity',jsonb_build_object('amount',u.shortfall_quantity,'unit',u.unit),'authorizedCommandId',${commandId}::text,'environment','preview'),u.accepted_at FROM upd u JOIN ver v ON v.aggregate_id=u.obligation_id RETURNING event_id
    ), ex AS (
     INSERT INTO preview_fulfillment_exception(exception_id,fulfillment_id,obligation_id,acceptance_id,kind,affected_quantity,unit,canonical_event_id,occurred_at)
     SELECT ${exceptionId},u.fulfillment_id,u.obligation_id,${acceptanceId},CASE WHEN ${state}='REJECTED' THEN 'REJECTION' ELSE 'SHORTFALL' END,u.shortfall_quantity,u.unit,${exceptionEventId},u.accepted_at FROM upd u WHERE ${shortfall}>0 RETURNING *
    ), ev2 AS (
     INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at)
-    SELECT ${exceptionEventId},e.obligation_id,v.version,'FULFILLMENT_EXCEPTION',jsonb_build_object('exceptionId',e.exception_id,'acceptanceId',e.acceptance_id,'kind',e.kind,'affectedQuantity',jsonb_build_object('amount',e.affected_quantity,'unit',e.unit),'authorizedCommandId',${commandId}::text,'environment','preview'),e.occurred_at FROM ex e JOIN ver2 v ON v.aggregate_id=e.obligation_id RETURNING event_id
+    SELECT ${exceptionEventId},e.obligation_id,v.final_version,'FULFILLMENT_EXCEPTION',jsonb_build_object('exceptionId',e.exception_id,'acceptanceId',e.acceptance_id,'kind',e.kind,'affectedQuantity',jsonb_build_object('amount',e.affected_quantity,'unit',e.unit),'authorizedCommandId',${commandId}::text,'environment','preview'),e.occurred_at FROM ex e JOIN ver v ON v.aggregate_id=e.obligation_id WHERE ${shortfall}>0 RETURNING event_id
    )
-   SELECT u.obligation_id,u.state,u.accepted_quantity,u.shortfall_quantity,u.acceptance_event_id FROM upd u JOIN cmd ON true JOIN ev1 ON ev1.event_id=u.acceptance_event_id`;
+   SELECT u.obligation_id,u.state,u.accepted_quantity,u.shortfall_quantity,u.acceptance_event_id FROM upd u JOIN cmd ON true JOIN ev1 ON ev1.event_id=u.acceptance_event_id
+   WHERE ${shortfall}=0 OR EXISTS (SELECT 1 FROM ev2 WHERE event_id=${exceptionEventId})`;
   if(!rows[0])return res.status(409).json({ok:false,error:'FULFILLMENT_NOT_ACCEPTABLE'});
   return res.status(201).json({ok:true,acceptance:{obligationId:String(rows[0].obligation_id),state:String(rows[0].state),acceptedQuantity:Number(rows[0].accepted_quantity),shortfallQuantity:Number(rows[0].shortfall_quantity),acceptanceEventId:String(rows[0].acceptance_event_id),idempotent:false}});
  }catch(error){console.error('Fulfillment acceptance failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'FULFILLMENT_ACCEPTANCE_FAILED'});}
