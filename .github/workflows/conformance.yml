@@ -45,9 +45,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/wait-for-vercel-status.mjs
-      - name: RC2 preview HTTP adversarial rehearsal
+      - name: RC2 preview HTTP rehearsal status
         if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc2-production-readiness-falsification'
-        env:
-          PREVIEW_BASE_URL: https://workers-food-club-git-sw1-rc2-production-readi-0760c2-food-club.vercel.app
-          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/test-preview-http-rehearsal.mjs
+        run: |
+          echo "Exact-head Vercel deployment is proven by the preceding status check."
+          echo "The live HTTP adversarial rehearsal is intentionally not run against a hard-coded branch alias from this required gate."
+          echo "Run the rc2-preview-http-rehearsal workflow with the exact immutable Vercel deployment URL; RC2-E2E-001 remains open until that workflow passes."
