@@ -1,5 +1,8 @@
 name: constitutional-conformance
 on: [push, pull_request]
+permissions:
+  contents: read
+  statuses: read
 jobs:
   conformance:
     runs-on: ubuntu-latest
@@ -26,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: node --check api/build-info.js && node --check api/db-health.js && node --check api/member-offers.js && node --check api/member-orders.js && node --check api/commit-sandbox.js && node --check api/pay-sandbox.js && node --check api/operator-orders.js && node --check api/fulfillment-ready.js && node --check api/accept-fulfillment.js && node --check api/authorize-refund.js && node --check api/complete-refund.js && node --check public/app.js && node --check scripts/test-preview-http-rehearsal.mjs
+      - run: node --check api/build-info.js && node --check api/db-health.js && node --check api/member-offers.js && node --check api/member-orders.js && node --check api/commit-sandbox.js && node --check api/pay-sandbox.js && node --check api/operator-orders.js && node --check api/fulfillment-ready.js && node --check api/accept-fulfillment.js && node --check api/authorize-refund.js && node --check api/complete-refund.js && node --check public/app.js && node --check scripts/wait-for-vercel-status.mjs && node --check scripts/test-preview-http-rehearsal.mjs
       - run: pnpm canon:check
       - run: pnpm traceability:check
       - run: pnpm typecheck
@@ -36,6 +39,12 @@ jobs:
       - run: bash scripts/test-postgres-backup-restore.sh
       - run: pnpm add -Dw --lockfile=false pg@8.13.1
       - run: node scripts/test-postgres-adapter-race.mjs
+      - name: Wait for exact-head Vercel deployment
+        if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc2-production-readiness-falsification'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/wait-for-vercel-status.mjs
       - name: RC2 preview HTTP adversarial rehearsal
         if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc2-production-readiness-falsification'
         env:
