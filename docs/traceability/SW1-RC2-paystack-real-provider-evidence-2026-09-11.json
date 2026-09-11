@@ -1,0 +1,50 @@
+{
+  "slice": "SW1-RC2",
+  "finding": "RC2-PAY-001",
+  "provider": "PAYSTACK",
+  "environment": "test",
+  "country": "Ghana",
+  "channel": "mobile_money",
+  "mobileMoneyProvider": "mtn",
+  "testedCommit": "2f26c567c3a7b24f766ed93823b45a80744746fc",
+  "previewBaseUrl": "https://workers-food-club-kp2cfb3ro-food-club.vercel.app",
+  "workflowRunId": 34655253994,
+  "workflowJobId": 103446135375,
+  "artifact": {
+    "id": 10284339887,
+    "name": "rc2-paystack-provider-rehearsal-2f26c567c3a7b24f766ed93823b45a80744746fc",
+    "sha256": "93ef541f4e2e450af9bdca37f3b341cb64ad882f1ffaf19933477dc7aeff0926"
+  },
+  "observed": {
+    "reference": "wfc-rc2-9008f072-8628-4905-855f-d562b66c8d75",
+    "amountMinor": "100",
+    "currency": "GHS",
+    "initiationRawStatus": "success",
+    "initiationState": "PENDING_EXTERNAL_CONFIRMATION",
+    "verificationRawStatus": "success",
+    "verificationState": "CONFIRMED",
+    "providerOccurredAt": "2026-09-11T22:44:02.000Z"
+  },
+  "integrity": {
+    "expectedCommitShaMatchedRuntime": true,
+    "realProviderExchange": true,
+    "mockedProvider": false,
+    "liveFundsAuthorized": false,
+    "secretExposed": false
+  },
+  "proved": [
+    "exact RC2 preview commit executed the rehearsal harness",
+    "Paystack accepted a Ghana GHS 1.00 MTN test Mobile Money charge request",
+    "Paystack later verified the exact generated reference as success/CONFIRMED",
+    "the verified amount and currency were exactly GHS 1.00",
+    "no live funds were authorized",
+    "the Paystack test secret was not present in captured evidence"
+  ],
+  "notProved": [
+    "live webhook delivery authenticity for the exact merchant integration",
+    "delayed timeout/requery behavior beyond the initial successful verification",
+    "real provider refund creation/status retry-redelivery behavior",
+    "production live credential provisioning",
+    "authorization of live member funds"
+  ]
+}
