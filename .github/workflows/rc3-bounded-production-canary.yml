@@ -42,6 +42,12 @@ jobs:
           test "$actual" = "$CANARY_SHA"
           echo "RC3 canary candidate: $actual"
 
+      - name: Install repo-pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@59.11.7
 
