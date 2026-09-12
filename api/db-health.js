@@ -47,6 +47,28 @@ export default async function handler(req, res) {
     });
   }
 
+  if (url.searchParams.get('probe') === 'auth-client-config') {
+    res.setHeader('Cache-Control', 'no-store');
+    const environment = process.env.VERCEL_ENV || 'unknown';
+    const provider = process.env.OIDC_BROWSER_PROVIDER === 'google' ? 'google' : null;
+    const clientId = provider === 'google' && configured(process.env.OIDC_AUDIENCE)
+      ? process.env.OIDC_AUDIENCE
+      : null;
+
+    return res.status(200).json({
+      ok: true,
+      environment,
+      authenticationMode: environment === 'production' ? 'OIDC' : 'PREVIEW',
+      provider,
+      clientId,
+      productionApplicationAccessEnabled:
+        environment === 'production' && productionApplicationAccessEnabled(process.env),
+      configured: provider === 'google' && configured(clientId),
+      tokenPersistence: 'MEMORY_ONLY',
+      liveFundsAuthorized: false,
+    });
+  }
+
   if (url.searchParams.get('probe') === 'config-isolation') {
     if (process.env.VERCEL_ENV !== 'preview') {
       return res.status(403).json({
