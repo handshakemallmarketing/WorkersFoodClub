@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.0",
+  "evidenceId": "SW1-RC3-PRODUCTION-BASELINE-NONPROMOTION-2026-09-12",
+  "slice": "SW1-RC3",
+  "result": "PASS_NONPROMOTION_BASELINE",
+  "observedAt": "2026-09-12T13:42:59Z",
+  "repository": "handshakemallmarketing/WorkersFoodClub",
+  "rc3": {
+    "branch": "sw1-rc3-production-identity-live-provider-falsification",
+    "candidateHead": "35f6c7088828a937c45f09e6147a0fce6d74dc05",
+    "pullRequest": 52,
+    "latestObservedDeploymentId": "dpl_8121bTrdicve422DaAZ3ipGDvGvb",
+    "latestObservedDeploymentTarget": null,
+    "latestObservedDeploymentState": "READY",
+    "productionApplicationAccessAuthorized": false,
+    "liveFundsAuthorized": false
+  },
+  "productionBaseline": {
+    "deploymentId": "dpl_551py9fWxPEPa9UNU7rYfjbBVxN7",
+    "deploymentUrl": "workers-food-club-h4git1fql-food-club.vercel.app",
+    "state": "READY",
+    "target": "production",
+    "gitBranch": "main",
+    "gitCommitSha": "eb191168ec121b6d4dfde9acbfc0db3e7b43f06e",
+    "gitCommitMessage": "Merge PR #51: SW1-RC2 production-readiness falsification",
+    "releaseBoundary": "SW1-RC2",
+    "isRollbackCandidate": true
+  },
+  "runtimeObservation": {
+    "productionLogsQueryWindow": "2h",
+    "productionLogsFound": false,
+    "applicationEndpointProbe": {
+      "path": "/api/member-orders",
+      "result": "VERCEL_PLATFORM_SSO_REDIRECT",
+      "httpStatus": 302,
+      "interpretation": "Platform authentication intercepted the probe before application response; no application authorization conclusion is drawn from this probe."
+    }
+  },
+  "assertions": [
+    "No observed RC3 deployment is targeted to Production.",
+    "The currently observed Production deployment remains the SW1-RC2 main commit eb191168ec121b6d4dfde9acbfc0db3e7b43f06e.",
+    "RC3 Production application access remains unauthorized.",
+    "Live funds remain unauthorized.",
+    "This evidence proves a pre-canary non-promotion baseline only; it does not close RC3-AUTH-001, RC3-BIND-001, RC3-ENV-001, RC3-LOG-001, RC3-ROLLBACK-001, RC3-REHEARSAL-001, or RC3-PAY-001."
+  ],
+  "nextAuthorizedTransition": {
+    "requiresExplicitAuthorization": true,
+    "scope": "bounded RC3 Production canary deployment/rehearsal with Production application access initially disabled, followed by separately controlled identity enablement; no live funds",
+    "liveProviderActivationIncluded": false
+  }
+}
