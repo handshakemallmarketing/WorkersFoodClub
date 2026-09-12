@@ -1,0 +1,31 @@
+name: RC3 production access rollback rehearsal
+on:
+  workflow_dispatch:
+    inputs:
+      production_base_url:
+        description: Exact immutable Production deployment origin
+        required: true
+        type: string
+      expected_commit_sha:
+        description: Exact 40-character deployed commit SHA
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  rollback-rehearsal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prove Production access rollback kill switch
+        env:
+          PRODUCTION_BASE_URL: ${{ inputs.production_base_url }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/test-production-access-rollback.mjs
+      - name: Preserve governance boundary
+        run: |
+          echo "This rehearsal proves application-access rollback only."
+          echo "It does not authorize Production writes, Paystack live mode, or live funds."
