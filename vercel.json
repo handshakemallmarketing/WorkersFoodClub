@@ -5,6 +5,10 @@
     {
       "source": "/api/build-info",
       "destination": "/api/db-health?probe=build-info"
+    },
+    {
+      "source": "/api/auth-readiness",
+      "destination": "/api/db-health?probe=identity-readiness"
     }
   ]
 }
