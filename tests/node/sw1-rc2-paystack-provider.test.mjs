@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
+import {Readable} from 'node:stream';
 import {PaystackConfigurationGate,PaystackPaymentAdapter,PaystackWebhookVerifier} from '../../dist/packages/pilot-payments/src/paystack.js';
+import paystackRehearsalHandler, {config as paystackApiConfig} from '../../api/paystack-rehearsal.js';
 
 const jsonResponse=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});
 const money=(minor,currency='GHS')=>Object.freeze({minor:BigInt(minor),currency});
@@ -73,4 +75,127 @@ test('Paystack provider errors are fail-closed and do not echo credentials',asyn
  const secret='sk_test_super_sensitive';const fetcher=queueFetcher([{status:401,body:{status:false,message:`bad key ${secret}`}}]);
  const adapter=new PaystackPaymentAdapter({environment:'test',secretKey:secret},fetcher);
  await assert.rejects(()=>adapter.verifyPayment('wfc-order-5'),err=>{assert.equal(err.message,'PAYSTACK_PROVIDER_REQUEST_FAILED');assert.ok(!err.message.includes(secret));return true;});
+});
+
+
+async function invokePaystackWebhook(rawBody, signature) {
+ const req=Readable.from([Buffer.from(rawBody)]);
+ req.method='POST';
+ req.headers={'x-paystack-signature':signature};
+
+ let statusCode=200;
+ let payload;
+ const headers={};
+
+ const res={
+  setHeader(name,value){headers[String(name).toLowerCase()]=value;},
+  status(code){statusCode=code;return this;},
+  json(value){payload=value;return value;}
+ };
+
+ const priorEnv=process.env.VERCEL_ENV;
+ const priorSecret=process.env.PAYSTACK_SECRET_KEY;
+
+ process.env.VERCEL_ENV='preview';
+ process.env.PAYSTACK_SECRET_KEY='sk_test_webhook_boundary';
+
+ try{
+  await paystackRehearsalHandler(req,res);
+  return {statusCode,payload,headers};
+ }finally{
+  if(priorEnv===undefined) delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV=priorEnv;
+
+  if(priorSecret===undefined) delete process.env.PAYSTACK_SECRET_KEY;
+  else process.env.PAYSTACK_SECRET_KEY=priorSecret;
+ }
+}
+
+test('Paystack deployed HTTP boundary verifies exact raw-body signature before trusting payload',async()=>{
+ assert.equal(paystackApiConfig.api.bodyParser,false);
+
+ const secret='sk_test_webhook_boundary';
+ const rawBody=JSON.stringify({
+  event:'charge.success',
+  data:{
+   reference:'wfc-rc2-http-boundary-001',
+   status:'success',
+   amount:100,
+   currency:'GHS',
+   paid_at:'2026-09-12T04:00:00Z'
+  }
+ });
+
+ const signature=createHmac('sha512',secret).update(rawBody).digest('hex');
+ const result=await invokePaystackWebhook(rawBody,signature);
+
+ assert.equal(result.statusCode,200);
+ assert.equal(result.payload.ok,true);
+ assert.equal(result.payload.webhook.provider,'PAYSTACK');
+ assert.equal(result.payload.webhook.providerReference,'wfc-rc2-http-boundary-001');
+ assert.equal(result.payload.webhook.status,'CONFIRMED');
+ assert.equal(result.payload.webhook.amount.minor,'100');
+ assert.equal(result.payload.webhook.amount.currency,'GHS');
+ assert.equal(result.payload.webhook.authenticity,'HMAC_SHA512_VERIFIED');
+});
+
+test('Paystack deployed HTTP boundary rejects forged signature',async()=>{
+ const rawBody=JSON.stringify({
+  event:'charge.success',
+  data:{
+   reference:'wfc-rc2-http-boundary-002',
+   status:'success',
+   amount:100,
+   currency:'GHS',
+   paid_at:'2026-09-12T04:00:00Z'
+  }
+ });
+
+ const result=await invokePaystackWebhook(rawBody,'0'.repeat(128));
+
+ assert.equal(result.statusCode,401);
+ assert.deepEqual(result.payload,{
+  ok:false,
+  error:'PAYSTACK_WEBHOOK_SIGNATURE_INVALID'
+ });
+});
+
+test('Paystack deployed HTTP boundary rejects body tampering after signature creation',async()=>{
+ const secret='sk_test_webhook_boundary';
+
+ const original=JSON.stringify({
+  event:'charge.success',
+  data:{
+   reference:'wfc-rc2-http-boundary-003',
+   status:'success',
+   amount:100,
+   currency:'GHS',
+   paid_at:'2026-09-12T04:00:00Z'
+  }
+ });
+
+ const signature=createHmac('sha512',secret).update(original).digest('hex');
+ const tampered=original.replace('"amount":100','"amount":10000');
+
+ const result=await invokePaystackWebhook(tampered,signature);
+
+ assert.equal(result.statusCode,401);
+ assert.equal(result.payload.error,'PAYSTACK_WEBHOOK_SIGNATURE_INVALID');
+});
+
+test('Paystack deployed HTTP boundary rejects authenticated unsupported event',async()=>{
+ const secret='sk_test_webhook_boundary';
+
+ const rawBody=JSON.stringify({
+  event:'refund.processed',
+  data:{
+   reference:'wfc-rc2-http-boundary-004'
+  }
+ });
+
+ const signature=createHmac('sha512',secret).update(rawBody).digest('hex');
+ const result=await invokePaystackWebhook(rawBody,signature);
+
+ assert.equal(result.statusCode,400);
+ assert.equal(result.payload.error,'PAYSTACK_WEBHOOK_EVENT_NOT_SUPPORTED');
 });
