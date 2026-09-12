@@ -9,6 +9,10 @@
     {
       "source": "/api/auth-readiness",
       "destination": "/api/db-health?probe=identity-readiness"
+    },
+    {
+      "source": "/api/auth-client-config",
+      "destination": "/api/db-health?probe=auth-client-config"
     }
   ]
 }
