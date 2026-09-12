@@ -38,6 +38,17 @@ function summarize(result) {
   };
 }
 
+function resolveHandler(moduleNamespace) {
+  const candidates = [
+    moduleNamespace?.default,
+    moduleNamespace?.default?.default,
+    moduleNamespace?.handler,
+  ];
+  const handler = candidates.find((candidate) => typeof candidate === 'function');
+  if (!handler) throw new Error('RC2_AUTH_PROBE_HANDLER_RESOLUTION_FAILED');
+  return handler;
+}
+
 async function invokeJsonHandler(handler, { method = 'GET', headers = {}, url = '/' } = {}) {
   const harness = responseHarness();
   await handler({ method, headers, url }, harness.res);
@@ -78,15 +89,14 @@ async function runAuthSelfTest() {
     return { ok: false, error: 'PAYSTACK_TEST_SECRET_NOT_CONFIGURED' };
   }
 
-  const [
-    { default: memberOrdersHandler },
-    { default: operatorOrdersHandler },
-    { default: paystackHandler },
-  ] = await Promise.all([
+  const [memberModule, operatorModule, paystackModule] = await Promise.all([
     import('./member-orders.js'),
     import('./operator-orders.js'),
     import('./paystack-rehearsal.js'),
   ]);
+  const memberOrdersHandler = resolveHandler(memberModule);
+  const operatorOrdersHandler = resolveHandler(operatorModule);
+  const paystackHandler = resolveHandler(paystackModule);
 
   const memberWrongScope = await invokeJsonHandler(memberOrdersHandler, {
     headers: {
