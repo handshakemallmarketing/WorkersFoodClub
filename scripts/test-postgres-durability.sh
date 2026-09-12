@@ -9,10 +9,22 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/003_command_fencing.sql
 "${PSQL[@]}" -f packages/durability/sql/004_physical_lineage.sql
 "${PSQL[@]}" -f packages/durability/sql/005_member_communications.sql
+"${PSQL[@]}" -f packages/durability/sql/006_application_identity_binding.sql
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+TRUNCATE application_identity_binding,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
 SQL
+
+# RC3-BIND-001: external identity resolves to one durable canonical participant and governed scopes.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id)
+VALUES('binding:live','https://issuer.example/','subject:1','participant:1',ARRAY['member:orders.read'],'ACTIVE','evidence:identity:1',now(),'participant:operator','grant:identity:1');
+SQL
+binding=$("${PSQL[@]}" -Atc "SELECT participant_id||':'||state FROM application_identity_binding WHERE issuer='https://issuer.example/' AND subject='subject:1'")
+[[ "$binding" == "participant:1:ACTIVE" ]] || { echo "application identity binding did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:rebind','https://issuer.example/','subject:1','participant:2',ARRAY['operator:orders.read'],'ACTIVE','evidence:identity:2',now(),'participant:operator','grant:identity:1')" >/dev/null 2>&1; then
+  echo "external identity was silently rebound" >&2; exit 1
+fi
 
 # INV-027: durable result survives a fresh connection.
 "${PSQL[@]}" <<'SQL'
@@ -92,7 +104,6 @@ inputs=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform_input WHERE t
 outputs=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform_output WHERE transform_id='transform:blend'")
 [[ "$inputs" == "2" && "$outputs" == "2" ]] || { echo "durable lineage ancestry ports missing" >&2; exit 1; }
 
-# A failed overconsuming transform must leave no transform/output/partial consumption behind.
 if "${PSQL[@]}" -c "SELECT record_lineage_transform('transform:bad','REPACK','kg',0,'2026-09-08T02:11:00Z','[\"evidence:bad\"]'::jsonb,'[{\"lotId\":\"lot:c\",\"quantity\":71}]'::jsonb,'[{\"lotId\":\"lot:e\",\"quantity\":71}]'::jsonb)" >/dev/null 2>&1; then
   echo "lineage overconsumption unexpectedly succeeded" >&2; exit 1
 fi
@@ -118,4 +129,4 @@ fi
 claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
 [[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
 
- echo "live PostgreSQL durability, fencing, explicit lineage and communications proof passed"
+echo "live PostgreSQL durability, fencing, identity binding, explicit lineage and communications proof passed"
