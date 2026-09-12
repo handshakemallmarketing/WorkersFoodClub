@@ -7,6 +7,7 @@
   "productionApplicationAccessAuthorized": false,
   "liveFundsAuthorized": false,
   "baselineEvidence": "docs/traceability/SW1-RC3-production-baseline-nonpromotion-evidence-2026-09-12.json",
+  "rollbackEvidence": "docs/traceability/SW1-RC3-production-rollback-rehearsal-evidence-2026-09-12.json",
   "startingEnvelope": {
     "hosting": "Vercel production deployment exists",
     "database": "Neon PostgreSQL",
@@ -28,12 +29,12 @@
     "RC3-ENV-001": {
       "severity": "P1",
       "status": "HARNESS_IMPLEMENTED_RUNTIME_PROOF_PENDING",
-      "finding": "Exact-head Vercel deployment is mandatory in constitutional conformance, and a dedicated RC3 production identity rehearsal workflow accepts an explicit Production origin and exact deployed SHA. Production issuer, audience, JWKS and application-binding configuration still require a successful deployed rehearsal before closure. The recorded Production baseline remains the SW1-RC2 main deployment and no observed RC3 deployment has been promoted to Production."
+      "finding": "Exact-head Vercel deployment is mandatory in constitutional conformance, and a dedicated RC3 production identity rehearsal workflow accepts an explicit Production origin and exact deployed SHA. A bounded RC3 Production canary now exists at deployment dpl_CSUWbrVHLXYTb4zVRnUgdcXodvq7 on commit 5377b89c92529c130ee9e78e89550fa3c28af488 with application access explicitly disabled. Production issuer, audience, JWKS and application-binding configuration still require a successful identity-enabled deployed rehearsal before closure."
     },
     "RC3-LOG-001": {
       "severity": "P1",
       "status": "REMEDIATED_CODE_PROOF_PENDING_RUNTIME",
-      "finding": "Adversarial tests plant bearer-token, issuer, audience, JWKS, subject and binding markers across missing, malformed, forged, unbound, disabled and successful production-auth paths and prove those markers are absent from console output. Runtime Vercel log inspection after real Production rehearsal traffic is still required before closure."
+      "finding": "Adversarial tests plant bearer-token, issuer, audience, JWKS, subject and binding markers across missing, malformed, forged, unbound, disabled and successful production-auth paths and prove those markers are absent from console output. Runtime Vercel log inspection after real Production identity rehearsal traffic is still required before closure."
     },
     "RC3-PAY-001": {
       "severity": "P1",
@@ -42,13 +43,13 @@
     },
     "RC3-ROLLBACK-001": {
       "severity": "P1",
-      "status": "KILL_SWITCH_IMPLEMENTED_RUNTIME_REHEARSAL_PENDING",
-      "finding": "Production application access has an explicit default-deny PRODUCTION_APPLICATION_ACCESS_ENABLED kill switch enforced before OIDC verification, with no Preview fallback. Unit and route tests prove disabled access returns PRODUCTION_APPLICATION_ACCESS_DISABLED before application binding or business-data access. A dedicated exact-SHA Production rollback rehearsal workflow exists and also asserts sandbox mutation routes remain production-disabled. The blocker remains open until that rollback workflow passes against an exact Production deployment with the kill switch disabled. Live-provider rollback remains separately bounded by RC3-PAY-001 and live funds remain unauthorized."
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "Production application access has an explicit default-deny PRODUCTION_APPLICATION_ACCESS_ENABLED kill switch enforced before OIDC verification, with no Preview fallback. Runtime rehearsal run 34703745217 passed against exact Production canary dpl_CSUWbrVHLXYTb4zVRnUgdcXodvq7 on commit 5377b89c92529c130ee9e78e89550fa3c28af488. Runtime SHA matched the expected SHA; member-orders, member-notifications and operator-orders failed closed while application access was disabled; commit-sandbox, pay-sandbox, fulfillment-ready, accept-fulfillment, authorize-refund and complete-refund all remained disabled in Production. Live-provider rollback remains separately bounded by RC3-PAY-001 and live funds remain unauthorized."
     },
     "RC3-REHEARSAL-001": {
       "severity": "P1",
       "status": "HARNESS_IMPLEMENTED_RUN_PENDING",
-      "finding": "A dedicated exact-SHA production identity adversarial rehearsal harness and workflow exist. It tests unauthenticated and malformed denial, cross-role escalation denial, server-side canonical actor binding and production mutation kill-switches without authorizing live funds. The blocker remains open until the workflow passes against an exact Production deployment."
+      "finding": "A dedicated exact-SHA production identity adversarial rehearsal harness and workflow exist. It tests unauthenticated and malformed denial, cross-role escalation denial, server-side canonical actor binding and production mutation kill-switches without authorizing live funds. The application-access-disabled rollback phase has passed in Production; this blocker remains open until the identity-enabled adversarial phase passes against an exact Production deployment."
     }
   },
   "negativeAssertionsRequired": [
