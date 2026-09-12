@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "evidenceId": "SW1-RC3-PRODUCTION-ROLLBACK-REHEARSAL-2026-09-12",
+  "slice": "SW1-RC3",
+  "result": "PASS",
+  "blocker": "RC3-ROLLBACK-001",
+  "productionDeployment": {
+    "provider": "VERCEL",
+    "deploymentId": "dpl_CSUWbrVHLXYTb4zVRnUgdcXodvq7",
+    "productionBaseUrl": "https://workers-food-club-chi.vercel.app",
+    "deployedCommitSha": "5377b89c92529c130ee9e78e89550fa3c28af488",
+    "environment": "production"
+  },
+  "rehearsal": {
+    "workflow": "RC3 production access rollback rehearsal",
+    "runId": 34703745217,
+    "jobId": 103579939993,
+    "sourceCommitSha": "ef489540fe316645b7243fc45b5662a42900b833",
+    "expectedCommitSha": "5377b89c92529c130ee9e78e89550fa3c28af488",
+    "runtimeCommitSha": "5377b89c92529c130ee9e78e89550fa3c28af488",
+    "productionApplicationAccess": "DISABLED"
+  },
+  "assertions": {
+    "protectedReadRoutesFailClosed": [
+      "member-orders",
+      "member-notifications",
+      "operator-orders"
+    ],
+    "sandboxMutationRoutesRemainDisabled": [
+      "commit-sandbox",
+      "pay-sandbox",
+      "fulfillment-ready",
+      "accept-fulfillment",
+      "authorize-refund",
+      "complete-refund"
+    ],
+    "boundedError": "PRODUCTION_APPLICATION_ACCESS_DISABLED",
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "releaseIndexAdvanced": false
+  },
+  "verdict": "RC3 application-access rollback mechanism is runtime-proven on the exact Production canary. This evidence does not authorize Production application access, Production writes, Paystack live mode, or live funds."
+}
