@@ -1,0 +1,78 @@
+name: RC3 bounded production canary
+
+on:
+  push:
+    branches:
+      - sw1-rc3-production-identity-live-provider-falsification
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    if: github.event.head_commit.message == 'RC3: execute bounded production canary deployment'
+    runs-on: ubuntu-latest
+    env:
+      CANARY_SHA: 5377b89c92529c130ee9e78e89550fa3c28af488
+      VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
+      VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
+    steps:
+      - name: Require deployment credential
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo 'VERCEL_TOKEN GitHub secret is not configured; refusing Production deployment.' >&2
+            exit 1
+          fi
+
+      - name: Checkout immutable green RC3 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANARY_SHA }}
+          fetch-depth: 1
+
+      - name: Verify immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$CANARY_SHA"
+          echo "RC3 canary candidate: $actual"
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.11.7
+
+      - name: Pull Production project settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club
+
+      - name: Build immutable candidate with Production semantics
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=food-club
+
+      - name: Deploy bounded Production canary
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --yes \
+            --token="$VERCEL_TOKEN" \
+            --scope=food-club \
+            --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production canary URL: $url"
+
+      - name: Record bounded authorization envelope
+        run: |
+          echo 'RC3 Production canary deployed with application access explicitly disabled.'
+          echo 'Live funds are NOT authorized.'
+          echo 'Paystack rehearsal remains Preview-only by code.'
+          echo 'No RC3 release-index advancement is authorized by this workflow.'
+          echo 'Rollback target remains SW1-RC2 production deployment dpl_551py9fWxPEPa9UNU7rYfjbBVxN7.'
