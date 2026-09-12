@@ -1,3 +1,260 @@
+import { createHmac } from 'node:crypto';
+import { Readable } from 'node:stream';
+import { mintPreviewApiToken } from '../lib/preview-api-auth.js';
+
+function responseHarness() {
+  let statusCode = 200;
+  let payload;
+  const headers = {};
+
+  const res = {
+    setHeader(name, value) {
+      headers[String(name).toLowerCase()] = value;
+    },
+    status(code) {
+      statusCode = code;
+      return this;
+    },
+    json(value) {
+      payload = value;
+      return value;
+    },
+  };
+
+  return {
+    res,
+    result() {
+      return { statusCode, payload, headers };
+    },
+  };
+}
+
+function summarize(result) {
+  return {
+    status: result.statusCode,
+    ok: result.payload?.ok === true,
+    error: result.payload?.error ?? null,
+    source: result.payload?.source ?? null,
+  };
+}
+
+async function invokeJsonHandler(handler, { method = 'GET', headers = {}, url = '/' } = {}) {
+  const harness = responseHarness();
+  await handler({ method, headers, url }, harness.res);
+  return harness.result();
+}
+
+async function invokeStreamHandler(handler, { body, headers = {} }) {
+  const req = Readable.from([Buffer.from(body)]);
+  req.method = 'POST';
+  req.headers = headers;
+  req.url = '/api/paystack-rehearsal';
+
+  const harness = responseHarness();
+  await handler(req, harness.res);
+  return harness.result();
+}
+
+function mintProbeToken(secret, { actorId, scopes, subject }) {
+  const now = Math.floor(Date.now() / 1000);
+  return mintPreviewApiToken({
+    secret,
+    subject,
+    actorId,
+    scopes,
+    issuedAt: now - 5,
+    expiresAt: now + 300,
+  });
+}
+
+async function runAuthSelfTest() {
+  const authSecret = process.env.PREVIEW_API_AUTH_SECRET;
+  if (!authSecret || authSecret.length < 32) {
+    return { ok: false, error: 'PREVIEW_AUTH_NOT_CONFIGURED' };
+  }
+
+  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+  if (!paystackSecret || !paystackSecret.startsWith('sk_test_')) {
+    return { ok: false, error: 'PAYSTACK_TEST_SECRET_NOT_CONFIGURED' };
+  }
+
+  const [
+    { default: memberOrdersHandler },
+    { default: operatorOrdersHandler },
+    { default: paystackHandler },
+  ] = await Promise.all([
+    import('./member-orders.js'),
+    import('./operator-orders.js'),
+    import('./paystack-rehearsal.js'),
+  ]);
+
+  const memberWrongScope = await invokeJsonHandler(memberOrdersHandler, {
+    headers: {
+      authorization: `Bearer ${mintProbeToken(authSecret, {
+        actorId: 'preview:member:001',
+        scopes: ['member:notifications.read'],
+        subject: 'rc2-probe:member-wrong-scope',
+      })}`,
+    },
+  });
+
+  const memberWrongActor = await invokeJsonHandler(memberOrdersHandler, {
+    headers: {
+      authorization: `Bearer ${mintProbeToken(authSecret, {
+        actorId: 'preview:operator:001',
+        scopes: ['member:orders.read'],
+        subject: 'rc2-probe:member-wrong-actor',
+      })}`,
+    },
+  });
+
+  const memberValid = await invokeJsonHandler(memberOrdersHandler, {
+    headers: {
+      authorization: `Bearer ${mintProbeToken(authSecret, {
+        actorId: 'preview:member:001',
+        scopes: ['member:orders.read'],
+        subject: 'rc2-probe:member-valid',
+      })}`,
+    },
+  });
+
+  const operatorWrongActor = await invokeJsonHandler(operatorOrdersHandler, {
+    headers: {
+      authorization: `Bearer ${mintProbeToken(authSecret, {
+        actorId: 'preview:member:001',
+        scopes: ['operator:orders.read'],
+        subject: 'rc2-probe:operator-wrong-actor',
+      })}`,
+    },
+  });
+
+  const operatorValid = await invokeJsonHandler(operatorOrdersHandler, {
+    headers: {
+      authorization: `Bearer ${mintProbeToken(authSecret, {
+        actorId: 'preview:operator:001',
+        scopes: ['operator:orders.read'],
+        subject: 'rc2-probe:operator-valid',
+      })}`,
+    },
+  });
+
+  const manualBody = JSON.stringify({
+    action: 'not-a-real-action',
+    reference: 'wfc-rc2-auth-self-test-001',
+  });
+
+  const manualUnauthenticated = await invokeStreamHandler(paystackHandler, {
+    body: manualBody,
+  });
+
+  const manualWrongScope = await invokeStreamHandler(paystackHandler, {
+    body: manualBody,
+    headers: {
+      authorization: `Bearer ${mintProbeToken(authSecret, {
+        actorId: 'preview:operator:001',
+        scopes: ['operator:orders.read'],
+        subject: 'rc2-probe:paystack-wrong-scope',
+      })}`,
+    },
+  });
+
+  const manualWrongActor = await invokeStreamHandler(paystackHandler, {
+    body: manualBody,
+    headers: {
+      authorization: `Bearer ${mintProbeToken(authSecret, {
+        actorId: 'preview:member:001',
+        scopes: ['operator:payment.rehearse'],
+        subject: 'rc2-probe:paystack-wrong-actor',
+      })}`,
+    },
+  });
+
+  const manualValid = await invokeStreamHandler(paystackHandler, {
+    body: manualBody,
+    headers: {
+      authorization: `Bearer ${mintProbeToken(authSecret, {
+        actorId: 'preview:operator:001',
+        scopes: ['operator:payment.rehearse'],
+        subject: 'rc2-probe:paystack-valid',
+      })}`,
+    },
+  });
+
+  const webhookBody = JSON.stringify({
+    event: 'charge.success',
+    data: {
+      reference: 'wfc-rc2-auth-self-test-webhook-001',
+      status: 'success',
+      amount: 100,
+      currency: 'GHS',
+      paid_at: '2026-09-12T07:00:00Z',
+    },
+  });
+  const webhookSignature = createHmac('sha512', paystackSecret)
+    .update(webhookBody)
+    .digest('hex');
+
+  const signedWebhook = await invokeStreamHandler(paystackHandler, {
+    body: webhookBody,
+    headers: { 'x-paystack-signature': webhookSignature },
+  });
+
+  const probes = {
+    memberWrongScope: summarize(memberWrongScope),
+    memberWrongActor: summarize(memberWrongActor),
+    memberValid: {
+      ...summarize(memberValid),
+      crossedAuthBoundary: ![401, 403].includes(memberValid.statusCode),
+      orderCount: Array.isArray(memberValid.payload?.orders) ? memberValid.payload.orders.length : null,
+    },
+    operatorWrongActor: summarize(operatorWrongActor),
+    operatorValid: {
+      ...summarize(operatorValid),
+      crossedAuthBoundary: ![401, 403].includes(operatorValid.statusCode),
+      orderCount: Array.isArray(operatorValid.payload?.orders) ? operatorValid.payload.orders.length : null,
+    },
+    paystackManualUnauthenticated: summarize(manualUnauthenticated),
+    paystackManualWrongScope: summarize(manualWrongScope),
+    paystackManualWrongActor: summarize(manualWrongActor),
+    paystackManualValid: {
+      ...summarize(manualValid),
+      crossedAuthBoundary: manualValid.statusCode === 400 && manualValid.payload?.error === 'PAYSTACK_REHEARSAL_ACTION_INVALID',
+    },
+    signedPaystackWebhookWithoutPreviewBearer: {
+      ...summarize(signedWebhook),
+      authenticity: signedWebhook.payload?.webhook?.authenticity ?? null,
+      provider: signedWebhook.payload?.webhook?.provider ?? null,
+      crossedProviderHmacBoundary: signedWebhook.statusCode === 200 && signedWebhook.payload?.webhook?.authenticity === 'HMAC_SHA512_VERIFIED',
+    },
+  };
+
+  const passed =
+    probes.memberWrongScope.status === 403 && probes.memberWrongScope.error === 'AUTHORIZATION_SCOPE_REQUIRED' &&
+    probes.memberWrongActor.status === 403 && probes.memberWrongActor.error === 'AUTHENTICATED_ACTOR_MISMATCH' &&
+    probes.memberValid.crossedAuthBoundary === true &&
+    probes.operatorWrongActor.status === 403 && probes.operatorWrongActor.error === 'AUTHENTICATED_ACTOR_MISMATCH' &&
+    probes.operatorValid.crossedAuthBoundary === true &&
+    probes.paystackManualUnauthenticated.status === 401 && probes.paystackManualUnauthenticated.error === 'AUTHENTICATION_REQUIRED' &&
+    probes.paystackManualWrongScope.status === 403 && probes.paystackManualWrongScope.error === 'AUTHORIZATION_SCOPE_REQUIRED' &&
+    probes.paystackManualWrongActor.status === 403 && probes.paystackManualWrongActor.error === 'AUTHENTICATED_ACTOR_MISMATCH' &&
+    probes.paystackManualValid.crossedAuthBoundary === true &&
+    probes.signedPaystackWebhookWithoutPreviewBearer.crossedProviderHmacBoundary === true;
+
+  console.info('RC2_AUTH_SELF_TEST', {
+    passed,
+    deploymentId: process.env.VERCEL_DEPLOYMENT_ID || null,
+    commitSha: process.env.VERCEL_GIT_COMMIT_SHA || null,
+  });
+
+  return {
+    ok: passed,
+    probe: 'rc2-auth-self-test',
+    deploymentId: process.env.VERCEL_DEPLOYMENT_ID || null,
+    commitSha: process.env.VERCEL_GIT_COMMIT_SHA || null,
+    probes,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -16,6 +273,16 @@ export default async function handler(req, res) {
       branchUrl: process.env.VERCEL_BRANCH_URL || null,
       deploymentId: process.env.VERCEL_DEPLOYMENT_ID || null,
     });
+  }
+
+  if (url.searchParams.get('probe') === 'auth-self-test') {
+    if (process.env.VERCEL_ENV !== 'preview') {
+      return res.status(403).json({ ok: false, error: 'AUTH_SELF_TEST_PREVIEW_ONLY' });
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    const result = await runAuthSelfTest();
+    return res.status(result.ok ? 200 : 500).json(result);
   }
 
   if (url.searchParams.get('probe') === 'config-isolation') {
