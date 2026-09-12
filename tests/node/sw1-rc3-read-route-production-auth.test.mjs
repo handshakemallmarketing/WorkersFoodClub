@@ -96,7 +96,7 @@ async function withProductionOidc(run) {
   }
 }
 
-test('RC3 member-notifications accepts production member principal before database access', async () => {
+test('RC3 member-notifications valid OIDC identity fails closed without application binding store', async () => {
   await withProductionOidc(async () => {
     const res = response();
     await memberNotifications({
@@ -111,11 +111,11 @@ test('RC3 member-notifications accepts production member principal before databa
     }, res);
 
     assert.equal(res.result.statusCode, 503);
-    assert.equal(res.result.body?.error, 'DATABASE_URL_MISSING');
+    assert.equal(res.result.body?.error, 'APPLICATION_BINDING_STORE_NOT_CONFIGURED');
   });
 });
 
-test('RC3 member-notifications rejects wrong production scope before database access', async () => {
+test('RC3 member-notifications rejects wrong production scope before application binding lookup', async () => {
   await withProductionOidc(async () => {
     const res = response();
     await memberNotifications({
@@ -134,7 +134,7 @@ test('RC3 member-notifications rejects wrong production scope before database ac
   });
 });
 
-test('RC3 operator-orders accepts production operator principal before database access', async () => {
+test('RC3 operator-orders valid OIDC identity fails closed without application binding store', async () => {
   await withProductionOidc(async () => {
     const res = response();
     await operatorOrders({
@@ -149,6 +149,6 @@ test('RC3 operator-orders accepts production operator principal before database 
     }, res);
 
     assert.equal(res.result.statusCode, 503);
-    assert.equal(res.result.body?.error, 'DATABASE_URL_MISSING');
+    assert.equal(res.result.body?.error, 'APPLICATION_BINDING_STORE_NOT_CONFIGURED');
   });
 });
