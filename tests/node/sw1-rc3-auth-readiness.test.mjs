@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import authReadiness from '../../api/auth-readiness.js';
+import dbHealth from '../../api/db-health.js';
 
 function response() {
   const result = { statusCode: null, body: null, headers: {} };
@@ -41,13 +41,13 @@ function restoreEnv(snapshot) {
   }
 }
 
-async function runWithEnv(values, request = { method: 'GET' }) {
+async function runWithEnv(values, request = { method: 'GET', url: '/api/db-health?probe=identity-readiness' }) {
   const original = snapshotEnv();
   try {
     for (const key of ENV_KEYS) delete process.env[key];
     Object.assign(process.env, values);
     const res = response();
-    await authReadiness(request, res);
+    await dbHealth(request, res);
     return res.result;
   } finally {
     restoreEnv(original);
@@ -121,7 +121,7 @@ test('RC3 auth readiness preserves Preview behavior', async () => {
 });
 
 test('RC3 auth readiness only permits GET', async () => {
-  const result = await runWithEnv({}, { method: 'POST' });
+  const result = await runWithEnv({}, { method: 'POST', url: '/api/db-health?probe=identity-readiness' });
   assert.equal(result.statusCode, 405);
   assert.equal(result.body?.error, 'METHOD_NOT_ALLOWED');
   assert.equal(result.headers.allow, 'GET');
