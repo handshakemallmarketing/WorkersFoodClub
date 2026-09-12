@@ -51,6 +51,13 @@ function token(overrides = {}, headerOverrides = {}) {
   return `${header}.${payload}.${signature}`;
 }
 
+function forgeSignature(jwt) {
+  const [header, payload, signaturePart] = jwt.split('.');
+  const signature = Buffer.from(signaturePart, 'base64url');
+  signature[0] ^= 0x01;
+  return `${header}.${payload}.${signature.toString('base64url')}`;
+}
+
 const resolveJwks = async () => JWKS;
 
 test('RC3 production OIDC config fails closed when incomplete', () => {
@@ -104,8 +111,7 @@ test('RC3 production OIDC rejects unsupported algorithm', async () => {
 });
 
 test('RC3 production OIDC rejects forged signature', async () => {
-  const valid = token();
-  const forged = `${valid.slice(0, -1)}${valid.endsWith('A') ? 'B' : 'A'}`;
+  const forged = forgeSignature(token());
   const result = await verifyProductionOidcToken({ token: forged, requiredScope: 'member:orders.read', now: NOW, config, jwksResolver: resolveJwks });
   assert.equal(result.error, 'TOKEN_SIGNATURE_INVALID');
 });
