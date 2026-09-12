@@ -17,12 +17,12 @@
     "RC3-AUTH-001": {
       "severity": "P1",
       "status": "REMEDIATED_CODE_PROOF_PENDING_RUNTIME",
-      "finding": "A fail-closed RS256 OIDC/JWKS production verifier and environment-aware application auth boundary exist and are covered by adversarial unit tests. OIDC establishes external identity only; application authority is resolved separately. Production runtime identity configuration and deployed success/failure evidence are still required before closure."
+      "finding": "The production OIDC verifier is now fail-closed, RS256/JWKS-based, signature-first, and identity-only. It verifies the cryptographic signature before trusting issuer, audience, temporal or subject claims. IdP actor/scope claims are not application authority and are no longer required configuration. Production runtime identity configuration and deployed success/failure evidence are still required before closure."
     },
     "RC3-BIND-001": {
       "severity": "P1",
       "status": "REMEDIATED_CODE_PROOF_PENDING_RUNTIME",
-      "finding": "Server-side application identity binding resolves verified (issuer, subject) to canonical participant_id and governed application scopes, with durable uniqueness preventing silent rebinding. Production-capable read routes consume the canonical principal. Consequential sandbox mutation routes now use environment-neutral generated durable identifiers/runtime metadata but remain explicitly production-disabled. Runtime proof of bound, unbound, disabled and cross-role principals is still required before closure."
+      "finding": "Server-side application identity binding resolves verified (issuer, subject) to canonical participant_id and governed application scopes, with durable uniqueness preventing silent rebinding. Production-capable read routes consume the canonical principal. IdP actor/scope claims cannot select application actor or authority. Consequential sandbox mutation routes remain explicitly production-disabled. Runtime proof of bound, unbound, disabled and cross-role principals is still required before closure."
     },
     "RC3-ENV-001": {
       "severity": "P1",
@@ -31,8 +31,8 @@
     },
     "RC3-LOG-001": {
       "severity": "P1",
-      "status": "OPEN",
-      "finding": "Production identity runtime logging hygiene has not yet been falsified with real production-auth failure/success traffic."
+      "status": "REMEDIATED_CODE_PROOF_PENDING_RUNTIME",
+      "finding": "Adversarial tests plant bearer-token, issuer, audience, JWKS, subject and binding markers across missing, malformed, forged, unbound, disabled and successful production-auth paths and prove those markers are absent from console output. Runtime Vercel log inspection after real Production rehearsal traffic is still required before closure."
     },
     "RC3-PAY-001": {
       "severity": "P1",
@@ -42,7 +42,7 @@
     "RC3-ROLLBACK-001": {
       "severity": "P1",
       "status": "KILL_SWITCH_IMPLEMENTED_RUNTIME_REHEARSAL_PENDING",
-      "finding": "Production application access now has an explicit default-deny PRODUCTION_APPLICATION_ACCESS_ENABLED kill switch enforced before OIDC verification, with no Preview fallback. Unit and route tests prove disabled access returns PRODUCTION_APPLICATION_ACCESS_DISABLED before application binding or business-data access. A dedicated exact-SHA Production rollback rehearsal workflow exists and also asserts sandbox mutation routes remain production-disabled. The blocker remains open until that rollback workflow passes against an exact Production deployment with the kill switch disabled. Live-provider rollback remains separately bounded by RC3-PAY-001 and live funds remain unauthorized."
+      "finding": "Production application access has an explicit default-deny PRODUCTION_APPLICATION_ACCESS_ENABLED kill switch enforced before OIDC verification, with no Preview fallback. Unit and route tests prove disabled access returns PRODUCTION_APPLICATION_ACCESS_DISABLED before application binding or business-data access. A dedicated exact-SHA Production rollback rehearsal workflow exists and also asserts sandbox mutation routes remain production-disabled. The blocker remains open until that rollback workflow passes against an exact Production deployment with the kill switch disabled. Live-provider rollback remains separately bounded by RC3-PAY-001 and live funds remain unauthorized."
     },
     "RC3-REHEARSAL-001": {
       "severity": "P1",
@@ -53,10 +53,11 @@
   "negativeAssertionsRequired": [
     "missing bearer fails closed",
     "malformed bearer fails closed",
-    "bad signature fails closed",
+    "bad signature fails closed before untrusted claims are accepted",
     "wrong issuer fails closed",
     "wrong audience fails closed",
     "expired or not-yet-valid token fails closed",
+    "IdP actor and scope claims cannot choose application actor or authority",
     "valid upstream subject without application binding fails closed",
     "member cannot acquire operator scope",
     "authenticated actor cannot be replaced by request actor input",
@@ -64,7 +65,7 @@
     "Preview HMAC token cannot authenticate production",
     "production application access kill switch fails closed before OIDC verification",
     "production mutation cannot emit Preview-only durable or canonical identity semantics",
-    "sensitive identity/provider material absent from runtime logs",
+    "sensitive bearer/identity/provider configuration material absent from logs",
     "unauthenticated provider traffic cannot create economic truth",
     "provider retries cannot duplicate canonical effects"
   ],
