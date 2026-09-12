@@ -1,0 +1,288 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createHmac} from 'node:crypto';
+import {Readable} from 'node:stream';
+import {PaystackConfigurationGate,PaystackPaymentAdapter,PaystackWebhookVerifier} from '../../dist/packages/pilot-payments/src/paystack.js';
+import paystackRehearsalHandler, {config as paystackApiConfig} from '../../api/paystack-rehearsal.js';
+import { mintPreviewApiToken } from '../../lib/preview-api-auth.js';
+
+const jsonResponse=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});
+const money=(minor,currency='GHS')=>Object.freeze({minor:BigInt(minor),currency});
+
+function queueFetcher(responses,calls=[]){
+ return async (url,init={})=>{calls.push({url:String(url),init});const next=responses.shift();if(!next) throw new Error('TEST_FETCH_QUEUE_EMPTY');return jsonResponse(next.body,next.status??200);};
+}
+
+test('Paystack live mode fails closed until live funds are explicitly authorized',()=>{
+ const gate=new PaystackConfigurationGate();
+ assert.throws(()=>gate.validate({environment:'live',secretKey:'sk_live_example'}),/PAYSTACK_LIVE_PAYMENTS_NOT_AUTHORIZED/);
+ assert.throws(()=>gate.validate({environment:'test',secretKey:'sk_live_example'}),/PAYSTACK_TEST_KEY_REQUIRED/);
+ const cfg=gate.validate({environment:'test',secretKey:'sk_test_example'});
+ assert.equal(cfg.liveEnabled,false);
+});
+
+test('Paystack Ghana MoMo initiation binds reference, amount and provider but does not declare payment truth',async()=>{
+ const calls=[];const fetcher=queueFetcher([{body:{status:true,data:{reference:'wfc-order-1',status:'pay_offline',display_text:'Approve on phone'}}}],calls);
+ const adapter=new PaystackPaymentAdapter({environment:'test',secretKey:'sk_test_example'},fetcher);
+ const receipt=await adapter.initiatePayment({reference:'wfc-order-1',email:'member@example.com',phone:'0551234567',mobileMoneyProvider:'mtn',amount:money(12500)});
+ assert.equal(receipt.providerReference,'wfc-order-1');assert.equal(receipt.state,'PENDING_EXTERNAL_CONFIRMATION');
+ const sent=JSON.parse(calls[0].init.body);assert.deepEqual(sent.mobile_money,{phone:'0551234567',provider:'mtn'});assert.equal(sent.amount,12500);assert.equal(sent.currency,'GHS');
+ assert.equal(calls[0].init.headers.Authorization,'Bearer sk_test_example');
+});
+
+test('Paystack webhook verification requires the exact raw body HMAC-SHA512 before semantics are trusted',()=>{
+ const secret='sk_test_webhook';const verifier=new PaystackWebhookVerifier(secret);
+ const rawBody=JSON.stringify({event:'charge.success',data:{reference:'wfc-order-1',status:'success',amount:12500,currency:'GHS',paid_at:'2026-09-11T12:00:00Z'}});
+ const signature=createHmac('sha512',secret).update(rawBody).digest('hex');
+ const verified=verifier.verify({rawBody,signature});assert.equal(verified.status,'CONFIRMED');assert.equal(verified.amount.minor,12500n);
+ assert.throws(()=>verifier.verify({rawBody:`${rawBody} `,signature}),/PAYMENT_WEBHOOK_SIGNATURE_INVALID/);
+ assert.throws(()=>verifier.verify({rawBody,signature:'0'.repeat(128)}),/PAYMENT_WEBHOOK_SIGNATURE_INVALID/);
+});
+
+test('Paystack webhook rejects authenticated but unsupported events rather than guessing payment state',()=>{
+ const secret='sk_test_webhook';const verifier=new PaystackWebhookVerifier(secret);
+ const rawBody=JSON.stringify({event:'refund.processed',data:{reference:'wfc-order-1'}});const signature=createHmac('sha512',secret).update(rawBody).digest('hex');
+ assert.throws(()=>verifier.verify({rawBody,signature}),/PAYSTACK_WEBHOOK_EVENT_NOT_SUPPORTED/);
+});
+
+test('Paystack transaction verification reconciles provider success and rejects nonterminal outcomes as canonical truth',async()=>{
+ const fetcher=queueFetcher([
+  {body:{status:true,data:{reference:'wfc-order-2',status:'pending',amount:5000,currency:'GHS',created_at:'2026-09-11T12:00:00Z'}}},
+  {body:{status:true,data:{reference:'wfc-order-2',status:'success',amount:5000,currency:'GHS',paid_at:'2026-09-11T12:01:00Z'}}}
+ ]);
+ const adapter=new PaystackPaymentAdapter({environment:'test',secretKey:'sk_test_example'},fetcher);
+ const pending=await adapter.verifyPayment('wfc-order-2');assert.equal(pending.state,'PENDING');assert.throws(()=>adapter.toVerifiedTerminal(pending),/PAYSTACK_OUTCOME_NOT_TERMINAL/);
+ const success=await adapter.verifyPayment('wfc-order-2');const terminal=adapter.toVerifiedTerminal(success);assert.equal(terminal.status,'CONFIRMED');assert.equal(terminal.providerReference,'wfc-order-2');
+});
+
+test('Paystack verification rejects provider reference rebinding',async()=>{
+ const fetcher=queueFetcher([{body:{status:true,data:{reference:'other-order',status:'success',amount:5000,currency:'GHS',paid_at:'2026-09-11T12:01:00Z'}}}]);
+ const adapter=new PaystackPaymentAdapter({environment:'test',secretKey:'sk_test_example'},fetcher);
+ await assert.rejects(()=>adapter.verifyPayment('wfc-order-3'),/PAYSTACK_VERIFY_REFERENCE_MISMATCH/);
+});
+
+test('Paystack refunds remain provider evidence with explicit lifecycle state and transaction binding',async()=>{
+ const calls=[];const fetcher=queueFetcher([
+  {body:{status:true,data:{id:77,status:'pending',transaction_reference:'wfc-order-4',amount:3000,currency:'GHS'}}},
+  {body:{status:true,data:{id:77,status:'processed',transaction_reference:'wfc-order-4',amount:3000,currency:'GHS'}}}
+ ],calls);
+ const adapter=new PaystackPaymentAdapter({environment:'test',secretKey:'sk_test_example'},fetcher);
+ const started=await adapter.initiateRefund({transactionReference:'wfc-order-4',amount:money(3000),merchantNote:'authorized-remedy:remedy-1'});assert.equal(started.state,'PENDING');assert.equal(started.refundId,'77');
+ const queried=await adapter.queryRefund('77');assert.equal(queried.state,'PROCESSED');assert.equal(queried.transactionReference,'wfc-order-4');
+ assert.equal(JSON.parse(calls[0].init.body).transaction,'wfc-order-4');
+});
+
+test('Paystack provider errors are fail-closed and do not echo credentials',async()=>{
+ const secret='sk_test_super_sensitive';const fetcher=queueFetcher([{status:401,body:{status:false,message:`bad key ${secret}`}}]);
+ const adapter=new PaystackPaymentAdapter({environment:'test',secretKey:secret},fetcher);
+ await assert.rejects(()=>adapter.verifyPayment('wfc-order-5'),err=>{assert.equal(err.message,'PAYSTACK_PROVIDER_REQUEST_FAILED');assert.ok(!err.message.includes(secret));return true;});
+});
+
+
+async function invokePaystackWebhook(rawBody, signature) {
+ const req=Readable.from([Buffer.from(rawBody)]);
+ req.method='POST';
+ req.headers={'x-paystack-signature':signature};
+
+ let statusCode=200;
+ let payload;
+ const headers={};
+
+ const res={
+  setHeader(name,value){headers[String(name).toLowerCase()]=value;},
+  status(code){statusCode=code;return this;},
+  json(value){payload=value;return value;}
+ };
+
+ const priorEnv=process.env.VERCEL_ENV;
+ const priorSecret=process.env.PAYSTACK_SECRET_KEY;
+
+ process.env.VERCEL_ENV='preview';
+ process.env.PAYSTACK_SECRET_KEY='sk_test_webhook_boundary';
+
+ try{
+  await paystackRehearsalHandler(req,res);
+  return {statusCode,payload,headers};
+ }finally{
+  if(priorEnv===undefined) delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV=priorEnv;
+
+  if(priorSecret===undefined) delete process.env.PAYSTACK_SECRET_KEY;
+  else process.env.PAYSTACK_SECRET_KEY=priorSecret;
+ }
+}
+
+test('Paystack deployed HTTP boundary verifies exact raw-body signature before trusting payload',async()=>{
+ assert.equal(paystackApiConfig.api.bodyParser,false);
+
+ const secret='sk_test_webhook_boundary';
+ const rawBody=JSON.stringify({
+  event:'charge.success',
+  data:{
+   reference:'wfc-rc2-http-boundary-001',
+   status:'success',
+   amount:100,
+   currency:'GHS',
+   paid_at:'2026-09-12T04:00:00Z'
+  }
+ });
+
+ const signature=createHmac('sha512',secret).update(rawBody).digest('hex');
+ const result=await invokePaystackWebhook(rawBody,signature);
+
+ assert.equal(result.statusCode,200);
+ assert.equal(result.payload.ok,true);
+ assert.equal(result.payload.webhook.provider,'PAYSTACK');
+ assert.equal(result.payload.webhook.providerReference,'wfc-rc2-http-boundary-001');
+ assert.equal(result.payload.webhook.status,'CONFIRMED');
+ assert.equal(result.payload.webhook.amount.minor,'100');
+ assert.equal(result.payload.webhook.amount.currency,'GHS');
+ assert.equal(result.payload.webhook.authenticity,'HMAC_SHA512_VERIFIED');
+});
+
+test('Paystack deployed HTTP boundary rejects forged signature',async()=>{
+ const rawBody=JSON.stringify({
+  event:'charge.success',
+  data:{
+   reference:'wfc-rc2-http-boundary-002',
+   status:'success',
+   amount:100,
+   currency:'GHS',
+   paid_at:'2026-09-12T04:00:00Z'
+  }
+ });
+
+ const result=await invokePaystackWebhook(rawBody,'0'.repeat(128));
+
+ assert.equal(result.statusCode,401);
+ assert.deepEqual(result.payload,{
+  ok:false,
+  error:'PAYSTACK_WEBHOOK_SIGNATURE_INVALID'
+ });
+});
+
+test('Paystack deployed HTTP boundary rejects body tampering after signature creation',async()=>{
+ const secret='sk_test_webhook_boundary';
+
+ const original=JSON.stringify({
+  event:'charge.success',
+  data:{
+   reference:'wfc-rc2-http-boundary-003',
+   status:'success',
+   amount:100,
+   currency:'GHS',
+   paid_at:'2026-09-12T04:00:00Z'
+  }
+ });
+
+ const signature=createHmac('sha512',secret).update(original).digest('hex');
+ const tampered=original.replace('"amount":100','"amount":10000');
+
+ const result=await invokePaystackWebhook(tampered,signature);
+
+ assert.equal(result.statusCode,401);
+ assert.equal(result.payload.error,'PAYSTACK_WEBHOOK_SIGNATURE_INVALID');
+});
+
+test('Paystack deployed HTTP boundary rejects authenticated unsupported event',async()=>{
+ const secret='sk_test_webhook_boundary';
+
+ const rawBody=JSON.stringify({
+  event:'refund.processed',
+  data:{
+   reference:'wfc-rc2-http-boundary-004'
+  }
+ });
+
+ const signature=createHmac('sha512',secret).update(rawBody).digest('hex');
+ const result=await invokePaystackWebhook(rawBody,signature);
+
+ assert.equal(result.statusCode,400);
+ assert.equal(result.payload.error,'PAYSTACK_WEBHOOK_EVENT_NOT_SUPPORTED');
+});
+
+
+const PREVIEW_AUTH_SECRET='rc2-paystack-auth-secret-0123456789-abcdefghijklmnopqrstuvwxyz';
+
+async function invokePaystackManual(body,token){
+ const rawBody=JSON.stringify(body);
+ const req=Readable.from([rawBody]);
+ req.method='POST';
+ req.headers=token?{authorization:`Bearer ${token}`}:{};
+
+ let statusCode=200;
+ let payload;
+ const headers={};
+ const res={
+  setHeader(name,value){headers[String(name).toLowerCase()]=value;},
+  status(code){statusCode=code;return this;},
+  json(value){payload=value;return value;}
+ };
+
+ const priorEnv=process.env.VERCEL_ENV;
+ const priorPaystackSecret=process.env.PAYSTACK_SECRET_KEY;
+ const priorAuthSecret=process.env.PREVIEW_API_AUTH_SECRET;
+
+ process.env.VERCEL_ENV='preview';
+ process.env.PAYSTACK_SECRET_KEY='sk_test_webhook_boundary';
+ process.env.PREVIEW_API_AUTH_SECRET=PREVIEW_AUTH_SECRET;
+
+ try{
+  await paystackRehearsalHandler(req,res);
+  return {statusCode,payload,headers};
+ }finally{
+  if(priorEnv===undefined) delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV=priorEnv;
+
+  if(priorPaystackSecret===undefined) delete process.env.PAYSTACK_SECRET_KEY;
+  else process.env.PAYSTACK_SECRET_KEY=priorPaystackSecret;
+
+  if(priorAuthSecret===undefined) delete process.env.PREVIEW_API_AUTH_SECRET;
+  else process.env.PREVIEW_API_AUTH_SECRET=priorAuthSecret;
+ }
+}
+
+function mintPaystackOperatorToken(overrides={}){
+ const now=Math.floor(Date.now()/1000);
+ return mintPreviewApiToken({
+  secret:PREVIEW_AUTH_SECRET,
+  subject:'preview-user:operator-test',
+  actorId:'preview:operator:001',
+  scopes:['operator:payment.rehearse'],
+  issuedAt:now-5,
+  expiresAt:now+300,
+  ...overrides
+ });
+}
+
+test('Paystack manual rehearsal rejects unauthenticated caller',async()=>{
+ const result=await invokePaystackManual({action:'verify',reference:'wfc-rc2-auth-test-001'});
+ assert.equal(result.statusCode,401);
+ assert.equal(result.payload.error,'AUTHENTICATION_REQUIRED');
+});
+
+test('Paystack manual rehearsal rejects wrong scope',async()=>{
+ const token=mintPaystackOperatorToken({scopes:['operator:orders.read']});
+ const result=await invokePaystackManual({action:'verify',reference:'wfc-rc2-auth-test-002'},token);
+ assert.equal(result.statusCode,403);
+ assert.equal(result.payload.error,'AUTHORIZATION_SCOPE_REQUIRED');
+});
+
+test('Paystack manual rehearsal rejects wrong authenticated actor',async()=>{
+ const token=mintPaystackOperatorToken({actorId:'preview:operator:other'});
+ const result=await invokePaystackManual({action:'verify',reference:'wfc-rc2-auth-test-003'},token);
+ assert.equal(result.statusCode,403);
+ assert.equal(result.payload.error,'AUTHENTICATED_ACTOR_MISMATCH');
+});
+
+test('Paystack manual rehearsal accepts valid operator principal past auth gate',async()=>{
+ const token=mintPaystackOperatorToken();
+ const result=await invokePaystackManual({action:'not-a-real-action'},token);
+
+ /*
+  * Reaching PAYSTACK_REHEARSAL_ACTION_INVALID proves the valid principal
+  * crossed the auth boundary without requiring a live provider call.
+  */
+ assert.equal(result.statusCode,400);
+ assert.equal(result.payload.error,'PAYSTACK_REHEARSAL_ACTION_INVALID');
+});

@@ -1,0 +1,42 @@
+{
+  "slice": "SW1-RC2",
+  "status": "GO_RC2",
+  "validatedCodeCommit": "ffdfe78586f53c0c63b5309656d8ea4d0c6b7ca1",
+  "reviewArtifact": "docs/traceability/SW1-RC2-security-privacy-payment-production-readiness-review.json",
+  "contract": "docs/sw1/SW1-RC2-security-privacy-payment-production-readiness-review.md",
+  "constitutionalConformance": {
+    "runNumber": 1228,
+    "runId": 34681237613,
+    "result": "SUCCESS"
+  },
+  "deployedRuntime": {
+    "deploymentId": "dpl_8weHyq9iFPNTVnjWGwTVTkC8o6ZE",
+    "environment": "preview",
+    "result": "READY"
+  },
+  "authenticatedReplayBridge": {
+    "probeCommit": "c68cbd68ad8075eb5bc92c9d1908d69492ae34f3",
+    "deploymentId": "dpl_3YprUmLWnVTMLVcMHCStF8d9HgJv",
+    "result": "PASS"
+  },
+  "closedP0P1Findings": [
+    "RC2-PAY-001",
+    "RC2-SEC-001",
+    "RC2-OBS-001",
+    "RC2-AUTH-001",
+    "RC2-PRIV-001",
+    "RC2-DUR-001",
+    "RC2-RUN-001",
+    "RC2-LEGAL-001"
+  ],
+  "unresolvedP0P1Findings": [],
+  "productionAuthorization": false,
+  "liveFundsAuthorized": false,
+  "authorizes": "merge and advancement of the SW1-RC2 evidence baseline within the tested Preview/test-provider envelope",
+  "limitations": [
+    "live Paystack funds are not authorized",
+    "production identity-provider integration is not asserted by the Preview HMAC boundary",
+    "no destructive production database restore was performed",
+    "production activation outside the exact provider/environment/policy envelope requires a separate authorization decision"
+  ]
+}

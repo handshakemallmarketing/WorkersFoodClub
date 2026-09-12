@@ -1,4 +1,4 @@
-import type {AuthorityGrantId,EvidenceId,ParticipantId} from '../../kernel/src/index.js';
+import type {AuthorityGrantId,EvidenceId,ParticipantId,Quantity} from '../../kernel/src/index.js';
 import type {AuthorityEvaluator} from '../../authority/src/index.js';
 
 export type TransferDimension='TITLE'|'RISK';
@@ -9,6 +9,19 @@ export interface TransferEvent {
   readonly transactionId:string;
   readonly type:string;
   readonly occurredAt:string;
+  readonly evidenceIds:readonly EvidenceId[];
+}
+
+export interface QuantityTransferEvent extends TransferEvent {
+  readonly quantity?:Quantity;
+}
+
+export interface AcceptanceTransferSource {
+  readonly id:string;
+  readonly obligationId:string;
+  readonly state:'ACCEPTED'|'REJECTED'|'PARTIALLY_ACCEPTED';
+  readonly quantity:Quantity;
+  readonly acceptedAt:string;
   readonly evidenceIds:readonly EvidenceId[];
 }
 
@@ -52,8 +65,36 @@ export interface TransferEvaluation {
   readonly riskEventId?:string;
 }
 
+export interface QuantityTransferEvaluation extends TransferEvaluation {
+  readonly totalQuantity:Quantity;
+  readonly titleTransferredQuantity:Quantity;
+  readonly riskTransferredQuantity:Quantity;
+  readonly titleComplete:boolean;
+  readonly riskComplete:boolean;
+  readonly titleEventIds:readonly string[];
+  readonly riskEventIds:readonly string[];
+}
+
 const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
 const at=(v:string)=>new Date(v).getTime();
+
+export function transferEventFromAcceptance(input:AcceptanceTransferSource):QuantityTransferEvent|undefined{
+  if(!input.id.trim()||!input.obligationId.trim()||!validTime(input.acceptedAt)||input.evidenceIds.length===0) throw new Error('TRANSFER_ACCEPTANCE_SOURCE_INVALID');
+  if(!Number.isFinite(input.quantity.amount)||input.quantity.amount<0||!input.quantity.unit.trim()) throw new Error('TRANSFER_ACCEPTANCE_QUANTITY_INVALID');
+  if(input.state==='REJECTED'){
+    if(input.quantity.amount!==0) throw new Error('TRANSFER_REJECTED_ACCEPTANCE_QUANTITY_INVALID');
+    return undefined;
+  }
+  if(input.quantity.amount<=0) throw new Error('TRANSFER_ACCEPTANCE_QUANTITY_INVALID');
+  return Object.freeze({
+    id:input.id,
+    transactionId:input.obligationId,
+    type:'ACCEPTANCE',
+    occurredAt:input.acceptedAt,
+    evidenceIds:Object.freeze([...input.evidenceIds]),
+    quantity:Object.freeze({...input.quantity})
+  });
+}
 
 function validateRule(rule:TransferRule):void{
   if(rule.trigger==='NAMED_EVENT'){
@@ -103,19 +144,52 @@ export class GovernedTransferPolicyRegistry {
 export class GovernedTransferEvaluator {
   constructor(private readonly registry:GovernedTransferPolicyRegistry){}
 
-  evaluate(input:{transactionId:string;transactionType:string;policyId:string;policyVersion:number;events:readonly TransferEvent[]}):TransferEvaluation{
+  private eligible(input:{transactionId:string;transactionType:string;policyId:string;policyVersion:number;events:readonly TransferEvent[]}){
     const policy=this.registry.get(input.policyId,input.policyVersion);
     if(policy.transactionType!==input.transactionType) throw new Error('TRANSFER_POLICY_TRANSACTION_TYPE_MISMATCH');
     const events=input.events.filter(e=>e.transactionId===input.transactionId);
-    for(const e of events){if(!e.id.trim()||!e.type.trim()||!validTime(e.occurredAt)||e.evidenceIds.length===0) throw new Error('TRANSFER_EVENT_EVIDENCE_REQUIRED');}
-    const eligible=events.filter(e=>at(e.occurredAt)>=at(policy.effectiveFrom));
-    const first=(rule:TransferRule)=>eligible.filter(e=>e.type===triggerType(rule)).sort((a,b)=>at(a.occurredAt)-at(b.occurredAt))[0];
+    const ids=new Set<string>();
+    for(const e of events){
+      if(!e.id.trim()||!e.type.trim()||!validTime(e.occurredAt)||e.evidenceIds.length===0) throw new Error('TRANSFER_EVENT_EVIDENCE_REQUIRED');
+      if(ids.has(e.id)) throw new Error('TRANSFER_EVENT_ID_DUPLICATE');
+      ids.add(e.id);
+    }
+    return {policy,events:events.filter(e=>at(e.occurredAt)>=at(policy.effectiveFrom))};
+  }
+
+  evaluate(input:{transactionId:string;transactionType:string;policyId:string;policyVersion:number;events:readonly TransferEvent[]}):TransferEvaluation{
+    const {policy,events}=this.eligible(input);
+    const first=(rule:TransferRule)=>events.filter(e=>e.type===triggerType(rule)).sort((a,b)=>at(a.occurredAt)-at(b.occurredAt))[0];
     const titleEvent=first(policy.title);const riskEvent=first(policy.risk);
     const base={transactionId:input.transactionId,policyId:policy.id,policyVersion:policy.version,titleTransferred:Boolean(titleEvent),riskTransferred:Boolean(riskEvent)};
-    return Object.freeze({
-      ...base,
-      ...(titleEvent?{titleEventId:titleEvent.id}:{}),
-      ...(riskEvent?{riskEventId:riskEvent.id}:{})
-    });
+    return Object.freeze({...base,...(titleEvent?{titleEventId:titleEvent.id}:{}),...(riskEvent?{riskEventId:riskEvent.id}:{})});
+  }
+
+  evaluateQuantities(input:{transactionId:string;transactionType:string;policyId:string;policyVersion:number;totalQuantity:Quantity;events:readonly QuantityTransferEvent[]}):QuantityTransferEvaluation{
+    if(!Number.isFinite(input.totalQuantity.amount)||input.totalQuantity.amount<=0) throw new Error('TRANSFER_TOTAL_QUANTITY_INVALID');
+    const {policy,events}=this.eligible(input);
+    const accumulate=(rule:TransferRule)=>{
+      const matching=events.filter(e=>e.type===triggerType(rule)).sort((a,b)=>at(a.occurredAt)-at(b.occurredAt)) as QuantityTransferEvent[];
+      let amount=0;const eventIds:string[]=[];
+      for(const e of matching){
+        if(!e.quantity||!Number.isFinite(e.quantity.amount)||e.quantity.amount<=0) throw new Error('TRANSFER_TRIGGER_QUANTITY_REQUIRED');
+        if(e.quantity.unit!==input.totalQuantity.unit) throw new Error('TRANSFER_QUANTITY_UNIT_MISMATCH');
+        amount+=e.quantity.amount;
+        if(amount>input.totalQuantity.amount) throw new Error('TRANSFER_QUANTITY_EXCEEDS_TOTAL');
+        eventIds.push(e.id);
+      }
+      return {quantity:Object.freeze({amount,unit:input.totalQuantity.unit}),eventIds:Object.freeze(eventIds)};
+    };
+    const title=accumulate(policy.title);const risk=accumulate(policy.risk);
+    const titleTransferred=title.quantity.amount>0;const riskTransferred=risk.quantity.amount>0;
+    const result={
+      transactionId:input.transactionId,policyId:policy.id,policyVersion:policy.version,
+      titleTransferred,riskTransferred,
+      ...(titleTransferred?{titleEventId:title.eventIds[0]}:{}),...(riskTransferred?{riskEventId:risk.eventIds[0]}:{}),
+      totalQuantity:Object.freeze({...input.totalQuantity}),titleTransferredQuantity:title.quantity,riskTransferredQuantity:risk.quantity,
+      titleComplete:title.quantity.amount===input.totalQuantity.amount,riskComplete:risk.quantity.amount===input.totalQuantity.amount,
+      titleEventIds:title.eventIds,riskEventIds:risk.eventIds
+    };
+    return Object.freeze(result);
   }
 }

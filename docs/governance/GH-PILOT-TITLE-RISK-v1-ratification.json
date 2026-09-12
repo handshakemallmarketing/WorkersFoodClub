@@ -1,0 +1,20 @@
+{
+  "policyId":"GH-PILOT-TITLE-RISK",
+  "version":1,
+  "transactionType":"GH_PILOT_MEMBER_FOOD_ORDER",
+  "decision":"RATIFIED_AS_WRITTEN",
+  "decisionRecordedAt":"2026-09-11T19:33:00Z",
+  "decisionSource":"Governance actor approval recorded in project conversation: 'Ratified as written'",
+  "governanceActor":{"participantId":"participant:willie-adofo","displayName":"Willie Adofo — Founder / Governance Authority"},
+  "authorityGrantId":"grant:willie-adofo:transfer-policy-governance:v1",
+  "governanceApprovalId":"decision:gh-pilot-title-risk:v1:2026-09-11",
+  "approvedPolicyPath":"docs/policies/GH-PILOT-TITLE-RISK-v1.md",
+  "approvedPolicyHead":"4f999224890cc78600a232b76c423245d13876e8",
+  "approvedBinding":{"title":"ACCEPTANCE","risk":"ACCEPTANCE"},
+  "scope":"Ghana Workers Food Club pilot business-governance policy",
+  "executableAuthorityBinding":"PROVEN",
+  "conformanceEvidence":{"workflow":"constitutional-conformance","runNumber":1181,"runId":34641283180,"jobId":103401277182,"headSha":"99e1b592a33ccdffbbf0f87069e26f151c1ef73f","conclusion":"success"},
+  "productionAuthorization":false,
+  "remainingValidation":["record any Ghana external legal/policy review required for production","satisfy all other SW1-RC2 production-readiness domains"],
+  "notClaimed":["legal advice","statutory interpretation","universal Ghana title/risk rule","production release authorization"]
+}

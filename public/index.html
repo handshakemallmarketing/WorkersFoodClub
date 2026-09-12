@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>Food Club Ghana — Preview</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">FC</div><div><strong>Food Club Ghana</strong><span>Member Preview</span></div></div>
+      <nav>
+        <button class="nav-item active" data-view="dashboard">Overview</button>
+        <button class="nav-item" data-view="catalog">Member Offers</button>
+        <button class="nav-item" data-view="orders">My Orders</button>
+        <button class="nav-item" data-view="operator">Operations</button>
+        <button class="nav-item" data-view="controls">RC2 Controls</button>
+      </nav>
+      <div class="sidebar-footer"><span class="status-dot"></span>Preview environment</div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><p class="eyebrow">Workers Food Club</p><h1 id="page-title">Member Overview</h1></div>
+        <div class="env-badges"><span id="db-status" class="badge neutral">Checking Neon…</span><span class="badge warning">Sandbox payments only</span></div>
+      </header>
+
+      <section id="dashboard" class="view active">
+        <div class="hero-card">
+          <div>
+            <p class="eyebrow">Pilot cohort preview</p>
+            <h2>Better food buying through pooled member demand.</h2>
+            <p>Food Club Ghana organizes member commitments, governed sourcing, physical inventory, fulfillment and savings evidence into one auditable operating flow.</p>
+            <div class="hero-actions"><button class="primary" data-go="catalog">Browse current offers</button><button class="secondary" data-go="orders">View order history</button></div>
+          </div>
+          <div class="metric-stack">
+            <div class="metric"><span>Preview status</span><strong>RC2 staging</strong></div>
+            <div class="metric"><span>Database</span><strong id="db-metric">Checking…</strong></div>
+            <div class="metric"><span>Live funds</span><strong>Disabled</strong></div>
+          </div>
+        </div>
+        <div class="grid three">
+          <article class="card"><span class="kicker">Demand</span><h3>5 kg</h3><p>Illustrative pooled rice commitment for the current pilot window.</p></article>
+          <article class="card"><span class="kicker">Fulfillment</span><h3>Pickup</h3><p>Member acceptance and remedy states remain independently evidenced.</p></article>
+          <article class="card"><span class="kicker">Savings</span><h3>GHS 80.00</h3><p>Illustrative governed savings evidence from the integrated RC1 scenario.</p></article>
+        </div>
+      </section>
+
+      <section id="catalog" class="view">
+        <div class="section-intro"><div><p class="eyebrow">Current pilot offers</p><h2>Member Offers</h2></div><span id="offers-source" class="badge neutral">Loading Neon data…</span></div>
+        <div id="offer-grid" class="offer-grid" aria-live="polite"><article class="offer-card muted"><div class="offer-icon">…</div><div><h3>Loading offers</h3><p>Reading staging catalog from Neon PostgreSQL.</p></div><button class="secondary small" disabled>Please wait</button></article></div>
+      </section>
+
+      <section id="orders" class="view">
+        <div class="section-intro"><div><p class="eyebrow">Member activity</p><h2>My Orders</h2></div><span id="orders-source" class="badge neutral">Loading Neon data…</span></div>
+        <div id="orders-list" class="timeline-card" aria-live="polite"><div class="timeline-row"><span class="timeline-dot"></span><div><strong>Loading sandbox commitments</strong><p>Reading governed staging state from Neon PostgreSQL.</p></div><time>Staging</time></div></div>
+      </section>
+
+      <section id="operator" class="view">
+        <div class="section-intro"><div><p class="eyebrow">Pilot operations</p><h2>Operator Console</h2></div><span id="operator-source" class="badge warning">Loading paid orders…</span></div>
+        <div id="operator-orders" class="timeline-card" aria-live="polite"><div class="timeline-row"><span class="timeline-dot"></span><div><strong>Loading fulfillment queue</strong><p>Only payment-confirmed preview orders can enter fulfillment.</p></div><time>Staging</time></div></div>
+        <div class="grid two">
+          <article class="card"><span class="kicker">Canonical state</span><h3>Auditable</h3><p>Readiness, acceptance and shortfall are recorded as canonical events rather than UI-only state.</p></article>
+          <article class="card"><span class="kicker">Conservation</span><h3>Fail closed</h3><p>Accepted quantity plus shortfall must equal the ready quantity before acceptance can persist.</p></article>
+        </div>
+      </section>
+
+      <section id="controls" class="view">
+        <div class="section-intro"><div><p class="eyebrow">Production-readiness</p><h2>RC2 Control Status</h2></div><span class="badge danger">Production NO-GO</span></div>
+        <div class="control-list">
+          <div class="control pass"><span>Secrets & environment isolation</span><strong>Implemented</strong></div>
+          <div class="control pass"><span>Privacy & retention controls</span><strong>Implemented</strong></div>
+          <div class="control pass"><span>Consequential observability</span><strong>Implemented</strong></div>
+          <div class="control pass"><span>PostgreSQL backup/restore rehearsal</span><strong>CI proven</strong></div>
+          <div class="control open"><span>Live Mobile Money provider evidence</span><strong>Open blocker</strong></div>
+          <div class="control open"><span>Operator incident runbooks</span><strong>Open blocker</strong></div>
+          <div class="control open"><span>Transaction title/risk policy</span><strong>Open blocker</strong></div>
+          <div class="control open"><span>Integrated RC2 adversarial rehearsal</span><strong>Open blocker</strong></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
