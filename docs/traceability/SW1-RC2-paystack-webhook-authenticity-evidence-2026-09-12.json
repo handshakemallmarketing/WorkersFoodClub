@@ -1,0 +1,41 @@
+{
+  "evidenceId": "SW1-RC2-PAYSTACK-WEBHOOK-AUTHENTICITY-2026-09-12",
+  "result": "PASS",
+  "blocker": "RC2-PAY-001",
+  "provider": "PAYSTACK",
+  "mode": "test",
+  "liveFundsAuthorized": false,
+  "git": {
+    "branch": "sw1-rc2-production-readiness-falsification",
+    "commit": "fa80dee"
+  },
+  "deployment": {
+    "provider": "VERCEL",
+    "deploymentId": "dpl_2erprJWa85f2E2vNsGdieVRQYQuJ",
+    "projectId": "prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE",
+    "environment": "preview",
+    "domain": "workers-food-club-git-sw1-rc2-production-readi-0760c2-food-club.vercel.app"
+  },
+  "transaction": {
+    "providerReference": "wfc-rc2-cd81f710-8e25-4f23-a780-87b40cf3ee00",
+    "amountMinor": "100",
+    "currency": "GHS",
+    "status": "CONFIRMED"
+  },
+  "webhook": {
+    "path": "/api/paystack-rehearsal",
+    "requestMethod": "POST",
+    "responseStatusCode": 200,
+    "authenticity": "HMAC_SHA512_VERIFIED",
+    "runtimeLogId": "9b8hb-1789190433952-88d55dca12bd"
+  },
+  "assertions": [
+    "Paystack test transaction initiation reached the deployed preview boundary.",
+    "Paystack delivered a provider-originated webhook to the configured public preview endpoint.",
+    "The deployed handler verified the exact raw request body using HMAC-SHA512 before trusting webhook semantics.",
+    "The verified webhook mapped the provider transaction to CONFIRMED.",
+    "The deployed handler returned HTTP 200 after successful verification.",
+    "Live funds remain unauthorized and were not used."
+  ],
+  "conclusion": "RC2-PAY-001 CLOSED"
+}
