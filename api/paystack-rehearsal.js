@@ -94,6 +94,15 @@ export default async function handler(req, res) {
       const verifier = new PaystackWebhookVerifier(secretKey);
       const verified = verifier.verify({ rawBody, signature });
 
+      console.info('PAYSTACK_WEBHOOK_VERIFIED', {
+        provider: 'PAYSTACK',
+        providerReference: verified.providerReference,
+        status: verified.status,
+        currency: verified.amount.currency,
+        amountMinor: verified.amount.minor.toString(),
+        authenticity: 'HMAC_SHA512_VERIFIED',
+      });
+
       res.setHeader('Cache-Control', 'no-store');
 
       return res.status(200).json({
