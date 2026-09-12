@@ -1,3 +1,4 @@
+import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 const PARTICIPANT_ID = 'preview:member:001';
 
 export default async function handler(req, res) {
@@ -5,6 +6,14 @@ export default async function handler(req, res) {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   }
+
+  const principal = requirePreviewApiAuth(
+    req,
+    res,
+    'member:orders.read',
+    PARTICIPANT_ID,
+  );
+  if (!principal) return;
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });

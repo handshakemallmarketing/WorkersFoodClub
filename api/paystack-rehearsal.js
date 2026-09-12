@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { executePaystackRehearsal } from '../dist/packages/paystack-rehearsal/src/index.js';
 import { PaystackWebhookVerifier } from '../dist/packages/pilot-payments/src/paystack.js';
+import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 
 const ACTIONS = new Set(['initiate', 'verify', 'refund', 'refund-status']);
 const REFERENCE_RE = /^wfc-rc2-[A-Za-z0-9-]{8,80}$/;
@@ -138,6 +139,22 @@ export default async function handler(req, res) {
       return fail(res, 400, 'PAYSTACK_WEBHOOK_INVALID');
     }
   }
+
+  /*
+   * Existing RC2 provider-rehearsal control path.
+   * Body parsing is now explicit because automatic Vercel parsing is disabled.
+   *
+   * IMPORTANT:
+   * This unsigned/manual path is operator-authenticated. The signed provider
+   * webhook path above remains authenticated exclusively by Paystack HMAC.
+   */
+  const principal = requirePreviewApiAuth(
+    req,
+    res,
+    'operator:payment.rehearse',
+    'preview:operator:001',
+  );
+  if (!principal) return;
 
   /*
    * Existing RC2 provider-rehearsal control path.

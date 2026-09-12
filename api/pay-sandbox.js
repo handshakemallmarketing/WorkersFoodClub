@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 
 const PARTICIPANT_ID = 'preview:member:001';
 const REQUEST_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -43,6 +44,14 @@ export default async function handler(req, res) {
   if (process.env.VERCEL_ENV === 'production') {
     return res.status(403).json({ ok: false, error: 'SANDBOX_PAYMENT_DISABLED_IN_PRODUCTION' });
   }
+
+  const principal = requirePreviewApiAuth(
+    req,
+    res,
+    'member:payment.execute',
+    PARTICIPANT_ID,
+  );
+  if (!principal) return;
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });

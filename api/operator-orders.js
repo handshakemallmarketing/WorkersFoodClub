@@ -1,7 +1,16 @@
+import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 const PREVIEW_PICKUP_PLACE='preview:pickup:001';
 
 export default async function handler(req,res){
  if(req.method!=='GET'){res.setHeader('Allow','GET');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
+
+  const principal = requirePreviewApiAuth(
+    req,
+    res,
+    'operator:orders.read',
+    'preview:operator:001',
+  );
+  if (!principal) return;
  const connectionString=process.env.DATABASE_URL;if(!connectionString)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
  try{
   const {neon}=await import('@neondatabase/serverless');const sql=neon(connectionString,{fetchOptions:{signal:AbortSignal.timeout(4000)}});

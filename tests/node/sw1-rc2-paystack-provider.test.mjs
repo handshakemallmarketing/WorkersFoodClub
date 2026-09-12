@@ -4,6 +4,7 @@ import {createHmac} from 'node:crypto';
 import {Readable} from 'node:stream';
 import {PaystackConfigurationGate,PaystackPaymentAdapter,PaystackWebhookVerifier} from '../../dist/packages/pilot-payments/src/paystack.js';
 import paystackRehearsalHandler, {config as paystackApiConfig} from '../../api/paystack-rehearsal.js';
+import { mintPreviewApiToken } from '../../lib/preview-api-auth.js';
 
 const jsonResponse=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});
 const money=(minor,currency='GHS')=>Object.freeze({minor:BigInt(minor),currency});
@@ -198,4 +199,90 @@ test('Paystack deployed HTTP boundary rejects authenticated unsupported event',a
 
  assert.equal(result.statusCode,400);
  assert.equal(result.payload.error,'PAYSTACK_WEBHOOK_EVENT_NOT_SUPPORTED');
+});
+
+
+const PREVIEW_AUTH_SECRET='rc2-paystack-auth-secret-0123456789-abcdefghijklmnopqrstuvwxyz';
+
+async function invokePaystackManual(body,token){
+ const rawBody=JSON.stringify(body);
+ const req=Readable.from([rawBody]);
+ req.method='POST';
+ req.headers=token?{authorization:`Bearer ${token}`}:{};
+
+ let statusCode=200;
+ let payload;
+ const headers={};
+ const res={
+  setHeader(name,value){headers[String(name).toLowerCase()]=value;},
+  status(code){statusCode=code;return this;},
+  json(value){payload=value;return value;}
+ };
+
+ const priorEnv=process.env.VERCEL_ENV;
+ const priorPaystackSecret=process.env.PAYSTACK_SECRET_KEY;
+ const priorAuthSecret=process.env.PREVIEW_API_AUTH_SECRET;
+
+ process.env.VERCEL_ENV='preview';
+ process.env.PAYSTACK_SECRET_KEY='sk_test_webhook_boundary';
+ process.env.PREVIEW_API_AUTH_SECRET=PREVIEW_AUTH_SECRET;
+
+ try{
+  await paystackRehearsalHandler(req,res);
+  return {statusCode,payload,headers};
+ }finally{
+  if(priorEnv===undefined) delete process.env.VERCEL_ENV;
+  else process.env.VERCEL_ENV=priorEnv;
+
+  if(priorPaystackSecret===undefined) delete process.env.PAYSTACK_SECRET_KEY;
+  else process.env.PAYSTACK_SECRET_KEY=priorPaystackSecret;
+
+  if(priorAuthSecret===undefined) delete process.env.PREVIEW_API_AUTH_SECRET;
+  else process.env.PREVIEW_API_AUTH_SECRET=priorAuthSecret;
+ }
+}
+
+function mintPaystackOperatorToken(overrides={}){
+ const now=Math.floor(Date.now()/1000);
+ return mintPreviewApiToken({
+  secret:PREVIEW_AUTH_SECRET,
+  subject:'preview-user:operator-test',
+  actorId:'preview:operator:001',
+  scopes:['operator:payment.rehearse'],
+  issuedAt:now-5,
+  expiresAt:now+300,
+  ...overrides
+ });
+}
+
+test('Paystack manual rehearsal rejects unauthenticated caller',async()=>{
+ const result=await invokePaystackManual({action:'verify',reference:'wfc-rc2-auth-test-001'});
+ assert.equal(result.statusCode,401);
+ assert.equal(result.payload.error,'AUTHENTICATION_REQUIRED');
+});
+
+test('Paystack manual rehearsal rejects wrong scope',async()=>{
+ const token=mintPaystackOperatorToken({scopes:['operator:orders.read']});
+ const result=await invokePaystackManual({action:'verify',reference:'wfc-rc2-auth-test-002'},token);
+ assert.equal(result.statusCode,403);
+ assert.equal(result.payload.error,'AUTHORIZATION_SCOPE_REQUIRED');
+});
+
+test('Paystack manual rehearsal rejects wrong authenticated actor',async()=>{
+ const token=mintPaystackOperatorToken({actorId:'preview:operator:other'});
+ const result=await invokePaystackManual({action:'verify',reference:'wfc-rc2-auth-test-003'},token);
+ assert.equal(result.statusCode,403);
+ assert.equal(result.payload.error,'AUTHENTICATED_ACTOR_MISMATCH');
+});
+
+test('Paystack manual rehearsal accepts valid operator principal past auth gate',async()=>{
+ const token=mintPaystackOperatorToken();
+ const result=await invokePaystackManual({action:'not-a-real-action'},token);
+
+ /*
+  * Reaching PAYSTACK_REHEARSAL_ACTION_INVALID proves the valid principal
+  * crossed the auth boundary without requiring a live provider call.
+  */
+ assert.equal(result.statusCode,400);
+ assert.equal(result.payload.error,'PAYSTACK_REHEARSAL_ACTION_INVALID');
 });

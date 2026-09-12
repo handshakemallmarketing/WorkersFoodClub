@@ -1,0 +1,153 @@
+{
+  "schemaVersion": "1.0",
+  "evidenceId": "SW1-RC2-AUTH-001-2026-09-12",
+  "blocker": "RC2-AUTH-001",
+  "domain": "AUTHORIZATION",
+  "status": "IMPLEMENTED_LOCAL_RUNTIME_PENDING",
+  "environment": "preview",
+  "productionAuthorized": false,
+  "control": {
+    "type": "short-lived-preview-hmac-bearer",
+    "algorithm": "HMAC-SHA256",
+    "productionFailClosed": true,
+    "maximumTtlSeconds": 900,
+    "principalBinding": [
+      "subject",
+      "actorId",
+      "scopes",
+      "issuedAt",
+      "expiresAt"
+    ],
+    "providerWebhookException": {
+      "endpoint": "POST /api/paystack-rehearsal",
+      "condition": "x-paystack-signature present",
+      "authentication": "Paystack exact raw-body HMAC-SHA512",
+      "previewBearerRequired": false,
+      "reason": "Provider callback authentication must remain independent of operator preview credentials."
+    }
+  },
+  "protectedHttpBoundaries": [
+    {
+      "endpoint": "POST /api/commit-sandbox",
+      "actorId": "preview:member:001",
+      "scope": "member:purchase.commit"
+    },
+    {
+      "endpoint": "POST /api/pay-sandbox",
+      "actorId": "preview:member:001",
+      "scope": "member:payment.execute"
+    },
+    {
+      "endpoint": "POST /api/accept-fulfillment",
+      "actorId": "preview:member:001",
+      "scope": "member:fulfillment.accept"
+    },
+    {
+      "endpoint": "GET /api/member-orders",
+      "actorId": "preview:member:001",
+      "scope": "member:orders.read"
+    },
+    {
+      "endpoint": "GET /api/member-notifications",
+      "actorId": "preview:member:001",
+      "scope": "member:notifications.read"
+    },
+    {
+      "endpoint": "POST /api/fulfillment-ready",
+      "actorId": "preview:operator:001",
+      "scope": "operator:fulfillment.manage"
+    },
+    {
+      "endpoint": "POST /api/authorize-refund",
+      "actorId": "preview:operator:001",
+      "scope": "operator:refund.authorize"
+    },
+    {
+      "endpoint": "POST /api/complete-refund",
+      "actorId": "preview:operator:001",
+      "scope": "operator:refund.complete"
+    },
+    {
+      "endpoint": "GET /api/operator-orders",
+      "actorId": "preview:operator:001",
+      "scope": "operator:orders.read"
+    },
+    {
+      "endpoint": "POST /api/paystack-rehearsal (unsigned manual control path)",
+      "actorId": "preview:operator:001",
+      "scope": "operator:payment.rehearse"
+    }
+  ],
+  "falsification": {
+    "helperTests": {
+      "count": 7,
+      "result": "PASS",
+      "cases": [
+        "preview authorization fails closed in production",
+        "missing credential rejected",
+        "forged credential rejected",
+        "expired credential rejected",
+        "wrong scope rejected",
+        "valid bounded actor and scope accepted",
+        "authenticated actor mismatch rejected"
+      ]
+    },
+    "routeBoundaryTests": {
+      "count": 29,
+      "result": "PASS",
+      "coverage": [
+        "unauthenticated caller rejected before database access",
+        "wrong scope rejected before database access",
+        "authenticated actor mismatch rejected",
+        "valid member principal crosses authorization boundary",
+        "valid operator principal crosses authorization boundary"
+      ]
+    },
+    "combinedAuthorizationTests": {
+      "count": 40,
+      "passed": 40,
+      "failed": 0
+    },
+    "fullKernelRegression": {
+      "count": 353,
+      "passed": 353,
+      "failed": 0,
+      "status": "PASS"
+    },
+    "traceabilityCheck": "PASS",
+    "conformance": "PASS",
+    "paystackManualAuthorizationTests": {
+      "count": 4,
+      "result": "PASS",
+      "cases": [
+        "unsigned manual rehearsal rejects unauthenticated caller",
+        "unsigned manual rehearsal rejects wrong scope",
+        "unsigned manual rehearsal rejects wrong authenticated actor",
+        "valid operator principal crosses authorization boundary without provider call"
+      ]
+    },
+    "paystackWebhookBoundary": {
+      "result": "PASS",
+      "previewBearerRequired": false,
+      "authentication": "HMAC-SHA512 over exact raw request body",
+      "verifiedCases": [
+        "valid signed webhook accepted",
+        "forged signature rejected",
+        "body tampering rejected",
+        "signed unsupported event rejected"
+      ]
+    }
+  },
+  "runtimeEvidence": {
+    "deployed": false,
+    "deploymentId": null,
+    "implementationCommit": null,
+    "externalBoundaryProbe": "PENDING"
+  },
+  "closure": {
+    "localImplementation": "PASS",
+    "deployedBoundary": "PENDING",
+    "blockerClosed": false,
+    "reason": "Implementation and local falsification pass. Closure requires deployment of the exact implementation commit and external preview-boundary evidence."
+  }
+}

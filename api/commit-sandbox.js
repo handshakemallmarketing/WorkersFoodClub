@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 
 const PARTICIPANT_ID = 'preview:member:001';
 const MEMBERSHIP_ID = 'preview:membership:001';
@@ -45,6 +46,14 @@ export default async function handler(req, res) {
   if (process.env.VERCEL_ENV === 'production') {
     return res.status(403).json({ ok: false, error: 'SANDBOX_COMMIT_DISABLED_IN_PRODUCTION' });
   }
+
+  const principal = requirePreviewApiAuth(
+    req,
+    res,
+    'member:purchase.commit',
+    PARTICIPANT_ID,
+  );
+  if (!principal) return;
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });

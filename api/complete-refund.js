@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OBLIGATION_ID_RE=/^preview:obligation:[0-9a-f-]{36}$/i;
 const OPERATOR_ID='preview:operator:001';
@@ -8,6 +9,14 @@ function serialize(r,idempotent=false){return {remedyId:String(r.remedy_id),obli
 export default async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
  if(process.env.VERCEL_ENV==='production')return res.status(403).json({ok:false,error:'PREVIEW_REFUND_DISABLED_IN_PRODUCTION'});
+
+  const principal = requirePreviewApiAuth(
+    req,
+    res,
+    'operator:refund.complete',
+    OPERATOR_ID,
+  );
+  if (!principal) return;
  const connectionString=process.env.DATABASE_URL;if(!connectionString)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
  const obligationId=typeof req.body?.obligationId==='string'?req.body.obligationId:'';const requestId=typeof req.body?.requestId==='string'?req.body.requestId:'';
  if(!OBLIGATION_ID_RE.test(obligationId))return res.status(400).json({ok:false,error:'OBLIGATION_ID_INVALID'});

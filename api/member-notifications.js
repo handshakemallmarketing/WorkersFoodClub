@@ -1,8 +1,17 @@
+import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 const PARTICIPANT_ID='preview:member:001';
 
 export default async function handler(req,res){
   if(req.method!=='GET'){res.setHeader('Allow','GET');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
   if(process.env.VERCEL_ENV==='production')return res.status(403).json({ok:false,error:'PREVIEW_MEMBER_INBOX_DISABLED_IN_PRODUCTION'});
+
+  const principal = requirePreviewApiAuth(
+    req,
+    res,
+    'member:notifications.read',
+    PARTICIPANT_ID,
+  );
+  if (!principal) return;
   const connectionString=process.env.DATABASE_URL;if(!connectionString)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
   try{
     const {neon}=await import('@neondatabase/serverless');const sql=neon(connectionString,{fetchOptions:{signal:AbortSignal.timeout(4000)}});
