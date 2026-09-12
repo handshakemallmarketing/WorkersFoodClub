@@ -6,6 +6,7 @@
   "parentRelease": "SW1-RC2",
   "productionApplicationAccessAuthorized": false,
   "liveFundsAuthorized": false,
+  "baselineEvidence": "docs/traceability/SW1-RC3-production-baseline-nonpromotion-evidence-2026-09-12.json",
   "startingEnvelope": {
     "hosting": "Vercel production deployment exists",
     "database": "Neon PostgreSQL",
@@ -27,7 +28,7 @@
     "RC3-ENV-001": {
       "severity": "P1",
       "status": "HARNESS_IMPLEMENTED_RUNTIME_PROOF_PENDING",
-      "finding": "Exact-head Vercel deployment is mandatory in constitutional conformance, and a dedicated RC3 production identity rehearsal workflow accepts an explicit Production origin and exact deployed SHA. Production issuer, audience, JWKS and application-binding configuration still require a successful deployed rehearsal before closure."
+      "finding": "Exact-head Vercel deployment is mandatory in constitutional conformance, and a dedicated RC3 production identity rehearsal workflow accepts an explicit Production origin and exact deployed SHA. Production issuer, audience, JWKS and application-binding configuration still require a successful deployed rehearsal before closure. The recorded Production baseline remains the SW1-RC2 main deployment and no observed RC3 deployment has been promoted to Production."
     },
     "RC3-LOG-001": {
       "severity": "P1",
