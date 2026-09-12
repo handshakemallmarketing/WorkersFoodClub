@@ -10,16 +10,23 @@ on:
         description: Exact Git commit SHA deployed at preview_url
         required: true
         type: string
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/rc2-paystack-provider-rehearsal.yml
 permissions:
   contents: read
   id-token: write
 jobs:
   rehearsal:
     runs-on: ubuntu-latest
+    env:
+      TARGET_PREVIEW_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_url || 'https://workers-food-club-git-sw1-rc2-production-readi-0760c2-food-club.vercel.app' }}
+      TARGET_EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || '788df6e1ed867da3ded5621fdf52f75f71332b99' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ env.TARGET_EXPECTED_SHA }}
       - uses: pnpm/action-setup@v4
         with: { version: 9.15.4 }
       - uses: actions/setup-node@v4
@@ -37,8 +44,8 @@ jobs:
             core.setOutput('token', token);
       - name: Exercise real Paystack test provider through exact Preview deployment
         env:
-          PREVIEW_BASE_URL: ${{ inputs.preview_url }}
-          EXPECTED_COMMIT_SHA: ${{ inputs.expected_sha }}
+          PREVIEW_BASE_URL: ${{ env.TARGET_PREVIEW_URL }}
+          EXPECTED_COMMIT_SHA: ${{ env.TARGET_EXPECTED_SHA }}
           VERCEL_TRUSTED_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         shell: bash
         run: |
@@ -48,7 +55,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rc2-paystack-provider-rehearsal-${{ inputs.expected_sha }}
+          name: rc2-paystack-provider-rehearsal-${{ env.TARGET_EXPECTED_SHA }}
           path: rc2-paystack-provider-rehearsal-evidence.json
           if-no-files-found: warn
           retention-days: 30
