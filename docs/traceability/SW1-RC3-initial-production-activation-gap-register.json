@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "SW1-RC3",
+  "status": "OPEN_NO_GO",
+  "startingMainCommit": "eb191168ec121b6d4dfde9acbfc0db3e7b43f06e",
+  "parentRelease": "SW1-RC2",
+  "productionApplicationAccessAuthorized": false,
+  "liveFundsAuthorized": false,
+  "startingEnvelope": {
+    "hosting": "Vercel production deployment exists",
+    "database": "Neon PostgreSQL",
+    "applicationAuthentication": "Preview HMAC authentication intentionally disabled in production",
+    "paymentProvider": "PAYSTACK",
+    "paymentMode": "test"
+  },
+  "findings": {
+    "RC3-AUTH-001": {
+      "severity": "P1",
+      "status": "OPEN",
+      "finding": "No production identity verifier has been proven. Preview authentication intentionally returns PREVIEW_AUTH_DISABLED_IN_PRODUCTION when VERCEL_ENV=production."
+    },
+    "RC3-BIND-001": {
+      "severity": "P1",
+      "status": "OPEN",
+      "finding": "Protected pilot routes still bind requests to hard-coded Preview actor IDs such as preview:member:001 rather than resolving a cryptographically authenticated production subject to a governed application actor."
+    },
+    "RC3-ENV-001": {
+      "severity": "P1",
+      "status": "OPEN",
+      "finding": "Production identity issuer, audience, trusted-key/JWKS configuration and application-binding source are not yet proven as explicit isolated fail-closed configuration."
+    },
+    "RC3-LOG-001": {
+      "severity": "P1",
+      "status": "OPEN",
+      "finding": "Production identity runtime logging hygiene has not yet been falsified with real production-auth failure/success traffic."
+    },
+    "RC3-PAY-001": {
+      "severity": "P1",
+      "status": "OPEN",
+      "finding": "Paystack authenticity/replay semantics are proven in test mode only. Live provider activation and live funds remain unauthorized."
+    },
+    "RC3-ROLLBACK-001": {
+      "severity": "P1",
+      "status": "OPEN",
+      "finding": "No exact production-auth/provider activation rollback or kill-switch rehearsal has yet been recorded."
+    },
+    "RC3-REHEARSAL-001": {
+      "severity": "P1",
+      "status": "OPEN",
+      "finding": "No exact-head production adversarial rehearsal exists for the future RC3 candidate."
+    }
+  },
+  "negativeAssertionsRequired": [
+    "missing bearer fails closed",
+    "malformed bearer fails closed",
+    "bad signature fails closed",
+    "wrong issuer fails closed",
+    "wrong audience fails closed",
+    "expired or not-yet-valid token fails closed",
+    "valid upstream subject without application binding fails closed",
+    "member cannot acquire operator scope",
+    "authenticated actor cannot be replaced by request actor input",
+    "disabled application principal fails closed",
+    "Preview HMAC token cannot authenticate production",
+    "sensitive identity/provider material absent from runtime logs",
+    "unauthenticated provider traffic cannot create economic truth",
+    "provider retries cannot duplicate canonical effects"
+  ],
+  "releaseIndexAdvanced": false,
+  "verdict": {
+    "rc3": "NO_GO",
+    "productionApplicationAccess": "NO_GO",
+    "liveFunds": "NO_GO"
+  }
+}
