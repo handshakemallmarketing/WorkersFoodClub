@@ -1,0 +1,55 @@
+name: RC3 production identity rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_base_url:
+        description: Immutable or production deployment origin to rehearse (https://...vercel.app)
+        required: true
+        type: string
+      expected_commit_sha:
+        description: Exact 40-character commit SHA deployed at the supplied origin
+        required: true
+        type: string
+      expected_member_actor_id:
+        description: Canonical application participant_id bound to the member OIDC subject
+        required: true
+        type: string
+      expected_operator_actor_id:
+        description: Canonical application participant_id bound to the operator OIDC subject
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  production-identity-rehearsal:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PRODUCTION_BASE_URL: ${{ inputs.production_base_url }}
+      EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+      RC3_EXPECTED_MEMBER_ACTOR_ID: ${{ inputs.expected_member_actor_id }}
+      RC3_EXPECTED_OPERATOR_ACTOR_ID: ${{ inputs.expected_operator_actor_id }}
+      RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
+      RC3_PRODUCTION_OPERATOR_TOKEN: ${{ secrets.RC3_PRODUCTION_OPERATOR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate immutable rehearsal inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT_SHA"
+          test -n "$RC3_PRODUCTION_MEMBER_TOKEN"
+          test -n "$RC3_PRODUCTION_OPERATOR_TOKEN"
+          echo "Rehearsing exact commit $EXPECTED_COMMIT_SHA"
+          echo "Live-funds authorization is not part of this workflow."
+      - name: Run production identity adversarial rehearsal
+        run: node scripts/test-production-identity-rehearsal.mjs
