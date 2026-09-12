@@ -1,0 +1,65 @@
+{
+  "result": "PASS",
+  "review": "SW1-RC2",
+  "date": "2026-09-12",
+  "branch": "sw1-rc2-production-readiness-falsification",
+  "evidenceCommit": "2a2c4cc",
+  "deployment": {
+    "deploymentId": "dpl_CbzqoTc9RdZkEsNCWdyhmz8gLtVL",
+    "projectId": "prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE",
+    "environment": "preview",
+    "domain": "workers-food-club-git-sw1-rc2-production-readi-0760c2-food-club.vercel.app"
+  },
+  "blockers": {
+    "RC2-SEC-001": {
+      "status": "CLOSED",
+      "conclusion": "Deployed configuration boundary rejects unsafe environment/provider/database bindings without mutating or exposing real credentials.",
+      "deployedFalsification": [
+        {
+          "case": "sandbox-provider-in-production",
+          "result": "PASS",
+          "httpStatus": 200,
+          "rejected": true,
+          "reason": "SANDBOX_PROVIDER_FORBIDDEN_IN_PRODUCTION",
+          "runtimeLogId": "7xhfd-1789192989831-3d324e3cdaa0"
+        },
+        {
+          "case": "live-provider-outside-production",
+          "result": "PASS",
+          "httpStatus": 200,
+          "rejected": true,
+          "reason": "LIVE_PROVIDER_FORBIDDEN_OUTSIDE_PRODUCTION",
+          "runtimeLogId": "7rpk8-1789192990011-6e148bac7e7a"
+        },
+        {
+          "case": "non-production-db-in-production",
+          "result": "PASS",
+          "httpStatus": 200,
+          "rejected": true,
+          "reason": "NON_PRODUCTION_DATABASE_FORBIDDEN_IN_PRODUCTION",
+          "runtimeLogId": "lgvfm-1789192990161-911cb5a82025"
+        }
+      ]
+    },
+    "RC2-OBS-001": {
+      "status": "CLOSED",
+      "conclusion": "Deployed webhook rejection path emits bounded operational diagnostics without logging submitted sensitive payload data.",
+      "deployedFalsification": {
+        "result": "PASS",
+        "forgedWebhookRejected": true,
+        "httpStatus": 401,
+        "runtimeLogId": "fq4rj-1789192107725-813559991d59",
+        "loggedMessage": "PAYMENT_WEBHOOK_SIGNATURE_INVALID",
+        "plantedMarker": "PLANTED_RUNTIME_SECRET_RC2_9217",
+        "plantedMarkerObservedInRuntimeLogs": false
+      }
+    }
+  },
+  "safety": {
+    "realSecretsExposed": false,
+    "realSecretsModified": false,
+    "liveFundsAuthorized": false,
+    "syntheticConfigurationOnly": true
+  },
+  "conclusion": "RC2-SEC-001 CLOSED; RC2-OBS-001 CLOSED"
+}
