@@ -49,6 +49,7 @@ function response() {
 const ENV_KEYS = [
   'VERCEL_ENV',
   'DATABASE_URL',
+  'PRODUCTION_APPLICATION_ACCESS_ENABLED',
   'OIDC_ISSUER',
   'OIDC_AUDIENCE',
   'OIDC_JWKS_URI',
@@ -72,6 +73,7 @@ test('RC3 member-orders valid OIDC identity fails closed without application bin
   const originalFetch = globalThis.fetch;
   try {
     process.env.VERCEL_ENV = 'production';
+    process.env.PRODUCTION_APPLICATION_ACCESS_ENABLED = 'true';
     delete process.env.DATABASE_URL;
     process.env.OIDC_ISSUER = 'https://identity.example.test/';
     process.env.OIDC_AUDIENCE = 'workers-food-club-api';
@@ -100,10 +102,11 @@ test('RC3 member-orders valid OIDC identity fails closed without application bin
   }
 });
 
-test('RC3 member-orders production route fails closed without OIDC configuration', async () => {
+test('RC3 member-orders production route fails closed without OIDC configuration when access is enabled', async () => {
   const original = snapshotEnv();
   try {
     process.env.VERCEL_ENV = 'production';
+    process.env.PRODUCTION_APPLICATION_ACCESS_ENABLED = 'true';
     delete process.env.DATABASE_URL;
     delete process.env.OIDC_ISSUER;
     delete process.env.OIDC_AUDIENCE;
@@ -116,6 +119,20 @@ test('RC3 member-orders production route fails closed without OIDC configuration
 
     assert.equal(res.result.statusCode, 503);
     assert.equal(res.result.body?.error, 'PRODUCTION_AUTH_NOT_CONFIGURED');
+  } finally {
+    restoreEnv(original);
+  }
+});
+
+test('RC3 member-orders production route is blocked by rollback kill switch before auth', async () => {
+  const original = snapshotEnv();
+  try {
+    process.env.VERCEL_ENV = 'production';
+    process.env.PRODUCTION_APPLICATION_ACCESS_ENABLED = 'false';
+    const res = response();
+    await memberOrders({ method: 'GET', headers: { authorization: `Bearer ${token()}` } }, res);
+    assert.equal(res.result.statusCode, 503);
+    assert.equal(res.result.body?.error, 'PRODUCTION_APPLICATION_ACCESS_DISABLED');
   } finally {
     restoreEnv(original);
   }
