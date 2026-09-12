@@ -16,18 +16,18 @@
   "findings": {
     "RC3-AUTH-001": {
       "severity": "P1",
-      "status": "OPEN",
-      "finding": "No production identity verifier has been proven. Preview authentication intentionally returns PREVIEW_AUTH_DISABLED_IN_PRODUCTION when VERCEL_ENV=production."
+      "status": "REMEDIATED_CODE_PROOF_PENDING_RUNTIME",
+      "finding": "A fail-closed RS256 OIDC/JWKS production verifier and environment-aware application auth boundary now exist and are covered by adversarial unit tests. Production runtime identity configuration and deployed success/failure evidence are still required before closure."
     },
     "RC3-BIND-001": {
       "severity": "P1",
-      "status": "OPEN",
-      "finding": "Protected pilot routes still bind requests to hard-coded Preview actor IDs such as preview:member:001 rather than resolving a cryptographically authenticated production subject to a governed application actor."
+      "status": "PARTIALLY_REMEDIATED",
+      "finding": "Production-capable read routes are being migrated to cryptographically authenticated principal.actorId. Consequential mutation routes remain production-disabled and still encode Preview-only identity/domain semantics including preview:* aggregate/event/command/remedy identifiers, preview operator/member IDs, vercel-preview owner tokens, preview pickup place values, Preview-only obligation validators, and canonical payload environment=preview. Production activation is prohibited until those durable/canonical semantics are environment-neutral or explicitly governed."
     },
     "RC3-ENV-001": {
       "severity": "P1",
       "status": "OPEN",
-      "finding": "Production identity issuer, audience, trusted-key/JWKS configuration and application-binding source are not yet proven as explicit isolated fail-closed configuration."
+      "finding": "Production identity issuer, audience, trusted-key/JWKS configuration and application-binding source are not yet proven as explicit isolated fail-closed deployed configuration."
     },
     "RC3-LOG-001": {
       "severity": "P1",
@@ -62,6 +62,7 @@
     "authenticated actor cannot be replaced by request actor input",
     "disabled application principal fails closed",
     "Preview HMAC token cannot authenticate production",
+    "production mutation cannot emit Preview-only durable or canonical identity semantics",
     "sensitive identity/provider material absent from runtime logs",
     "unauthenticated provider traffic cannot create economic truth",
     "provider retries cannot duplicate canonical effects"
