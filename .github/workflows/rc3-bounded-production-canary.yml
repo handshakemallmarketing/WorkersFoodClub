@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   canary:
-    if: github.event.head_commit.message == 'RC3: execute bounded production canary deployment'
+    if: "${{ github.event.head_commit.message == 'RC3 execute bounded production canary deployment' }}"
     runs-on: ubuntu-latest
     env:
       CANARY_SHA: 5377b89c92529c130ee9e78e89550fa3c28af488
