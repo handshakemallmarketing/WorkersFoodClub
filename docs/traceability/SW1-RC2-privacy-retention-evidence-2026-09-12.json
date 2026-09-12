@@ -1,0 +1,61 @@
+{
+  "slice": "SW1-RC2",
+  "control": "RC2-PRIV-001",
+  "status": "PASS",
+  "reviewedHeadBeforeEvidenceCommit": "2bf4a8c51274d842909d20e5b30b47590a6941b8",
+  "productionAuthorization": false,
+  "policyImplementation": "packages/production-readiness/src/index.ts",
+  "dataInventory": [
+    "AUTH_IDENTITY_REFERENCE",
+    "ELIGIBILITY_EVIDENCE_REFERENCE",
+    "ELIGIBILITY_DOCUMENT_RAW",
+    "PARTICIPANT_OPERATIONAL_ID",
+    "PAYMENT_EVIDENCE",
+    "INVENTORY_FULFILLMENT_EVIDENCE",
+    "SECRET_CREDENTIAL",
+    "AUDIT_METADATA"
+  ],
+  "provenControls": [
+    "every material registered data class has explicit purpose, sensitivity, retention period and disposition",
+    "raw eligibility documents and secret credentials are forbidden from broad projections and operational logs",
+    "canonical payment and inventory/fulfillment evidence cannot be silently deleted by retention policy",
+    "privacy-sensitive exports require actor scope and an explicit purpose",
+    "secret credentials are never exportable",
+    "member order reads are principal-bound to preview:member:001 and return only transaction/fulfillment/remedy fields",
+    "operator order reads require operator:orders.read bound to preview:operator:001",
+    "member notification reads are principal-bound to preview:member:001",
+    "read responses use Cache-Control: no-store",
+    "route error logging records only error name/message rather than credentials or request payloads"
+  ],
+  "tests": [
+    "tests/node/sw1-rc2-privacy-retention.test.mjs",
+    "tests/node/sw1-rc2-http-route-boundaries.test.mjs",
+    "tests/node/sw1-rc2-observability.test.mjs"
+  ],
+  "exactHeadConformance": {
+    "workflow": "constitutional-conformance",
+    "runNumber": 1222,
+    "runId": 34679679699,
+    "jobId": 103515846352,
+    "headSha": "2bf4a8c51274d842909d20e5b30b47590a6941b8",
+    "conclusion": "success",
+    "privacyTests": "4/4 passed",
+    "fullKernelTests": {"passed": 353, "failed": 0}
+  },
+  "deployedObservation": {
+    "deploymentId": "dpl_6sQijZbjGJuGYqaz2CFSYkWp7YZB",
+    "deploymentHeadSha": "2bf4a8c51274d842909d20e5b30b47590a6941b8",
+    "unauthenticatedMemberOrdersResult": "401 AUTHENTICATION_REQUIRED",
+    "runtimeLogInspection": "no bearer token, PREVIEW_API_AUTH_SECRET, provider secret or sensitive payload material observed in the inspected request logs",
+    "limitation": "successful authenticated deployed reads remain part of RC2-AUTH-001 runtime falsification and are not claimed here"
+  },
+  "closure": {
+    "blockerClosed": true,
+    "basis": "The current RC2 candidate has an explicit executable data-class/retention/disposition registry, fail-closed minimization rules, actor-scoped privacy access controls, minimized read projections and exact-head conformance evidence. Remaining authenticated deployed-boundary work is tracked under RC2-AUTH-001 rather than RC2-PRIV-001."
+  },
+  "notClaimed": [
+    "production authorization",
+    "legal determination of statutory retention periods",
+    "closure of RC2-AUTH-001"
+  ]
+}

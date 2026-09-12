@@ -2,6 +2,7 @@
   "slice": "SW1-RC2",
   "control": "RC2-RUN-001",
   "status": "PASS",
+  "reviewedHeadBeforeEvidenceCommit": "2bf4a8c51274d842909d20e5b30b47590a6941b8",
   "domain": "incident-recovery",
   "artifact": "docs/sw1/SW1-RC2-operator-incident-recovery-runbooks.md",
   "assertions": [
@@ -19,6 +20,20 @@
   "executableEvidence": [
     "tests/node/sw1-rc2-runbooks.test.mjs"
   ],
+  "exactHeadConformance": {
+    "workflow": "constitutional-conformance",
+    "runNumber": 1222,
+    "runId": 34679679699,
+    "jobId": 103515846352,
+    "headSha": "2bf4a8c51274d842909d20e5b30b47590a6941b8",
+    "conclusion": "success",
+    "runbookTests": "4/4 passed",
+    "fullKernelTests": {"passed": 353, "failed": 0}
+  },
+  "closure": {
+    "blockerClosed": true,
+    "basis": "The inspectable operator incident/recovery runbook covers every mandatory RC2 incident class, preserves fail-closed/additive recovery semantics, prohibits destructive canonical repair and is enforced by exact-head executable tests."
+  },
   "releasePromotion": false,
-  "note": "This closes the inspectable runbook control only. It does not authorize production, close payment-provider or title/risk-policy blockers, or promote SW1-RC2 release evidence."
+  "note": "RC2-RUN-001 is closed as an operational-runbook control. This does not authorize production or close RC2-AUTH-001."
 }

@@ -1,0 +1,46 @@
+{
+  "slice": "SW1-RC2",
+  "control": "RC2-DUR-001",
+  "status": "PASS",
+  "reviewedHeadBeforeEvidenceCommit": "2bf4a8c51274d842909d20e5b30b47590a6941b8",
+  "productionAuthorization": false,
+  "liveProductionRestorePerformed": false,
+  "rehearsal": {
+    "script": "scripts/test-postgres-backup-restore.sh",
+    "databaseEngine": "PostgreSQL 16",
+    "sourceDatabase": "foodclub_test",
+    "isolatedRestoreDatabase": "foodclub_rc2_restore",
+    "backupFormat": "pg_dump custom format",
+    "restoreTool": "pg_restore --exit-on-error",
+    "sourceRestoreDigest": "f7031caecc1de548bd4a33f865bf4c94",
+    "deterministicProjectionProof": "order:rc2:restore:1:5:kg",
+    "sourceIsolationProof": "mutating restored aggregate version to 99 left source aggregate version at 1"
+  },
+  "falsificationControls": [
+    "restore target must differ from source",
+    "restore target names containing prod or production are rejected",
+    "backup artifact must exist and be non-empty",
+    "restored canonical digest must exactly equal source digest",
+    "restored canonical state must independently rebuild the expected material order summary",
+    "mutation of restored state must not mutate source canonical state"
+  ],
+  "exactHeadConformance": {
+    "workflow": "constitutional-conformance",
+    "runNumber": 1222,
+    "runId": 34679679699,
+    "jobId": 103515846352,
+    "headSha": "2bf4a8c51274d842909d20e5b30b47590a6941b8",
+    "conclusion": "success",
+    "backupRestoreStep": "success",
+    "fullKernelTests": {"passed": 353, "failed": 0}
+  },
+  "closure": {
+    "blockerClosed": true,
+    "basis": "Automated exact-head PostgreSQL backup creation and isolated restore rehearsal proves canonical-state equivalence, deterministic material rebuild, and source isolation without targeting a live production store. This satisfies the RC2-DUR-001 closure condition while preserving the prohibition on destructive production restore rehearsal."
+  },
+  "notClaimed": [
+    "production authorization",
+    "live production restore execution",
+    "closure of RC2-AUTH-001 or any unrelated readiness finding"
+  ]
+}
