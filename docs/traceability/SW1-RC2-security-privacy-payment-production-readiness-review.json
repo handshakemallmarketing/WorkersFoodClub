@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "SW1-RC2",
+  "review": "security-privacy-payment-production-readiness",
+  "status": "GO_RC2",
+  "reviewedCodeCommit": "ffdfe78586f53c0c63b5309656d8ea4d0c6b7ca1",
+  "baseMainCommit": "9f801d05ac9d5474d742bcff7cc30ec0ff61d05a",
+  "productionAuthorization": false,
+  "liveFundsAuthorized": false,
+  "providerEnvelope": {
+    "provider": "PAYSTACK",
+    "mode": "test",
+    "signedWebhookAuthentication": "exact raw-body HMAC-SHA512",
+    "liveProviderActivationAuthorized": false
+  },
+  "environmentEnvelope": {
+    "hosting": "Vercel Preview",
+    "database": "Neon PostgreSQL",
+    "applicationAuthentication": "Preview-only short-lived HMAC-SHA256 bearer",
+    "maximumBearerTtlSeconds": 900
+  },
+  "resolvedP0P1": {
+    "RC2-PAY-001": "CLOSED",
+    "RC2-SEC-001": "CLOSED",
+    "RC2-OBS-001": "CLOSED",
+    "RC2-AUTH-001": "CLOSED",
+    "RC2-PRIV-001": "CLOSED",
+    "RC2-DUR-001": "CLOSED",
+    "RC2-RUN-001": "CLOSED",
+    "RC2-LEGAL-001": "CLOSED"
+  },
+  "unresolvedP0P1Findings": [],
+  "evidence": [
+    "docs/traceability/SW1-RC2-paystack-webhook-authenticity-evidence-2026-09-12.json",
+    "docs/traceability/SW1-RC2-security-observability-runtime-evidence-2026-09-12.json",
+    "docs/traceability/SW1-RC2-http-authorization-evidence-2026-09-12.json",
+    "docs/traceability/SW1-RC2-privacy-retention-evidence-2026-09-12.json",
+    "docs/traceability/SW1-RC2-backup-restore-evidence-2026-09-12.json",
+    "docs/traceability/SW1-RC2-operator-incident-recovery-runbooks.json",
+    "docs/traceability/SW1-RC2-title-risk-policy-draft.json",
+    "docs/traceability/SW1-RC2-integrated-preview-rehearsal.json"
+  ],
+  "exactHeadConformance": {
+    "commit": "ffdfe78586f53c0c63b5309656d8ea4d0c6b7ca1",
+    "workflow": "constitutional-conformance",
+    "runNumber": 1228,
+    "runId": 34681237613,
+    "result": "SUCCESS"
+  },
+  "exactHeadDeployment": {
+    "commit": "ffdfe78586f53c0c63b5309656d8ea4d0c6b7ca1",
+    "deploymentId": "dpl_8weHyq9iFPNTVnjWGwTVTkC8o6ZE",
+    "state": "READY",
+    "unauthenticatedMemberOrders": {"status":401,"error":"AUTHENTICATION_REQUIRED"}
+  },
+  "authenticatedReplayBridge": {
+    "purpose": "compose the final bearer boundary with already-proven deployed replay/idempotency controls without exposing PREVIEW_API_AUTH_SECRET",
+    "temporaryProbeCommit": "c68cbd68ad8075eb5bc92c9d1908d69492ae34f3",
+    "deploymentId": "dpl_3YprUmLWnVTMLVcMHCStF8d9HgJv",
+    "result": "PASS",
+    "wrongMemberScope": {"status":403,"error":"AUTHORIZATION_SCOPE_REQUIRED"},
+    "paymentReplay": {"status":200,"idempotent":true,"canonicalEventStable":true,"principalSubstitutionIgnored":true},
+    "wrongRefundActor": {"status":403,"error":"AUTHENTICATED_ACTOR_MISMATCH"},
+    "refundReplay": {"status":200,"idempotent":true,"completionEventStable":true,"providerReferenceStable":true},
+    "finalCanonicalProjectionStable": true,
+    "runtimeLogInspection": "PASS_NO_BEARER_OR_SECRET_MATERIAL",
+    "temporaryProbeRemovedByFinalizationCommit": true
+  },
+  "mainReconciliation": {
+    "mergeCommit": "ffdfe78586f53c0c63b5309656d8ea4d0c6b7ca1",
+    "mainParent": "9f801d05ac9d5474d742bcff7cc30ec0ff61d05a",
+    "resolution": "current main versions retained for the two add/add rehearsal workflows",
+    "compareAfterResolution": {"behindBy":0,"mergeBaseIsCurrentMain":true}
+  },
+  "mandatoryNegativeAssertions": {
+    "authorityNotInferredFromUiOrRole": "PASS",
+    "unauthenticatedProviderMessageCannotBecomePaymentTruth": "PASS",
+    "replayCannotDuplicatePaymentRefundOrPhysicalEffect": "PASS",
+    "unknownExternalOutcomeNotGuessed": "PASS",
+    "projectionOrLogsDoNotOutrankCanonicalState": "PASS",
+    "restoreCannotSilentlyTargetActiveProduction": "PASS",
+    "sensitiveVerificationPayloadExcludedFromBroadProjectionLogs": "PASS",
+    "missingSecretOrConfigFailsClosed": "PASS",
+    "runbooksDoNotAuthorizeCanonicalRewrite": "PASS",
+    "softwareDoesNotInventTitleRiskPolicy": "PASS"
+  },
+  "historicalArtifactTreatment": {
+    "docs/traceability/SW1-RC2-initial-production-readiness-gap-register.json": "historical opening assessment; superseded by closure evidence above",
+    "docs/traceability/SW1-RC2-integrated-preview-rehearsal.json": "historical PARTIAL_GREEN rehearsal; downstream replay evidence is retained and its final-auth composition gap is closed by authenticatedReplayBridge"
+  },
+  "verdict": {
+    "rc2": "GO_RC2",
+    "pr51": "GO_TO_MERGE_AFTER_FINALIZATION_HEAD_IS_GREEN_AND_GITHUB_REPORTS_MERGEABLE",
+    "liveFunds": "NO_GO",
+    "productionActivation": "WITHHELD_OUTSIDE_EXACT_RC2_ENVELOPE",
+    "reason": "All identified RC2 P0/P1 findings are closed with executable or inspectable evidence. The final authenticated candidate composes authorization, replay/idempotency, provider authenticity, configuration isolation, privacy, durability, runbooks and ratified title/risk governance. Live funds remain explicitly unauthorized."
+  }
+}
