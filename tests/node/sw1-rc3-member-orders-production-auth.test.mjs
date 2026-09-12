@@ -67,7 +67,7 @@ function restoreEnv(snapshot) {
   }
 }
 
-test('RC3 member-orders production route authenticates OIDC principal before database access', async () => {
+test('RC3 member-orders valid OIDC identity fails closed without application binding store', async () => {
   const original = snapshotEnv();
   const originalFetch = globalThis.fetch;
   try {
@@ -92,10 +92,8 @@ test('RC3 member-orders production route authenticates OIDC principal before dat
       headers: { authorization: `Bearer ${token()}` },
     }, res);
 
-    // Database is deliberately absent. Reaching this error proves the valid
-    // production principal crossed authentication without any Preview actor match.
     assert.equal(res.result.statusCode, 503);
-    assert.equal(res.result.body?.error, 'DATABASE_URL_MISSING');
+    assert.equal(res.result.body?.error, 'APPLICATION_BINDING_STORE_NOT_CONFIGURED');
   } finally {
     globalThis.fetch = originalFetch;
     restoreEnv(original);
