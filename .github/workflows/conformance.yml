@@ -40,7 +40,10 @@ jobs:
       - run: pnpm add -Dw --lockfile=false pg@8.13.1
       - run: node scripts/test-postgres-adapter-race.mjs
       - name: Wait for exact-head Vercel deployment
-        if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc2-production-readiness-falsification'
+        if: >-
+          github.event_name == 'pull_request' &&
+          (github.head_ref == 'sw1-rc2-production-readiness-falsification' ||
+           github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification')
         env:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
@@ -51,3 +54,9 @@ jobs:
           echo "Exact-head Vercel deployment is proven by the preceding status check."
           echo "The live HTTP adversarial rehearsal is intentionally not run against a hard-coded branch alias from this required gate."
           echo "Run the rc2-preview-http-rehearsal workflow with the exact immutable Vercel deployment URL; RC2-E2E-001 remains open until that workflow passes."
+      - name: RC3 exact-head deployment boundary status
+        if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification'
+        run: |
+          echo "RC3 exact-head Preview deployment status is required and proven by the preceding Vercel status check."
+          echo "Preview deployment proof does not authorize Production application access, Production writes, or live funds."
+          echo "RC3 production identity/environment adversarial rehearsal and live-provider activation evidence remain separate release blockers."
