@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { requireApplicationAuth } from '../lib/application-auth.js';
 import { canonicalRuntimeMetadata, durableId, runtimeEnvironment, runtimeOwnerToken } from '../lib/durable-runtime-semantics.js';
 const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -28,7 +29,7 @@ export default async function handler(req,res){
   const prior=await sql`SELECT * FROM preview_refund_remedy WHERE obligation_id=${obligationId} LIMIT 1`;
   if(!prior[0])return res.status(409).json({ok:false,error:'REFUND_NOT_AUTHORIZED'});
   if(prior[0].status==='COMPLETED')return res.status(200).json({ok:true,remedy:serialize(prior[0],true)});
-  const eventId=durableId('event'),commandId=durableId('command'),providerReference=`sandbox-refund:${crypto.randomUUID?.()??''}`;
+  const eventId=durableId('event'),commandId=durableId('command'),providerReference=`sandbox-refund:${randomUUID()}`;
   const rows=await sql`
    WITH target AS (
     SELECT * FROM preview_refund_remedy WHERE obligation_id=${obligationId} AND status='AUTHORIZED' FOR UPDATE
