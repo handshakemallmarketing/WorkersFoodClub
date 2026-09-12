@@ -24,7 +24,7 @@
     <main>
       <header class="topbar">
         <div><p class="eyebrow">Workers Food Club</p><h1 id="page-title">Member Overview</h1></div>
-        <div class="env-badges"><span id="db-status" class="badge neutral">Checking Neon…</span><span class="badge warning">Sandbox payments only</span></div>
+        <div class="env-badges"><div id="auth-panel" aria-live="polite"><span class="badge neutral">Checking identity…</span></div><span id="db-status" class="badge neutral">Checking Neon…</span><span class="badge warning">Sandbox payments only</span></div>
       </header>
 
       <section id="dashboard" class="view active">
@@ -82,6 +82,7 @@
       </section>
     </main>
   </div>
+  <script src="/auth.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
