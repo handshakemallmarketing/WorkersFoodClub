@@ -82,8 +82,8 @@ async function withProductionOidc(run) {
     process.env.OIDC_ISSUER = ISSUER;
     process.env.OIDC_AUDIENCE = AUDIENCE;
     process.env.OIDC_JWKS_URI = JWKS_URI;
-    process.env.OIDC_ACTOR_CLAIM = ACTOR_CLAIM;
-    process.env.OIDC_SCOPE_CLAIM = 'scope';
+    delete process.env.OIDC_ACTOR_CLAIM;
+    delete process.env.OIDC_SCOPE_CLAIM;
     globalThis.fetch = async (url) => {
       assert.equal(String(url), JWKS_URI);
       return new Response(JSON.stringify({ keys: [jwk] }), {
@@ -117,22 +117,24 @@ test('RC3 member-notifications valid OIDC identity fails closed without applicat
   });
 });
 
-test('RC3 member-notifications rejects wrong production scope before application binding lookup', async () => {
+test('RC3 IdP scope claim is not application authority', async () => {
   await withProductionOidc(async () => {
     const res = response();
     await memberNotifications({
       method: 'GET',
       headers: {
         authorization: `Bearer ${token({
-          actorId: 'member:prod-notifications-001',
-          scope: 'member:orders.read',
+          actorId: 'operator:attacker-selected',
+          scope: 'operator:everything',
           subject: 'oidc|member-prod-notifications-001',
         })}`,
       },
     }, res);
 
-    assert.equal(res.result.statusCode, 403);
-    assert.equal(res.result.body?.error, 'AUTHORIZATION_SCOPE_REQUIRED');
+    // The OIDC layer authenticates only issuer+subject. Application authority
+    // must come from the server-side binding store, which is deliberately absent.
+    assert.equal(res.result.statusCode, 503);
+    assert.equal(res.result.body?.error, 'APPLICATION_BINDING_STORE_NOT_CONFIGURED');
   });
 });
 
