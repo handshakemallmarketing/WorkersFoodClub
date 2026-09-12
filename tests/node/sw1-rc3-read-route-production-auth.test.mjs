@@ -53,6 +53,7 @@ function response() {
 const ENV_KEYS = [
   'VERCEL_ENV',
   'DATABASE_URL',
+  'PRODUCTION_APPLICATION_ACCESS_ENABLED',
   'OIDC_ISSUER',
   'OIDC_AUDIENCE',
   'OIDC_JWKS_URI',
@@ -76,6 +77,7 @@ async function withProductionOidc(run) {
   const originalFetch = globalThis.fetch;
   try {
     process.env.VERCEL_ENV = 'production';
+    process.env.PRODUCTION_APPLICATION_ACCESS_ENABLED = 'true';
     delete process.env.DATABASE_URL;
     process.env.OIDC_ISSUER = ISSUER;
     process.env.OIDC_AUDIENCE = AUDIENCE;
@@ -151,4 +153,27 @@ test('RC3 operator-orders valid OIDC identity fails closed without application b
     assert.equal(res.result.statusCode, 503);
     assert.equal(res.result.body?.error, 'APPLICATION_BINDING_STORE_NOT_CONFIGURED');
   });
+});
+
+test('RC3 production read routes are disabled by rollback kill switch before OIDC', async () => {
+  const original = snapshotEnv();
+  try {
+    process.env.VERCEL_ENV = 'production';
+    process.env.PRODUCTION_APPLICATION_ACCESS_ENABLED = 'false';
+    const res = response();
+    await operatorOrders({
+      method: 'GET',
+      headers: {
+        authorization: `Bearer ${token({
+          actorId: 'operator:prod-001',
+          scope: 'operator:orders.read',
+          subject: 'oidc|operator-prod-001',
+        })}`,
+      },
+    }, res);
+    assert.equal(res.result.statusCode, 503);
+    assert.equal(res.result.body?.error, 'PRODUCTION_APPLICATION_ACCESS_DISABLED');
+  } finally {
+    restoreEnv(original);
+  }
 });
