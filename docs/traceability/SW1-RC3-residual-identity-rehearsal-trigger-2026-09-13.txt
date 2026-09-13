@@ -1,0 +1,3 @@
+Authorized bounded residual RC3 identity adversarial rehearsal.
+Scope: prove valid Google subject without application binding fails closed; prove disabled application principal fails closed; restore governed binding; rollback Production application access to false.
+Live funds remain unauthorized. Paystack live mode remains unauthorized.
