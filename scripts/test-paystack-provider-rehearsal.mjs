@@ -1,11 +1,29 @@
-const base=(process.env.PREVIEW_BASE_URL??'').replace(/\/$/,'');
-const expectedSha=process.env.EXPECTED_COMMIT_SHA??'';
+import { mintPreviewApiToken } from '../lib/preview-api-auth.js';
+
+const base=(process.env.PREVIEW_BASE_URL??'').trim().replace(/\/$/,'');
+const expectedSha=(process.env.EXPECTED_COMMIT_SHA??'').trim();
 const oidc=process.env.VERCEL_TRUSTED_OIDC_TOKEN??'';
+const previewAuthSecret=process.env.PREVIEW_API_AUTH_SECRET??'';
 if(!/^https:\/\//.test(base)) throw new Error('PREVIEW_BASE_URL_REQUIRED');
 if(!/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error('EXPECTED_COMMIT_SHA_INVALID');
 if(!oidc) throw new Error('VERCEL_TRUSTED_OIDC_TOKEN_REQUIRED');
+if(previewAuthSecret.length<32) throw new Error('PREVIEW_API_AUTH_SECRET_REQUIRED');
 
-const headers={'content-type':'application/json','x-vercel-trusted-oidc-idp-token':oidc};
+const now=Math.floor(Date.now()/1000);
+const previewOperatorToken=mintPreviewApiToken({
+  secret:previewAuthSecret,
+  subject:'github-actions:paystack-provider-rehearsal',
+  actorId:'preview:operator:001',
+  scopes:['operator:payment.rehearse'],
+  issuedAt:now,
+  expiresAt:now+(10*60),
+});
+
+const headers={
+  'content-type':'application/json',
+  'x-vercel-trusted-oidc-idp-token':oidc,
+  authorization:`Bearer ${previewOperatorToken}`,
+};
 
 async function json(path,init={}){
   const response=await fetch(`${base}${path}`,{...init,headers:{...headers,...(init.headers??{})}});
@@ -72,6 +90,7 @@ console.log(JSON.stringify({
   delayedRequery:{startedAt:delayedRequeryStartedAt,observedAt:new Date().toISOString(),...delayedRequery},
   refund,
   refundStatusAttempts,
+  applicationAuth:'BOUNDED_PREVIEW_OPERATOR_TOKEN',
   liveFundsAuthorized:false,
   secretExposed:false
 },null,2));
