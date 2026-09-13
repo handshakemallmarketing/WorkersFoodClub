@@ -8,7 +8,7 @@ on:
     paths:
       - 'packages/durability/sql/006_application_identity_binding.sql'
       - 'packages/durability/sql/007_application_authority_membership.sql'
-      - 'packages/durability/sql/008_application_identity_binding_foreign_keys.sql'
+      - 'packages/durability/sql/008_identity_binding_referential_integrity.sql'
       - '.github/workflows/rc3-binding-integrity.yml'
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/durability/sql/006_application_identity_binding.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/durability/sql/007_application_authority_membership.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/durability/sql/008_application_identity_binding_foreign_keys.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/durability/sql/008_identity_binding_referential_integrity.sql
       - name: Seed governed principals and grant
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
