@@ -49,9 +49,61 @@
     root.appendChild(span);
   }
 
+  function productionMemberAccessAvailable() {
+    return config?.environment === 'production'
+      && config?.productionApplicationAccessEnabled === true
+      && Boolean(verifiedIdentity)
+      && Boolean(token);
+  }
+
+  function applyAccessUi() {
+    const production = config?.environment === 'production';
+    const memberAccess = productionMemberAccessAvailable();
+    const protectedButtons = document.querySelectorAll(
+      '[data-view="orders"], [data-view="operator"], [data-view="controls"], [data-go="orders"]',
+    );
+
+    protectedButtons.forEach((button) => {
+      if (!production) {
+        button.disabled = false;
+        button.removeAttribute('aria-disabled');
+        button.removeAttribute('title');
+        return;
+      }
+
+      const isMemberOrders = button.dataset.view === 'orders' || button.dataset.go === 'orders';
+      const allowed = isMemberOrders && memberAccess;
+      button.disabled = !allowed;
+      button.setAttribute('aria-disabled', allowed ? 'false' : 'true');
+      if (!allowed) {
+        button.title = verifiedIdentity
+          ? 'Identity verified; Production member access is not activated yet.'
+          : 'Sign in with Google to verify identity. Production member access remains disabled until activated.';
+      } else {
+        button.removeAttribute('title');
+      }
+    });
+
+    document.body.dataset.authState = verifiedIdentity ? 'verified' : 'anonymous';
+    document.body.dataset.memberAccess = memberAccess ? 'enabled' : 'disabled';
+  }
+
+  function emitAuthState() {
+    applyAccessUi();
+    window.dispatchEvent(new CustomEvent('foodclub:auth-state', {
+      detail: {
+        environment: config?.environment || 'unknown',
+        identityVerified: Boolean(verifiedIdentity),
+        subject: verifiedIdentity?.subject || null,
+        productionApplicationAccessEnabled: config?.productionApplicationAccessEnabled === true,
+        memberAccessAvailable: productionMemberAccessAvailable(),
+      },
+    }));
+  }
+
   function refreshProtectedViews() {
+    if (!productionMemberAccessAvailable()) return;
     if (typeof window.refreshOrders === 'function') window.refreshOrders();
-    if (typeof window.refreshOperatorOrders === 'function') window.refreshOperatorOrders();
   }
 
   function signOut() {
@@ -59,7 +111,7 @@
     verifiedIdentity = null;
     if (window.google?.accounts?.id) window.google.accounts.id.disableAutoSelect();
     renderGoogleButton();
-    refreshProtectedViews();
+    emitAuthState();
   }
 
   async function discoverIdentity(credential) {
@@ -97,8 +149,12 @@
       if (root) {
         root.innerHTML = '';
         const status = document.createElement('span');
-        status.className = 'badge neutral';
-        status.textContent = 'Google identity verified';
+        status.className = config?.productionApplicationAccessEnabled === true
+          ? 'badge neutral'
+          : 'badge warning';
+        status.textContent = config?.productionApplicationAccessEnabled === true
+          ? 'Google identity verified'
+          : 'Google identity verified · member access not activated';
         const subject = document.createElement('code');
         subject.textContent = identity.subject;
         subject.title = 'Verified Google subject';
@@ -109,11 +165,13 @@
         button.addEventListener('click', signOut);
         root.append(status, subject, button);
       }
+      emitAuthState();
       refreshProtectedViews();
     } catch {
       token = null;
       verifiedIdentity = null;
       setPanel('Google identity verification failed', 'badge danger');
+      emitAuthState();
     }
   }
 
@@ -166,6 +224,7 @@
       const body = await response.json();
       if (!response.ok || body?.ok !== true) throw new Error('AUTH_CLIENT_CONFIG_UNAVAILABLE');
       config = body;
+      emitAuthState();
 
       if (body.environment !== 'production') {
         setPanel('Preview identity');
@@ -176,14 +235,16 @@
         return;
       }
       if (body.productionApplicationAccessEnabled !== true) {
-        setPanel('Production identity configured · access disabled', 'badge warning');
+        setPanel('Production identity configured · member access disabled', 'badge warning');
       } else {
         setPanel('Loading Google sign-in…');
       }
       await loadGoogleScript();
       renderGoogleButton();
+      emitAuthState();
     } catch {
       setPanel('Identity configuration unavailable', 'badge danger');
+      emitAuthState();
     }
   }
 
@@ -192,6 +253,7 @@
     get mode() { return config?.authenticationMode || 'UNKNOWN'; },
     get subject() { return verifiedIdentity?.subject || null; },
     get issuer() { return verifiedIdentity?.issuer || null; },
+    get memberAccessAvailable() { return productionMemberAccessAvailable(); },
     signOut,
   });
 
