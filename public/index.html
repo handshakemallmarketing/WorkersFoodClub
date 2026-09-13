@@ -10,13 +10,13 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">FC</div><div><strong>Food Club Ghana</strong><span>Member Preview</span></div></div>
+      <div class="brand"><div class="brand-mark">FC</div><div><strong>Food Club Ghana</strong><span id="audience-label">Public Preview</span></div></div>
       <nav>
         <button class="nav-item active" data-view="dashboard">Overview</button>
         <button class="nav-item" data-view="catalog">Browse Offers</button>
-        <button class="nav-item" data-view="orders">My Orders</button>
-        <button class="nav-item" data-view="operator">Operations</button>
-        <button class="nav-item" data-view="controls">RC2 Controls</button>
+        <button class="nav-item" data-view="orders" hidden>My Orders</button>
+        <button class="nav-item" data-view="operator" hidden>Operations</button>
+        <button class="nav-item" data-view="controls" hidden>RC2 Controls</button>
       </nav>
       <div class="sidebar-footer"><span class="status-dot"></span>Preview environment</div>
     </aside>
@@ -33,7 +33,7 @@
             <p class="eyebrow">Pilot cohort preview</p>
             <h2>Better food buying through pooled member demand.</h2>
             <p>Food Club Ghana organizes member commitments, governed sourcing, physical inventory, fulfillment and savings evidence into one auditable operating flow.</p>
-            <div class="hero-actions"><button class="primary" data-go="catalog">Browse current offers</button><button class="secondary" data-go="orders">View order history</button></div>
+            <div class="hero-actions"><button class="primary" data-go="catalog">Browse current offers</button><button class="secondary" data-go="orders" hidden>View order history</button></div>
           </div>
           <div class="metric-stack">
             <div class="metric"><span>Preview status</span><strong>RC2 staging</strong></div>
