@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "1.0",
+  "evidenceId": "SW1-RC3-PRODUCTION-IDENTITY-REHEARSAL-2026-09-13",
+  "slice": "SW1-RC3",
+  "result": "PASS_BOUNDED_MEMBER_PATH_WITH_RESIDUAL_CASES",
+  "applicationCandidateSha": "b5cdf0d01359415f5da1e1f5ea5d81aa0fe307bf",
+  "identityEnabledDeployment": {
+    "deploymentId": "dpl_3LZFHP4LavgU8GLGXAHrcF2vmYd5",
+    "target": "production",
+    "state": "READY"
+  },
+  "rollbackDeployment": {
+    "deploymentId": "dpl_4ZsMXXgLjjHHyAJPKwvLQVFZaUjm",
+    "target": "production",
+    "state": "READY"
+  },
+  "authorizationEnvelope": {
+    "productionApplicationAccessTemporarilyAuthorizedForBoundedRehearsal": true,
+    "productionApplicationAccessCurrentState": false,
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false
+  },
+  "runtimeProof": {
+    "oidcConfigured": true,
+    "applicationBindingStoreConfigured": true,
+    "identityRuntimeReadyDuringRehearsal": true,
+    "governedMemberBindingResolved": true,
+    "activeMembershipRequiredAndSatisfied": true,
+    "authenticatedMemberOrders": {
+      "status": 200,
+      "result": "PASS"
+    },
+    "sameMemberIdentityOperatorOrders": {
+      "status": 403,
+      "result": "PASS_DENIED"
+    },
+    "unauthenticatedMemberOrders": {
+      "status": 401,
+      "result": "PASS_DENIED"
+    },
+    "unauthenticatedOperatorOrders": {
+      "status": 401,
+      "result": "PASS_DENIED"
+    },
+    "runtimeLogInspection": {
+      "result": "PASS",
+      "sensitiveBearerMaterialObserved": false,
+      "identitySubjectLogged": false,
+      "issuerOrProviderSecretLogged": false
+    },
+    "postRehearsalRollback": {
+      "productionApplicationAccessEnabled": false,
+      "identityRuntimeReady": false,
+      "memberOrdersStatus": 503,
+      "memberOrdersError": "PRODUCTION_APPLICATION_ACCESS_DISABLED",
+      "result": "PASS_FAIL_CLOSED"
+    }
+  },
+  "residualRuntimeCases": [
+    "valid upstream subject without application binding fails closed",
+    "disabled application principal fails closed"
+  ],
+  "notes": [
+    "No live funds or Paystack live-mode activation occurred.",
+    "The rehearsal proved the governed member positive path and member-to-operator negative authorization boundary.",
+    "Remaining unbound-subject and disabled-principal cases must be runtime-falsified before RC3 identity binding/rehearsal closure is claimed."
+  ]
+}
