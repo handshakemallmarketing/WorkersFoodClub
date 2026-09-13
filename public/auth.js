@@ -56,6 +56,27 @@
       && Boolean(token);
   }
 
+  function applyCatalogUi() {
+    const memberAccess = productionMemberAccessAvailable();
+    const label = memberAccess ? 'Member Offers' : 'Browse Offers';
+    const catalogNav = document.querySelector('[data-view="catalog"]');
+    const catalogHeading = document.querySelector('#catalog .section-intro h2');
+    const catalogView = document.getElementById('catalog');
+    const pageTitle = document.getElementById('page-title');
+
+    if (catalogNav) catalogNav.textContent = label;
+    if (catalogHeading) catalogHeading.textContent = label;
+    if (catalogView?.classList.contains('active') && pageTitle) pageTitle.textContent = label;
+  }
+
+  function bindCatalogUi() {
+    document.querySelectorAll('[data-view="catalog"], [data-go="catalog"]').forEach((button) => {
+      if (button.dataset.catalogLabelBound === 'true') return;
+      button.dataset.catalogLabelBound = 'true';
+      button.addEventListener('click', applyCatalogUi);
+    });
+  }
+
   function applyAccessUi() {
     const production = config?.environment === 'production';
     const memberAccess = productionMemberAccessAvailable();
@@ -84,6 +105,7 @@
       }
     });
 
+    applyCatalogUi();
     document.body.dataset.authState = verifiedIdentity ? 'verified' : 'anonymous';
     document.body.dataset.memberAccess = memberAccess ? 'enabled' : 'disabled';
   }
@@ -216,6 +238,7 @@
   }
 
   async function initialize() {
+    bindCatalogUi();
     try {
       const response = await originalFetch('/api/auth-client-config', {
         headers: { Accept: 'application/json' },
