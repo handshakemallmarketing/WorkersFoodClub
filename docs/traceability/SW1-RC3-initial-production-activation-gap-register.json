@@ -25,8 +25,8 @@
     },
     "RC3-BIND-001": {
       "severity": "P1",
-      "status": "PARTIAL_RUNTIME_PROVEN_RESIDUAL_CASES_OPEN",
-      "finding": "Runtime proof confirms a verified Google subject resolves to a durable application participant with ACTIVE membership and governed member scopes; the same member identity was denied operator access with HTTP 403. Durable participant, membership, authority-grant and binding referential integrity is enforced in Production. Runtime falsification of an otherwise-valid unbound subject and a disabled application principal remains outstanding."
+      "status": "PARTIAL_RUNTIME_PROVEN_RESIDUAL_CASE_OPEN",
+      "finding": "Runtime proof confirms a verified Google subject resolves to a durable application participant with ACTIVE membership and governed member scopes; the same member identity was denied operator access with HTTP 403. A valid Google subject with no matching application binding was also authenticated upstream but denied application member access with HTTP 403, proving the unbound-subject boundary fails closed. Durable participant, membership, authority-grant and binding referential integrity is enforced in Production. Runtime falsification of a disabled application principal remains outstanding."
     },
     "RC3-ENV-001": {
       "severity": "P1",
@@ -50,8 +50,8 @@
     },
     "RC3-REHEARSAL-001": {
       "severity": "P1",
-      "status": "PARTIAL_RUNTIME_PROVEN_RESIDUAL_CASES_OPEN",
-      "finding": "The bounded Production identity-enabled rehearsal passed for the governed member positive path, unauthenticated member/operator denial, member-to-operator denial, log hygiene, and rollback. Runtime adversarial coverage still lacks an otherwise-valid unbound Google subject and a disabled application principal. These cases must pass before the identity rehearsal blocker is closed."
+      "status": "PARTIAL_RUNTIME_PROVEN_RESIDUAL_CASE_OPEN",
+      "finding": "The bounded Production identity-enabled rehearsal passed for the governed member positive path, unauthenticated member/operator denial, member-to-operator denial, valid-but-unbound Google subject denial, log hygiene, and rollback. Runtime adversarial coverage now lacks only the disabled application principal case. That case must pass before the identity rehearsal blocker is closed."
     }
   },
   "negativeAssertionsRequired": [
@@ -74,7 +74,6 @@
     "provider retries cannot duplicate canonical effects"
   ],
   "runtimeResiduals": [
-    "valid upstream subject without application binding fails closed",
     "disabled application principal fails closed"
   ],
   "releaseIndexAdvanced": false,
