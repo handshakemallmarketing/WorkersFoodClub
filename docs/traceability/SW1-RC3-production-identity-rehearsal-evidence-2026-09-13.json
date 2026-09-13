@@ -2,21 +2,16 @@
   "schemaVersion": "1.0",
   "evidenceId": "SW1-RC3-PRODUCTION-IDENTITY-REHEARSAL-2026-09-13",
   "slice": "SW1-RC3",
-  "result": "PASS_BOUNDED_MEMBER_AND_UNBOUND_DENIAL_WITH_DISABLED_PRINCIPAL_RESIDUAL",
+  "result": "PASS_BOUNDED_IDENTITY_RUNTIME_FALSIFICATION_COMPLETE",
   "applicationCandidateSha": "b5cdf0d01359415f5da1e1f5ea5d81aa0fe307bf",
   "identityEnabledDeployment": {
-    "deploymentId": "dpl_3LZFHP4LavgU8GLGXAHrcF2vmYd5",
-    "target": "production",
-    "state": "READY"
-  },
-  "rollbackDeployment": {
-    "deploymentId": "dpl_4ZsMXXgLjjHHyAJPKwvLQVFZaUjm",
+    "deploymentId": "dpl_4vb8p3bti349E2XToSZfQ9p6VaXr",
     "target": "production",
     "state": "READY"
   },
   "authorizationEnvelope": {
     "productionApplicationAccessTemporarilyAuthorizedForBoundedRehearsal": true,
-    "productionApplicationAccessCurrentState": false,
+    "productionApplicationAccessRestorationRequired": true,
     "liveFundsAuthorized": false,
     "paystackLiveModeAuthorized": false
   },
@@ -26,9 +21,10 @@
     "identityRuntimeReadyDuringRehearsal": true,
     "governedMemberBindingResolved": true,
     "activeMembershipRequiredAndSatisfied": true,
-    "authenticatedMemberOrders": {
+    "authenticatedMemberOrdersBeforeDisabledBinding": {
       "status": 200,
-      "result": "PASS"
+      "result": "PASS",
+      "observedAt": "2026-09-13T18:25:37Z"
     },
     "sameMemberIdentityOperatorOrders": {
       "status": 403,
@@ -47,26 +43,34 @@
       "memberOrdersStatus": 403,
       "result": "PASS_FAIL_CLOSED"
     },
+    "disabledApplicationPrincipal": {
+      "bindingId": "binding:rc3:google:member:001",
+      "mutation": "ACTIVE_TO_DISABLED_TO_ACTIVE",
+      "participantStateDuringTest": "ACTIVE",
+      "membershipStateDuringTest": "ACTIVE",
+      "authorityGrantRevokedAtDuringTest": null,
+      "memberOrdersStatus": 403,
+      "observedAt": "2026-09-13T18:41:19Z",
+      "serverErrorBranch": "APPLICATION_PRINCIPAL_DISABLED",
+      "responseBodyCapturedExternally": false,
+      "errorBranchBasis": "The production server resolves the unique binding first and deterministically returns HTTP 403 APPLICATION_PRINCIPAL_DISABLED when binding.state is not ACTIVE. During the observed request only the controlled application_identity_binding state was DISABLED; the participant and membership remained ACTIVE.",
+      "bindingRestored": true,
+      "bindingRestoredAt": "2026-09-13T18:41:56.811Z",
+      "result": "PASS_FAIL_CLOSED"
+    },
     "runtimeLogInspection": {
       "result": "PASS",
       "sensitiveBearerMaterialObserved": false,
       "identitySubjectLogged": false,
       "issuerOrProviderSecretLogged": false
-    },
-    "postRehearsalRollback": {
-      "productionApplicationAccessEnabled": false,
-      "identityRuntimeReady": false,
-      "memberOrdersStatus": 503,
-      "memberOrdersError": "PRODUCTION_APPLICATION_ACCESS_DISABLED",
-      "result": "PASS_FAIL_CLOSED"
     }
   },
-  "residualRuntimeCases": [
-    "disabled application principal fails closed"
-  ],
+  "residualRuntimeCases": [],
   "notes": [
     "No live funds or Paystack live-mode activation occurred.",
-    "The rehearsal proved the governed member positive path, member-to-operator negative authorization boundary, and valid-but-unbound upstream subject denial at the application binding boundary.",
-    "Only the disabled application principal case remains to be runtime-falsified before RC3 identity binding/rehearsal closure is claimed."
+    "The governed Google member identity produced HTTP 200 on /api/member-orders before the controlled binding mutation and HTTP 403 while the same binding alone was DISABLED.",
+    "The controlled binding was restored to ACTIVE immediately after the denial proof.",
+    "The exact APPLICATION_PRINCIPAL_DISABLED error branch is established by the production server implementation and the exclusive binding-state mutation; the browser-held bearer credential was never exposed or persisted into evidence.",
+    "Production application access must be returned to fail-closed OFF after evidence capture."
   ]
 }
