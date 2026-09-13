@@ -9,6 +9,7 @@
   let token = null;
   let config = null;
   let verifiedIdentity = null;
+  let operatorAccess = false;
 
   function requestPath(input) {
     try {
@@ -56,6 +57,12 @@
       && Boolean(token);
   }
 
+  function setHidden(selector, hidden) {
+    document.querySelectorAll(selector).forEach((element) => {
+      element.hidden = hidden;
+    });
+  }
+
   function applyCatalogUi() {
     const memberAccess = productionMemberAccessAvailable();
     const label = memberAccess ? 'Member Offers' : 'Browse Offers';
@@ -80,34 +87,28 @@
   function applyAccessUi() {
     const production = config?.environment === 'production';
     const memberAccess = productionMemberAccessAvailable();
-    const protectedButtons = document.querySelectorAll(
-      '[data-view="orders"], [data-view="operator"], [data-view="controls"], [data-go="orders"]',
-    );
+    const authenticated = Boolean(verifiedIdentity && token);
+    const audienceLabel = document.getElementById('audience-label');
 
-    protectedButtons.forEach((button) => {
-      if (!production) {
-        button.disabled = false;
-        button.removeAttribute('aria-disabled');
-        button.removeAttribute('title');
-        return;
-      }
+    if (!production) {
+      setHidden('[data-view="orders"], [data-view="operator"], [data-view="controls"], [data-go="orders"]', false);
+      if (audienceLabel) audienceLabel.textContent = 'Member Preview';
+    } else {
+      setHidden('[data-view="orders"], [data-go="orders"]', !memberAccess);
+      setHidden('[data-view="operator"], [data-view="controls"]', !operatorAccess);
+      if (audienceLabel) audienceLabel.textContent = authenticated ? 'Member Preview' : 'Public Preview';
 
-      const isMemberOrders = button.dataset.view === 'orders' || button.dataset.go === 'orders';
-      const allowed = isMemberOrders && memberAccess;
-      button.disabled = !allowed;
-      button.setAttribute('aria-disabled', allowed ? 'false' : 'true');
-      if (!allowed) {
-        button.title = verifiedIdentity
-          ? 'Identity verified; Production member access is not activated yet.'
-          : 'Sign in with Google to verify identity. Production member access remains disabled until activated.';
-      } else {
-        button.removeAttribute('title');
+      const activeProtectedView = document.querySelector('.view.active#orders, .view.active#operator, .view.active#controls');
+      if (activeProtectedView) {
+        const stillAllowed = activeProtectedView.id === 'orders' ? memberAccess : operatorAccess;
+        if (!stillAllowed && typeof window.activate === 'function') window.activate('dashboard');
       }
-    });
+    }
 
     applyCatalogUi();
     document.body.dataset.authState = verifiedIdentity ? 'verified' : 'anonymous';
     document.body.dataset.memberAccess = memberAccess ? 'enabled' : 'disabled';
+    document.body.dataset.operatorAccess = operatorAccess ? 'enabled' : 'disabled';
   }
 
   function emitAuthState() {
@@ -119,6 +120,7 @@
         subject: verifiedIdentity?.subject || null,
         productionApplicationAccessEnabled: config?.productionApplicationAccessEnabled === true,
         memberAccessAvailable: productionMemberAccessAvailable(),
+        operatorAccessAvailable: operatorAccess,
       },
     }));
   }
@@ -126,11 +128,29 @@
   function refreshProtectedViews() {
     if (!productionMemberAccessAvailable()) return;
     if (typeof window.refreshOrders === 'function') window.refreshOrders();
+    if (operatorAccess && typeof window.refreshOperatorOrders === 'function') window.refreshOperatorOrders();
+  }
+
+  async function discoverOperatorAccess(credential) {
+    try {
+      const response = await originalFetch('/api/operator-orders', {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${credential}`,
+        },
+        cache: 'no-store',
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 
   function signOut() {
     token = null;
     verifiedIdentity = null;
+    operatorAccess = false;
     if (window.google?.accounts?.id) window.google.accounts.id.disableAutoSelect();
     renderGoogleButton();
     emitAuthState();
@@ -167,6 +187,9 @@
       const identity = await discoverIdentity(credential);
       token = credential;
       verifiedIdentity = identity;
+      operatorAccess = config?.productionApplicationAccessEnabled === true
+        ? await discoverOperatorAccess(credential)
+        : false;
       const root = panel();
       if (root) {
         root.innerHTML = '';
@@ -192,6 +215,7 @@
     } catch {
       token = null;
       verifiedIdentity = null;
+      operatorAccess = false;
       setPanel('Google identity verification failed', 'badge danger');
       emitAuthState();
     }
@@ -239,6 +263,7 @@
 
   async function initialize() {
     bindCatalogUi();
+    applyAccessUi();
     try {
       const response = await originalFetch('/api/auth-client-config', {
         headers: { Accept: 'application/json' },
@@ -277,6 +302,7 @@
     get subject() { return verifiedIdentity?.subject || null; },
     get issuer() { return verifiedIdentity?.issuer || null; },
     get memberAccessAvailable() { return productionMemberAccessAvailable(); },
+    get operatorAccessAvailable() { return operatorAccess; },
     signOut,
   });
 
