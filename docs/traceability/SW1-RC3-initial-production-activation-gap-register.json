@@ -13,7 +13,7 @@
   "startingEnvelope": {
     "hosting": "Vercel production deployment exists",
     "database": "Neon PostgreSQL",
-    "applicationAuthentication": "Production OIDC with application-owned binding and authority; current access switch disabled",
+    "applicationAuthentication": "Production OIDC with application-owned binding and authority; current access switch must be disabled outside bounded rehearsal",
     "paymentProvider": "PAYSTACK",
     "paymentMode": "test"
   },
@@ -21,22 +21,22 @@
     "RC3-AUTH-001": {
       "severity": "P1",
       "status": "CLOSED_RUNTIME_PROVEN",
-      "finding": "Production OIDC is runtime-proven against Google Identity Services using the RS256/JWKS signature-first verifier. A verified bound Google subject resolved through the application binding store and authenticated the member read path. Missing bearer traffic failed closed with HTTP 401. Production application access has been returned to disabled after rehearsal."
+      "finding": "Production OIDC is runtime-proven against Google Identity Services using the RS256/JWKS signature-first verifier. A verified bound Google subject resolved through the application binding store and authenticated the member read path. Missing bearer traffic failed closed with HTTP 401."
     },
     "RC3-BIND-001": {
       "severity": "P1",
-      "status": "PARTIAL_RUNTIME_PROVEN_RESIDUAL_CASE_OPEN",
-      "finding": "Runtime proof confirms a verified Google subject resolves to a durable application participant with ACTIVE membership and governed member scopes; the same member identity was denied operator access with HTTP 403. A valid Google subject with no matching application binding was also authenticated upstream but denied application member access with HTTP 403, proving the unbound-subject boundary fails closed. Durable participant, membership, authority-grant and binding referential integrity is enforced in Production. Runtime falsification of a disabled application principal remains outstanding."
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "Runtime proof confirms a verified Google subject resolves to a durable application participant with ACTIVE membership and governed member scopes; the same member identity was denied operator access with HTTP 403. A valid Google subject with no matching application binding was denied member access with HTTP 403. The final disabled-principal falsification also passed: with the same controlled Google identity, participant and membership remaining ACTIVE, changing only binding:rc3:google:member:001 from ACTIVE to DISABLED caused /api/member-orders to return HTTP 403, matching the deterministic APPLICATION_PRINCIPAL_DISABLED server branch. The binding was restored to ACTIVE immediately afterward."
     },
     "RC3-ENV-001": {
       "severity": "P1",
       "status": "CLOSED_RUNTIME_PROVEN",
-      "finding": "Production OIDC issuer, audience, JWKS and DATABASE_URL configuration are present and were runtime-proven during the bounded identity-enabled rehearsal. Readiness reported oidcConfigured=true, applicationBindingStoreConfigured=true and identityRuntimeReady=true while the bounded access switch was enabled. After rollback, the same readiness endpoint reports productionApplicationAccessEnabled=false and identityRuntimeReady=false as designed."
+      "finding": "Production OIDC issuer, audience, JWKS and DATABASE_URL configuration are present and runtime-proven during bounded identity-enabled rehearsals."
     },
     "RC3-LOG-001": {
       "severity": "P1",
       "status": "CLOSED_RUNTIME_PROVEN",
-      "finding": "Production runtime logs from the identity-enabled rehearsal showed only route/status metadata for the exercised OIDC paths. No bearer token material, Google subject, issuer value or provider secret material was observed."
+      "finding": "Production runtime logs from the identity-enabled rehearsal showed route/status metadata for exercised OIDC paths without bearer token material, Google subject, issuer value or provider secret material."
     },
     "RC3-PAY-001": {
       "severity": "P1",
@@ -46,12 +46,12 @@
     "RC3-ROLLBACK-001": {
       "severity": "P1",
       "status": "CLOSED_RUNTIME_PROVEN",
-      "finding": "Rollback is runtime-proven both by the earlier disabled canary rehearsal and by the post-identity-enabled rehearsal rollback. Current Production deployment dpl_4ZsMXXgLjjHHyAJPKwvLQVFZaUjm has production application access disabled; readiness reports identityRuntimeReady=false and /api/member-orders returns HTTP 503 PRODUCTION_APPLICATION_ACCESS_DISABLED."
+      "finding": "Rollback to fail-closed Production application access is runtime-proven. After the final identity falsification, Production application access must again be returned to disabled before RC3 work is left at rest."
     },
     "RC3-REHEARSAL-001": {
       "severity": "P1",
-      "status": "PARTIAL_RUNTIME_PROVEN_RESIDUAL_CASE_OPEN",
-      "finding": "The bounded Production identity-enabled rehearsal passed for the governed member positive path, unauthenticated member/operator denial, member-to-operator denial, valid-but-unbound Google subject denial, log hygiene, and rollback. Runtime adversarial coverage now lacks only the disabled application principal case. That case must pass before the identity rehearsal blocker is closed."
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "The bounded Production identity-enabled rehearsal passed for the governed member positive path, unauthenticated member/operator denial, member-to-operator denial, valid-but-unbound Google subject denial, disabled application principal denial, log hygiene, and rollback behavior. No identity runtime residual remains."
     }
   },
   "negativeAssertionsRequired": [
@@ -73,9 +73,7 @@
     "unauthenticated provider traffic cannot create economic truth",
     "provider retries cannot duplicate canonical effects"
   ],
-  "runtimeResiduals": [
-    "disabled application principal fails closed"
-  ],
+  "runtimeResiduals": [],
   "releaseIndexAdvanced": false,
   "verdict": {
     "rc3": "NO_GO",
