@@ -8,6 +8,7 @@
 
   let token = null;
   let config = null;
+  let verifiedIdentity = null;
 
   function requestPath(input) {
     try {
@@ -55,31 +56,65 @@
 
   function signOut() {
     token = null;
+    verifiedIdentity = null;
     if (window.google?.accounts?.id) window.google.accounts.id.disableAutoSelect();
     renderGoogleButton();
     refreshProtectedViews();
   }
 
-  function authenticated(credential) {
+  async function discoverIdentity(credential) {
+    const response = await originalFetch('/api/identity-subject', {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${credential}`,
+      },
+      cache: 'no-store',
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || body?.ok !== true || body?.verified !== true || !body?.subject) {
+      throw new Error(body?.error || 'IDENTITY_SUBJECT_DISCOVERY_FAILED');
+    }
+    return Object.freeze({
+      issuer: body.issuer,
+      subject: body.subject,
+      expiresAt: body.expiresAt,
+    });
+  }
+
+  async function authenticated(credential) {
     if (typeof credential !== 'string' || credential.split('.').length !== 3) {
       setPanel('Identity response invalid', 'badge danger');
       return;
     }
-    token = credential;
-    const root = panel();
-    if (root) {
-      root.innerHTML = '';
-      const status = document.createElement('span');
-      status.className = 'badge neutral';
-      status.textContent = 'Google identity ready';
-      const button = document.createElement('button');
-      button.className = 'secondary small';
-      button.type = 'button';
-      button.textContent = 'Sign out';
-      button.addEventListener('click', signOut);
-      root.append(status, button);
+
+    setPanel('Verifying Google identity…');
+    try {
+      const identity = await discoverIdentity(credential);
+      token = credential;
+      verifiedIdentity = identity;
+      const root = panel();
+      if (root) {
+        root.innerHTML = '';
+        const status = document.createElement('span');
+        status.className = 'badge neutral';
+        status.textContent = 'Google identity verified';
+        const subject = document.createElement('code');
+        subject.textContent = identity.subject;
+        subject.title = 'Verified Google subject';
+        const button = document.createElement('button');
+        button.className = 'secondary small';
+        button.type = 'button';
+        button.textContent = 'Sign out';
+        button.addEventListener('click', signOut);
+        root.append(status, subject, button);
+      }
+      refreshProtectedViews();
+    } catch {
+      token = null;
+      verifiedIdentity = null;
+      setPanel('Google identity verification failed', 'badge danger');
     }
-    refreshProtectedViews();
   }
 
   function loadGoogleScript() {
@@ -155,6 +190,8 @@
   window.FoodClubAuth = Object.freeze({
     get hasToken() { return Boolean(token); },
     get mode() { return config?.authenticationMode || 'UNKNOWN'; },
+    get subject() { return verifiedIdentity?.subject || null; },
+    get issuer() { return verifiedIdentity?.issuer || null; },
     signOut,
   });
 
