@@ -9,7 +9,21 @@
     "target": "production",
     "state": "READY"
   },
-  "finalFailClosedDeployment": {
+  "authorityUiCandidateSha": "e6439c92adc61bde8bc0934ee2f9dfb89b686c02",
+  "authorityUiIdentityEnabledDeployment": {
+    "deploymentId": "dpl_8N8MZqTi1WKxJrMbWhCQX8fyvCi2",
+    "deploymentUrl": "https://workers-food-club-ln7jv1f8p-food-club.vercel.app",
+    "productionAlias": "https://workers-food-club-chi.vercel.app",
+    "target": "production",
+    "state": "READY",
+    "workflowRunId": 34777308747,
+    "triggerCommit": "2cd053ae8b71321e1a0d452ef47a7c8c8b2ea3a4",
+    "productionApplicationAccessEnabled": true,
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "result": "PASS_BOUNDED_AUTHORITY_UI_REHEARSAL"
+  },
+  "priorFailClosedDeployment": {
     "deploymentId": "dpl_71Jr41RfA6ugzGSAcqtPkPndAxKG",
     "productionAlias": "https://workers-food-club-chi.vercel.app",
     "target": "production",
@@ -21,6 +35,32 @@
     "memberOrdersStatus": 503,
     "memberOrdersError": "PRODUCTION_APPLICATION_ACCESS_DISABLED",
     "verifiedAt": "2026-09-13T18:45:23Z",
+    "result": "PASS_FAIL_CLOSED_RESTORED"
+  },
+  "finalFailClosedDeployment": {
+    "deploymentId": "dpl_DQFpsNDQESHNxk2gdnEjikr4FXP3",
+    "deploymentUrl": "https://workers-food-club-iz0o28yyi-food-club.vercel.app",
+    "productionAlias": "https://workers-food-club-chi.vercel.app",
+    "target": "production",
+    "state": "READY",
+    "applicationCandidateSha": "e6439c92adc61bde8bc0934ee2f9dfb89b686c02",
+    "triggerCommit": "91938956d5a895f9d4b518db67b7d5996c1a8183",
+    "productionApplicationAccessEnabled": false,
+    "memberOrdersStatus": 503,
+    "memberOrdersError": "PRODUCTION_APPLICATION_ACCESS_DISABLED",
+    "verifiedAt": "2026-09-13T19:24:28Z",
+    "exactHeadChecks": {
+      "constitutionalConformance": {
+        "runNumber": 1463,
+        "runId": 34777529391,
+        "result": "SUCCESS"
+      },
+      "rc3BindingIntegrity": {
+        "runNumber": 74,
+        "runId": 34777529392,
+        "result": "SUCCESS"
+      }
+    },
     "result": "PASS_FAIL_CLOSED_RESTORED"
   },
   "authorizationEnvelope": {
@@ -77,6 +117,24 @@
       "postRestoreAuthorityGrantRevokedAt": null,
       "result": "PASS_FAIL_CLOSED"
     },
+    "authorityAwareNavigation": {
+      "candidateSha": "e6439c92adc61bde8bc0934ee2f9dfb89b686c02",
+      "productionAccessDuringTest": true,
+      "governedMemberAuthenticated": true,
+      "memberTabsVisible": [
+        "Overview",
+        "Member Offers",
+        "My Orders"
+      ],
+      "operatorAdminTabsAbsent": [
+        "Operations",
+        "RC2 Controls"
+      ],
+      "paymentUiState": "Sandbox payments only",
+      "observedAt": "2026-09-13T19:21:00Z",
+      "observationBasis": "Authenticated bounded Production rehearsal plus user-observed rendered UI; server-side member/operator authorization remained authoritative.",
+      "result": "PASS_AUTHORITY_ALIGNED_UI"
+    },
     "runtimeLogInspection": {
       "result": "PASS",
       "sensitiveBearerMaterialObserved": false,
@@ -90,7 +148,8 @@
     "The governed Google member identity produced HTTP 200 on /api/member-orders before the controlled binding mutation and HTTP 403 while the same binding alone was DISABLED.",
     "The controlled binding was restored to ACTIVE immediately after the denial proof; participant and membership are ACTIVE and the authority grant remains unrevoked.",
     "The exact APPLICATION_PRINCIPAL_DISABLED error branch is established by the production server implementation and the exclusive binding-state mutation; the browser-held bearer credential was never exposed or persisted into evidence.",
-    "The final bounded Production canary redeployed the immutable candidate with PRODUCTION_APPLICATION_ACCESS_ENABLED=false. The canonical Production alias then returned HTTP 503 PRODUCTION_APPLICATION_ACCESS_DISABLED on /api/member-orders.",
+    "The authority-aware UI candidate was then exercised in a bounded Production identity-enabled rehearsal. The governed member saw member-only navigation while operator/admin navigation remained absent.",
+    "The final bounded Production canary redeployed the authority-aware UI candidate with PRODUCTION_APPLICATION_ACCESS_ENABLED=false. The canonical Production alias returned HTTP 503 PRODUCTION_APPLICATION_ACCESS_DISABLED on /api/member-orders and the exact-head mandatory checks passed.",
     "The obsolete residual binding workflow was converted to explicit workflow_dispatch with an explicit target URL and retained credential guard; it no longer auto-runs on branch pushes."
   ]
 }
