@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      PRODUCTION_BASE_URL: https://workers-food-club-gopjnl93t-food-club.vercel.app
+      PRODUCTION_BASE_URL: https://workers-food-club-gjsk4miq9-food-club.vercel.app
       EXPECTED_DEPLOYED_SHA: b5cdf0d01359415f5da1e1f5ea5d81aa0fe307bf
       EXPECTED_MEMBER_ACTOR_ID: participant:rc3:member:001
       RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
