@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: node --check api/db-health.js && node --check api/member-offers.js && node --check api/member-orders.js && node --check api/member-notifications.js && node --check api/commit-sandbox.js && node --check api/pay-sandbox.js && node --check api/paystack-rehearsal.js && node --check api/operator-orders.js && node --check api/fulfillment-ready.js && node --check api/accept-fulfillment.js && node --check api/authorize-refund.js && node --check api/complete-refund.js && node --check public/app.js && node --check scripts/wait-for-vercel-status.mjs && node --check scripts/test-preview-http-rehearsal.mjs && node --check scripts/test-paystack-provider-rehearsal.mjs
+      - run: node --check api/db-health.js && node --check api/member-offers.js && node --check api/member-orders.js && node --check api/member-notifications.js && node --check api/commit-sandbox.js && node --check api/pay-sandbox.js && node --check api/paystack-rehearsal.js && node --check api/operator-orders.js && node --check api/fulfillment-ready.js && node --check api/accept-fulfillment.js && node --check api/authorize-refund.js && node --check api/complete-refund.js && node --check lib/production-access-policy.js && node --check public/auth.js && node --check public/app.js && node --check scripts/wait-for-vercel-status.mjs && node --check scripts/test-preview-http-rehearsal.mjs && node --check scripts/test-paystack-provider-rehearsal.mjs && node --check scripts/test-production-identity-rehearsal.mjs && node --check scripts/test-production-access-rollback.mjs
       - run: pnpm canon:check
       - run: pnpm traceability:check
       - run: pnpm typecheck
@@ -40,7 +40,10 @@ jobs:
       - run: pnpm add -Dw --lockfile=false pg@8.13.1
       - run: node scripts/test-postgres-adapter-race.mjs
       - name: Wait for exact-head Vercel deployment
-        if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc2-production-readiness-falsification'
+        if: >-
+          github.event_name == 'pull_request' &&
+          (github.head_ref == 'sw1-rc2-production-readiness-falsification' ||
+           github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification')
         env:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
@@ -51,3 +54,11 @@ jobs:
           echo "Exact-head Vercel deployment is proven by the preceding status check."
           echo "The live HTTP adversarial rehearsal is intentionally not run against a hard-coded branch alias from this required gate."
           echo "Run the rc2-preview-http-rehearsal workflow with the exact immutable Vercel deployment URL; RC2-E2E-001 remains open until that workflow passes."
+      - name: RC3 exact-head deployment boundary status
+        if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification'
+        run: |
+          echo "RC3 exact-head Preview deployment status is required and proven by the preceding Vercel status check."
+          echo "Preview deployment proof does not authorize Production application access, Production writes, or live funds."
+          echo "Run the RC3 production identity rehearsal workflow against an exact Production deployment with canonical member/operator bindings before closing RC3-ENV-001 or RC3-REHEARSAL-001."
+          echo "Run the RC3 production access rollback rehearsal against an exact Production deployment with PRODUCTION_APPLICATION_ACCESS_ENABLED disabled before closing RC3-ROLLBACK-001."
+          echo "Live-provider activation remains a separate release blocker and live funds remain unauthorized."

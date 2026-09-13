@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "SW1-RC3",
+  "status": "OPEN_NO_GO",
+  "startingMainCommit": "eb191168ec121b6d4dfde9acbfc0db3e7b43f06e",
+  "parentRelease": "SW1-RC2",
+  "productionApplicationAccessAuthorized": false,
+  "liveFundsAuthorized": false,
+  "baselineEvidence": "docs/traceability/SW1-RC3-production-baseline-nonpromotion-evidence-2026-09-12.json",
+  "rollbackEvidence": "docs/traceability/SW1-RC3-production-rollback-rehearsal-evidence-2026-09-12.json",
+  "identityConfigPreflightEvidence": "docs/traceability/SW1-RC3-production-identity-config-preflight-evidence-2026-09-12.json",
+  "startingEnvelope": {
+    "hosting": "Vercel production deployment exists",
+    "database": "Neon PostgreSQL",
+    "applicationAuthentication": "Preview HMAC authentication intentionally disabled in production",
+    "paymentProvider": "PAYSTACK",
+    "paymentMode": "test"
+  },
+  "findings": {
+    "RC3-AUTH-001": {
+      "severity": "P1",
+      "status": "REMEDIATED_CODE_PROOF_PENDING_RUNTIME",
+      "finding": "The production OIDC verifier is fail-closed, RS256/JWKS-based, signature-first, and identity-only. Runtime proof remains blocked until Production OIDC configuration and dedicated rehearsal identities exist."
+    },
+    "RC3-BIND-001": {
+      "severity": "P1",
+      "status": "REMEDIATED_CODE_PROOF_PENDING_RUNTIME",
+      "finding": "Server-side application identity binding resolves verified (issuer, subject) to canonical participant_id and governed application scopes with durable uniqueness preventing silent rebinding. Runtime proof of bound, unbound, disabled and cross-role principals remains pending, and Production DATABASE_URL is not yet configured."
+    },
+    "RC3-ENV-001": {
+      "severity": "P1",
+      "status": "BLOCKED_MISSING_PRODUCTION_CONFIGURATION",
+      "finding": "Production identity configuration preflight run 34703827359 successfully pulled the Vercel Production environment without exposing values and found none of the required identity/binding variables present. Missing variables are OIDC_ISSUER, OIDC_AUDIENCE, OIDC_JWKS_URI and DATABASE_URL. Protected rehearsal credentials RC3_PRODUCTION_MEMBER_TOKEN and RC3_PRODUCTION_OPERATOR_TOKEN are also unset. Production application access remains disabled and identity enablement must not proceed until these prerequisites are provisioned and validated."
+    },
+    "RC3-LOG-001": {
+      "severity": "P1",
+      "status": "REMEDIATED_CODE_PROOF_PENDING_RUNTIME",
+      "finding": "Adversarial code tests prove sensitive bearer/identity/provider markers are absent from application console output. Runtime OIDC-path log inspection remains pending until Production identity configuration and rehearsal identities exist."
+    },
+    "RC3-PAY-001": {
+      "severity": "P1",
+      "status": "OPEN",
+      "finding": "Paystack authenticity/replay semantics are proven in test mode only. Live provider activation and live funds remain unauthorized."
+    },
+    "RC3-ROLLBACK-001": {
+      "severity": "P1",
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "Runtime rehearsal run 34703745217 passed against exact Production canary dpl_CSUWbrVHLXYTb4zVRnUgdcXodvq7 on commit 5377b89c92529c130ee9e78e89550fa3c28af488. Runtime SHA matched the expected SHA; all three protected read routes failed closed with application access disabled; all six sandbox mutation routes remained disabled in Production. Live-provider rollback remains separately bounded by RC3-PAY-001."
+    },
+    "RC3-REHEARSAL-001": {
+      "severity": "P1",
+      "status": "BLOCKED_MISSING_IDENTITY_CONFIGURATION_AND_REHEARSAL_CREDENTIALS",
+      "finding": "The exact-SHA Production identity adversarial rehearsal harness exists, and the application-access-disabled rollback phase has passed. The identity-enabled phase cannot start because Production OIDC variables, Production DATABASE_URL, and protected member/operator rehearsal tokens are missing."
+    }
+  },
+  "negativeAssertionsRequired": [
+    "missing bearer fails closed",
+    "malformed bearer fails closed",
+    "bad signature fails closed before untrusted claims are accepted",
+    "wrong issuer fails closed",
+    "wrong audience fails closed",
+    "expired or not-yet-valid token fails closed",
+    "IdP actor and scope claims cannot choose application actor or authority",
+    "valid upstream subject without application binding fails closed",
+    "member cannot acquire operator scope",
+    "authenticated actor cannot be replaced by request actor input",
+    "disabled application principal fails closed",
+    "Preview HMAC token cannot authenticate production",
+    "production application access kill switch fails closed before OIDC verification",
+    "production mutation cannot emit Preview-only durable or canonical identity semantics",
+    "sensitive bearer/identity/provider configuration material absent from logs",
+    "unauthenticated provider traffic cannot create economic truth",
+    "provider retries cannot duplicate canonical effects"
+  ],
+  "releaseIndexAdvanced": false,
+  "verdict": {
+    "rc3": "NO_GO",
+    "productionApplicationAccess": "NO_GO",
+    "liveFunds": "NO_GO"
+  }
+}

@@ -1,7 +1,7 @@
-import { randomUUID } from 'node:crypto';
-import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
+import { requireApplicationAuth } from '../lib/application-auth.js';
+import { canonicalRuntimeMetadata, durableId, runtimeEnvironment, runtimeOwnerToken } from '../lib/durable-runtime-semantics.js';
 
-const PARTICIPANT_ID = 'preview:member:001';
+const PREVIEW_PARTICIPANT_ID = 'preview:member:001';
 const MEMBERSHIP_ID = 'preview:membership:001';
 const POLICY_VERSION = 'preview-sandbox-v1';
 const OFFER_ID_RE = /^[A-Za-z0-9:_-]{1,120}$/;
@@ -47,13 +47,16 @@ export default async function handler(req, res) {
     return res.status(403).json({ ok: false, error: 'SANDBOX_COMMIT_DISABLED_IN_PRODUCTION' });
   }
 
-  const principal = requirePreviewApiAuth(
+  const principal = await requireApplicationAuth(
     req,
     res,
     'member:purchase.commit',
-    PARTICIPANT_ID,
+    PREVIEW_PARTICIPANT_ID,
   );
   if (!principal) return;
+
+  const runtime = canonicalRuntimeMetadata({ principal, environment: runtimeEnvironment() });
+  const ownerToken = runtimeOwnerToken(runtime.environment);
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
@@ -70,10 +73,9 @@ export default async function handler(req, res) {
     const existing = await readExisting(sql, requestId);
     if (existing) return res.status(200).json({ ok: true, commitment: serialize(existing, true) });
 
-    const obligationId = `preview:obligation:${randomUUID()}`;
-    const commandId = `preview:command:${randomUUID()}`;
-    const eventId = `preview:event:${randomUUID()}`;
-    const ownerToken = 'vercel-preview';
+    const obligationId = durableId('obligation');
+    const commandId = durableId('command');
+    const eventId = durableId('event');
 
     const rows = await sql`
       WITH selected_offer AS (
@@ -90,7 +92,7 @@ export default async function handler(req, res) {
           committed_price_minor, currency, fulfillment_method, state,
           authorized_command_id, authorized_event_id, policy_version
         )
-        SELECT ${obligationId}, ${requestId}, ${PARTICIPANT_ID}, ${MEMBERSHIP_ID}, offer_id,
+        SELECT ${obligationId}, ${requestId}, ${runtime.actorId}, ${MEMBERSHIP_ID}, offer_id,
                unit_quantity, unit, price_minor, currency, fulfillment_method, 'OPEN',
                ${commandId}, ${eventId}, ${POLICY_VERSION}
           FROM selected_offer
@@ -127,7 +129,8 @@ export default async function handler(req, res) {
                  'fulfillmentMethod', fulfillment_method,
                  'authorizedCommandId', authorized_command_id,
                  'policyVersion', policy_version,
-                 'environment', 'preview'
+                 'actorId', ${runtime.actorId}::text,
+                 'environment', ${runtime.environment}::text
                ),
                accepted_at
           FROM commitment

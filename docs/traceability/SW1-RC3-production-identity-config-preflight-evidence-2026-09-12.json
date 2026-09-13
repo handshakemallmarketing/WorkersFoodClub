@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0",
+  "evidenceId": "SW1-RC3-PRODUCTION-IDENTITY-CONFIG-PREFLIGHT-2026-09-12",
+  "slice": "SW1-RC3",
+  "result": "BLOCKED",
+  "blockers": ["RC3-ENV-001", "RC3-REHEARSAL-001"],
+  "workflow": {
+    "name": "RC3 production identity configuration preflight",
+    "runId": 34703827359,
+    "jobId": 103580166361,
+    "sourceCommitSha": "4ffe07d86a3019503cbce41a9d270ee161013bb9"
+  },
+  "productionEnvironment": {
+    "provider": "VERCEL",
+    "projectId": "prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE",
+    "teamId": "team_wnL0jYsouqFvJ8VJR0jIAhTl",
+    "pullSucceeded": true,
+    "valuesExposed": false,
+    "requiredVariables": [
+      "OIDC_ISSUER",
+      "OIDC_AUDIENCE",
+      "OIDC_JWKS_URI",
+      "DATABASE_URL"
+    ],
+    "presentVariables": [],
+    "missingVariables": [
+      "OIDC_ISSUER",
+      "OIDC_AUDIENCE",
+      "OIDC_JWKS_URI",
+      "DATABASE_URL"
+    ]
+  },
+  "githubRehearsalCredentials": {
+    "RC3_PRODUCTION_MEMBER_TOKEN": "MISSING",
+    "RC3_PRODUCTION_OPERATOR_TOKEN": "MISSING",
+    "valuesExposed": false
+  },
+  "authorizationBoundary": {
+    "productionApplicationAccessEnabled": false,
+    "productionWritesAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "liveFundsAuthorized": false,
+    "releaseIndexAdvanced": false
+  },
+  "verdict": "Production identity rehearsal must not proceed until the required OIDC configuration, Production database binding configuration, and protected member/operator rehearsal credentials are provisioned and separately validated."
+}
