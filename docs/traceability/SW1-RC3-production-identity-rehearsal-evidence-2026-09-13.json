@@ -9,9 +9,24 @@
     "target": "production",
     "state": "READY"
   },
+  "finalFailClosedDeployment": {
+    "deploymentId": "dpl_71Jr41RfA6ugzGSAcqtPkPndAxKG",
+    "productionAlias": "https://workers-food-club-chi.vercel.app",
+    "target": "production",
+    "state": "READY",
+    "applicationCandidateSha": "b5cdf0d01359415f5da1e1f5ea5d81aa0fe307bf",
+    "triggerCommit": "4b3cac58052a639553a982f681644b2a0094d467",
+    "workflowRunId": 34775499581,
+    "productionApplicationAccessEnabled": false,
+    "memberOrdersStatus": 503,
+    "memberOrdersError": "PRODUCTION_APPLICATION_ACCESS_DISABLED",
+    "verifiedAt": "2026-09-13T18:45:23Z",
+    "result": "PASS_FAIL_CLOSED_RESTORED"
+  },
   "authorizationEnvelope": {
     "productionApplicationAccessTemporarilyAuthorizedForBoundedRehearsal": true,
-    "productionApplicationAccessRestorationRequired": true,
+    "productionApplicationAccessRestorationRequired": false,
+    "productionApplicationAccessCurrentState": "DISABLED",
     "liveFundsAuthorized": false,
     "paystackLiveModeAuthorized": false
   },
@@ -56,6 +71,10 @@
       "errorBranchBasis": "The production server resolves the unique binding first and deterministically returns HTTP 403 APPLICATION_PRINCIPAL_DISABLED when binding.state is not ACTIVE. During the observed request only the controlled application_identity_binding state was DISABLED; the participant and membership remained ACTIVE.",
       "bindingRestored": true,
       "bindingRestoredAt": "2026-09-13T18:41:56.811Z",
+      "postRestoreBindingState": "ACTIVE",
+      "postRestoreParticipantState": "ACTIVE",
+      "postRestoreMembershipState": "ACTIVE",
+      "postRestoreAuthorityGrantRevokedAt": null,
       "result": "PASS_FAIL_CLOSED"
     },
     "runtimeLogInspection": {
@@ -69,8 +88,9 @@
   "notes": [
     "No live funds or Paystack live-mode activation occurred.",
     "The governed Google member identity produced HTTP 200 on /api/member-orders before the controlled binding mutation and HTTP 403 while the same binding alone was DISABLED.",
-    "The controlled binding was restored to ACTIVE immediately after the denial proof.",
+    "The controlled binding was restored to ACTIVE immediately after the denial proof; participant and membership are ACTIVE and the authority grant remains unrevoked.",
     "The exact APPLICATION_PRINCIPAL_DISABLED error branch is established by the production server implementation and the exclusive binding-state mutation; the browser-held bearer credential was never exposed or persisted into evidence.",
-    "Production application access must be returned to fail-closed OFF after evidence capture."
+    "The final bounded Production canary redeployed the immutable candidate with PRODUCTION_APPLICATION_ACCESS_ENABLED=false. The canonical Production alias then returned HTTP 503 PRODUCTION_APPLICATION_ACCESS_DISABLED on /api/member-orders.",
+    "The obsolete residual binding workflow was converted to explicit workflow_dispatch with an explicit target URL and retained credential guard; it no longer auto-runs on branch pushes."
   ]
 }
