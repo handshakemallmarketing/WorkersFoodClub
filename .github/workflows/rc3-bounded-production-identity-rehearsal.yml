@@ -79,3 +79,5 @@ jobs:
           echo 'Paystack live mode remains NOT authorized.'
           echo 'No Production mutation scope is authorized by this workflow.'
           echo 'Rollback is a fresh Production deployment with PRODUCTION_APPLICATION_ACCESS_ENABLED=false.'
+
+# bounded trigger refresh
