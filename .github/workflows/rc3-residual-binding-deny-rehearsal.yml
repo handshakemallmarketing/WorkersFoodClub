@@ -1,0 +1,78 @@
+name: RC3 residual binding deny rehearsal
+
+on:
+  push:
+    branches:
+      - sw1-rc3-production-identity-live-provider-falsification
+
+permissions:
+  contents: read
+
+jobs:
+  member-binding-deny:
+    if: >-
+      ${{ github.event.head_commit.message == 'RC3 verify residual member-token baseline' ||
+          github.event.head_commit.message == 'RC3 prove unbound principal fails closed' ||
+          github.event.head_commit.message == 'RC3 prove disabled principal fails closed' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PRODUCTION_BASE_URL: https://workers-food-club-gopjnl93t-food-club.vercel.app
+      EXPECTED_DEPLOYED_SHA: b5cdf0d01359415f5da1e1f5ea5d81aa0fe307bf
+      EXPECTED_MEMBER_ACTOR_ID: participant:rc3:member:001
+      RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
+      TEST_MODE: ${{ github.event.head_commit.message }}
+    steps:
+      - name: Require controlled member credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${RC3_PRODUCTION_MEMBER_TOKEN:-}" || {
+            echo 'RC3_PRODUCTION_MEMBER_TOKEN missing; refusing residual Production rehearsal.' >&2
+            exit 1
+          }
+
+      - name: Prove exact residual binding behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --silent --show-error --fail-with-body \
+            --write-out $'\n%{http_code}' \
+            --header 'accept: application/json' \
+            --header "authorization: Bearer ${RC3_PRODUCTION_MEMBER_TOKEN}" \
+            "${PRODUCTION_BASE_URL}/api/member-notifications" || true)"
+          status="${response##*$'\n'}"
+          body="${response%$'\n'*}"
+
+          node - "$TEST_MODE" "$status" "$body" "$EXPECTED_MEMBER_ACTOR_ID" <<'NODE'
+          const [mode, rawStatus, rawBody, expectedActorId] = process.argv.slice(2);
+          const status = Number(rawStatus);
+          let body = {};
+          try { body = JSON.parse(rawBody); } catch { throw new Error('response was not JSON'); }
+
+          if (mode === 'RC3 verify residual member-token baseline') {
+            if (status !== 200 || body?.ok !== true || body?.memberId !== expectedActorId) {
+              throw new Error(`baseline binding proof failed with HTTP ${status}`);
+            }
+            console.log(JSON.stringify({ok:true, mode:'baseline-bound-member', status, canonicalActorVerified:true, tokenPrinted:false}));
+          } else if (mode === 'RC3 prove unbound principal fails closed') {
+            if (status !== 403 || body?.error !== 'APPLICATION_IDENTITY_NOT_BOUND') {
+              throw new Error(`unbound fail-closed proof failed with HTTP ${status} error ${body?.error ?? 'missing'}`);
+            }
+            console.log(JSON.stringify({ok:true, mode:'unbound-principal-denied', status, error:body.error, tokenPrinted:false}));
+          } else if (mode === 'RC3 prove disabled principal fails closed') {
+            if (status !== 403 || body?.error !== 'APPLICATION_PRINCIPAL_DISABLED') {
+              throw new Error(`disabled fail-closed proof failed with HTTP ${status} error ${body?.error ?? 'missing'}`);
+            }
+            console.log(JSON.stringify({ok:true, mode:'disabled-principal-denied', status, error:body.error, tokenPrinted:false}));
+          } else {
+            throw new Error(`unsupported TEST_MODE ${mode}`);
+          }
+          NODE
+
+      - name: Preserve authorization envelope
+        run: |
+          echo 'Residual RC3 identity-binding falsification only.'
+          echo 'Live funds remain NOT authorized.'
+          echo 'Paystack live mode remains NOT authorized.'
+          echo "Immutable deployed candidate: $EXPECTED_DEPLOYED_SHA"
