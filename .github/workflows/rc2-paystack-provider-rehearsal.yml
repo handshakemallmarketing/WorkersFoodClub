@@ -10,10 +10,6 @@ on:
         description: Exact Git commit SHA deployed at preview_url
         required: true
         type: string
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/rc2-paystack-provider-rehearsal.yml
 permissions:
   contents: read
   id-token: write
@@ -21,12 +17,13 @@ jobs:
   rehearsal:
     runs-on: ubuntu-latest
     env:
-      TARGET_PREVIEW_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_url || 'https://workers-food-club-git-sw1-rc2-production-readi-0760c2-food-club.vercel.app' }}
-      TARGET_EXPECTED_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || '788df6e1ed867da3ded5621fdf52f75f71332b99' }}
+      TARGET_PREVIEW_URL: ${{ inputs.preview_url }}
+      TARGET_EXPECTED_SHA: ${{ inputs.expected_sha }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout current RC3 rehearsal harness
+        uses: actions/checkout@v4
         with:
-          ref: ${{ env.TARGET_EXPECTED_SHA }}
+          ref: sw1-rc3-production-identity-live-provider-falsification
       - uses: pnpm/action-setup@v4
         with: { version: 9.15.4 }
       - uses: actions/setup-node@v4
@@ -47,6 +44,7 @@ jobs:
           PREVIEW_BASE_URL: ${{ env.TARGET_PREVIEW_URL }}
           EXPECTED_COMMIT_SHA: ${{ env.TARGET_EXPECTED_SHA }}
           VERCEL_TRUSTED_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          PREVIEW_API_AUTH_SECRET: ${{ secrets.PREVIEW_API_AUTH_SECRET }}
         shell: bash
         run: |
           set -o pipefail
