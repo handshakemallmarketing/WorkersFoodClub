@@ -13,7 +13,7 @@ jobs:
     if: "${{ github.event.head_commit.message == 'RC3 execute bounded production canary deployment' }}"
     runs-on: ubuntu-latest
     env:
-      CANARY_SHA: 3b95a336022b8fee1c4946da7cce7161f73f841f
+      CANARY_SHA: b5cdf0d01359415f5da1e1f5ea5d81aa0fe307bf
       VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
       VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
     steps:
