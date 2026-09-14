@@ -223,7 +223,7 @@ jobs:
           }
 
           test -n "$DEPLOY_URL"
-          immutable_build="$(vercel curl /api/build-info --deployment "$DEPLOY_URL" --token="$VERCEL_TOKEN" --scope=food-club)"
+          immutable_build="$(vercel curl /api/build-info --deployment "$DEPLOY_URL" --scope=food-club)"
           assert_sha_json 'immutable Production deployment identity' "$immutable_build"
 
           wait_for_canonical_activation
