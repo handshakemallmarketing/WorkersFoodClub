@@ -1,0 +1,38 @@
+{
+  "evidenceId": "PRODUCTION-APPLICATION-ACCESS-ACTIVATION-v1",
+  "status": "ACTIVE_BOUNDED_AUTHORIZATION",
+  "authorizedBy": "participant:willie-adofo",
+  "governanceActor": "Willie Adofo — Founder / Governance Authority",
+  "authorizationBasis": {
+    "type": "explicit_interactive_authorization",
+    "instruction": "Enable Production application access",
+    "recordedDate": "2026-09-14"
+  },
+  "grant": {
+    "grantId": "grant:willie-adofo:production-application-access:v1",
+    "actorId": "participant:willie-adofo",
+    "action": "EnableProductionApplicationAccess",
+    "repository": "handshakemallmarketing/WorkersFoodClub",
+    "environment": "production",
+    "candidateSha": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
+    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+    "scope": "Production application access only",
+    "validFrom": "2026-09-14",
+    "revoked": false
+  },
+  "explicitExclusions": {
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "livePaystackCredentialsAuthorized": false,
+    "paymentOrFulfillmentMutationAuthorityGranted": false
+  },
+  "executionRequirements": [
+    "exact candidate SHA must be runtime-proven before authorization-boundary falsification",
+    "unauthenticated application access must fail at authentication boundary",
+    "member and operator authority must remain scope-separated",
+    "Production sandbox and consequential mutation routes must remain disabled",
+    "any unexpected result requires immediate fail-closed rollback"
+  ],
+  "supersedesTransferPolicyAuthorityForThisAction": false,
+  "notes": "This is a separate, one-purpose Production application-access authorization. It does not widen the TRANSFER_POLICY_GOVERNANCE-v1 grant and confers no live-funds or Paystack-live authority."
+}
