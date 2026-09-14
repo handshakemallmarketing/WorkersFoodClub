@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "SW1-RC3",
+  "evidenceId": "SW1-RC3-PAYSTACK-PREVIEW-AUTH-HARNESS-2026-09-14",
+  "result": "BLOCKED_ON_PREVIEW_SHARED_SECRET_SYNCHRONIZATION",
+  "branch": "sw1-rc3-production-identity-live-provider-falsification",
+  "liveFundsAuthorized": false,
+  "paystackLiveModeAuthorized": false,
+  "productionApplicationAccessChanged": false,
+  "providerContactedInLatestRun": false,
+  "latestDiagnosticRun": {
+    "workflow": "rc2-paystack-provider-rehearsal",
+    "runId": 34803990681,
+    "runNumber": 9,
+    "jobId": 103852110373,
+    "headSha": "f6530dc30542f82250491600e88724fcdb8b26ab",
+    "previewUrl": "https://workers-food-club-qvvvjy9vt-food-club.vercel.app",
+    "previewDeploymentId": "dpl_H68gdV3UC9bGeabfK2uiyXSLVjB3",
+    "vercelDeploymentProtectionPassed": true,
+    "applicationEndpointReached": true,
+    "httpStatus": 401,
+    "applicationError": "TOKEN_INVALID",
+    "artifactId": 10332596769,
+    "artifactDigest": "sha256:9a65c50cf5300b2326e79cbe52ea1f63d049f3cbb28a6a8314d37c7b1cfe8495"
+  },
+  "diagnosis": {
+    "deploymentProtectionTransport": "AUTHENTICATED_VERCEL_CLI",
+    "applicationAuthentication": "BOUNDED_PREVIEW_OPERATOR_TOKEN",
+    "tokenTransportReachedApplication": true,
+    "failureLayer": "APPLICATION_PREVIEW_HMAC_VERIFICATION",
+    "mostLikelyCause": "PREVIEW_API_AUTH_SECRET differs between GitHub Actions and the Vercel Preview runtime",
+    "secretValueRecorded": false,
+    "secretExposed": false
+  },
+  "requiredNextAction": {
+    "action": "Synchronize PREVIEW_API_AUTH_SECRET to one identical newly generated value in GitHub Actions and the Vercel Preview environment, create a fresh Preview deployment, then rerun the bounded test-provider rehearsal.",
+    "requiresLiveCredentials": false,
+    "requiresProductionAccess": false,
+    "requiresDisablingVercelProtection": false
+  }
+}
