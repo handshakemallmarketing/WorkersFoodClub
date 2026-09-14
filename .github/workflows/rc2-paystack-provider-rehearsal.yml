@@ -36,13 +36,11 @@ jobs:
         env:
           PREVIEW_BASE_URL: ${{ env.TARGET_PREVIEW_URL }}
           EXPECTED_COMMIT_SHA: ${{ env.TARGET_EXPECTED_SHA }}
-          PREVIEW_API_AUTH_SECRET: ${{ secrets.PREVIEW_API_AUTH_SECRET }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_SCOPE: food-club
         shell: bash
         run: |
           set -o pipefail
-          test -n "$PREVIEW_API_AUTH_SECRET" || { echo 'PREVIEW_API_AUTH_SECRET_REQUIRED'; exit 1; }
           test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN_REQUIRED'; exit 1; }
           vercel --version
           node scripts/test-paystack-provider-rehearsal.mjs | tee rc2-paystack-provider-rehearsal-evidence.json
