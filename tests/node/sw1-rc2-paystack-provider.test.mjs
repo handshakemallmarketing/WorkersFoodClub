@@ -188,10 +188,11 @@ test('Paystack manual rehearsal remains preview-only even when a test credential
 });
 
 test('Paystack manual rehearsal requires sk_test credential class before any provider action',async()=>{
- const missing=await invokePaystackManual({action:'not-a-real-action'},{paystackSecret:undefined});
+ const request={action:'verify',reference:'wfc-rc2-auth-test-credential-gate'};
+ const missing=await invokePaystackManual(request,{paystackSecret:undefined});
  assert.equal(missing.statusCode,503);
  assert.equal(missing.payload.error,'PAYSTACK_TEST_SECRET_NOT_CONFIGURED');
- const live=await invokePaystackManual({action:'not-a-real-action'},{paystackSecret:'sk_live_not_authorized'});
+ const live=await invokePaystackManual(request,{paystackSecret:'sk_live_not_authorized'});
  assert.equal(live.statusCode,503);
  assert.equal(live.payload.error,'PAYSTACK_TEST_SECRET_NOT_CONFIGURED');
 });
