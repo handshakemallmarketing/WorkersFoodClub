@@ -1,8 +1,10 @@
 # SW1-RC3 — Production Identity & Live-Provider Activation Falsification
 
-Status: OPEN_NO_GO
+Status: GO_RC3_READINESS_ACTIVATIONS_WITHHELD
 Parent release: `SW1-RC2`
 Starting main commit: `eb191168ec121b6d4dfde9acbfc0db3e7b43f06e`
+Reviewed candidate: `a4ddbd08430a6293b622c84db950fd224fa36caa`
+Final review: `docs/traceability/SW1-RC3-final-review-2026-09-14.json`
 
 ## 1. Purpose
 
@@ -10,18 +12,18 @@ SW1-RC3 is the production-activation gate that follows the merged `GO_RC2` evide
 
 RC3 exists to falsify the proposition that the exact production deployment can safely bind authenticated users to canonical participants/operators and, if separately authorized, can activate the live payment provider without weakening the constitutional authority, idempotency, evidence, durability, privacy, title/risk, and recovery guarantees already proven in SW0/SW1.
 
-RC3 is **NO_GO** until every blocking criterion below is closed with exact-head executable or inspectable evidence.
+The bounded RC3 readiness claim is now green. This verdict does **not** authorize persistent Production application access, live funds, or Paystack live mode. Those capabilities remain separately withheld.
 
 ## 2. Non-negotiable starting constraints
 
-- Live member funds remain unauthorized at RC3 entry.
+- Live member funds remain unauthorized.
 - Production payment-provider credentials must not be used merely to make a test pass.
 - Production authentication must not reuse the Preview shared-HMAC token mechanism.
 - UI role names, email addresses, provider claims, or frontend state must not become canonical authority by convention.
 - A production identity must resolve to an explicit application principal and an authorized canonical actor/participant before any consequential command executes.
 - Existing Preview authentication must remain available only in non-production environments and must continue to fail closed in production.
 - Provider callbacks remain evidence only; they do not self-authorize canonical economic effects.
-- No release-index advancement occurs until the final RC3 review is green.
+- No release-index advancement is authorized by this RC3 readiness review alone.
 
 ## 3. Required production identity contract
 
@@ -38,30 +40,29 @@ The production API authentication seam must verify, at minimum:
 9. revocation/disablement — disabled or unbound principals fail closed even when the upstream token is cryptographically valid;
 10. logging hygiene — tokens, secrets, sensitive identity payloads and provider credentials never enter application logs.
 
-Production routes must consume a provider-neutral application principal contract. Provider-specific JWT/OIDC details belong behind an authentication adapter and must not leak into canonical domain semantics.
+Production routes consume a provider-neutral application principal contract. Provider-specific JWT/OIDC details remain behind the authentication adapter and do not become canonical domain semantics.
 
 ## 4. Required negative tests
 
-At minimum RC3 must demonstrate:
+RC3 demonstrated the required fail-closed matrix, including:
 
-- missing Authorization header -> fail closed;
-- malformed token -> fail closed;
-- bad signature -> fail closed;
-- wrong issuer -> fail closed;
-- wrong audience -> fail closed;
-- expired/not-yet-valid token -> fail closed;
-- valid upstream identity with no application binding -> fail closed;
-- valid member identity requesting operator scope -> fail closed;
-- valid operator identity attempting a different canonical actor -> fail closed;
-- valid token with body participant substitution -> authenticated binding wins or request fails closed;
-- disabled principal -> fail closed;
-- Preview HMAC token presented to production -> fail closed;
-- production token presented to Preview must not silently gain Preview authority unless explicitly supported and tested;
+- missing Authorization header;
+- malformed token;
+- bad signature;
+- wrong issuer;
+- wrong audience;
+- expired/not-yet-valid token;
+- valid upstream identity with no application binding;
+- valid member identity requesting operator scope;
+- actor substitution attempts;
+- disabled application principal;
+- Preview HMAC token presented to production;
+- Production access kill-switch denial before OIDC verification;
 - sensitive token/claim/provider material absent from runtime logs.
 
 ## 5. Live-provider activation contract
 
-The payment portion of RC3 remains blocked until a separately configured production-provider envelope is available. When activated for proof, the gate must establish:
+The live-payment portion of RC3 remains separately withheld. When a live production-provider envelope is later authorized, the gate must establish:
 
 - exact production provider/account/environment;
 - live webhook authenticity against the production secret without exposing it;
@@ -74,44 +75,52 @@ The payment portion of RC3 remains blocked until a separately configured product
 - explicit kill switch / rollback path;
 - minimal-value controlled transaction only after explicit live-funds authorization.
 
-A production deployment being `READY` on Vercel is not evidence that live payments are authorized.
+Current proof is intentionally bounded to real Paystack TEST mode. A Production deployment being `READY` on Vercel is not evidence that live payments are authorized.
 
-## 6. RC3 blocking register
+## 6. RC3 blocking register — final disposition
 
 ### RC3-AUTH-001 — Production token verification
-OPEN. Current runtime intentionally disables Preview auth in production; no production identity verifier has yet been proven.
+CLOSED_RUNTIME_PROVEN. Google OIDC RS256/JWKS verification, issuer/audience/time validation, missing-bearer denial and provider-neutral principal resolution were exercised in the bounded Production identity rehearsal.
 
 ### RC3-BIND-001 — Principal-to-canonical-actor binding
-OPEN. Current protected pilot routes still use hard-coded Preview actor IDs. Production must resolve authenticated subjects to governed application actors and prohibit substitution.
+CLOSED_RUNTIME_PROVEN. Verified Google subjects resolve through the application-owned binding store to durable application participants and governed authority. Valid-but-unbound identity, member-to-operator escalation and disabled application principal cases fail closed.
 
 ### RC3-ENV-001 — Production auth configuration isolation
-OPEN. Production issuer/audience/key configuration must be explicit, environment-isolated, validated, and fail closed when incomplete.
+CLOSED_RUNTIME_PROVEN. Production OIDC trust configuration and the Production Neon binding store were exercised under the bounded Production envelope and fail closed when incomplete.
 
 ### RC3-LOG-001 — Production identity logging hygiene
-OPEN. Runtime evidence must prove no bearer token, provider secret, raw identity payload, or sensitive claim set is emitted.
+CLOSED_RUNTIME_PROVEN. Runtime inspection found route/status metadata without bearer token material, Google subject, issuer value or provider secret material.
 
 ### RC3-PAY-001 — Live-provider activation proof
-OPEN / LIVE FUNDS NOT AUTHORIZED. Paystack has been proven only in test mode under RC2.
+CLOSED_RUNTIME_PROVEN_LIVE_ACTIVATION_WITHHELD for the authorization actually claimed. Real Paystack TEST mode proved GHS 1.00 initiation, provider confirmation, delayed transaction re-query, refund creation and repeated refund-status re-query. Executable tests cover exact raw-body HMAC-SHA512 verification, bad-signature/tamper rejection, reference binding, retry/idempotency semantics and test/live credential separation. Live merchant webhook delivery, live credentials and live funds remain deliberately unclaimed and unauthorized.
 
 ### RC3-ROLLBACK-001 — Production activation rollback/kill-switch rehearsal
-OPEN. Authentication/provider activation must have a tested bounded rollback path that does not rewrite canonical history.
+CLOSED_RUNTIME_PROVEN. Production application access rollback is proven. Final reviewed candidate deployment `dpl_CuXVr8MjtDYo76RAuEspbf4DBd66` is `READY` with application access explicitly disabled; the canonical member-orders route returns HTTP 503 `PRODUCTION_APPLICATION_ACCESS_DISABLED`.
 
 ### RC3-REHEARSAL-001 — Exact-head production adversarial rehearsal
-OPEN. Final production candidate must pass the required negative identity tests and the already-established payment/replay/durability checks on the exact reviewed head.
+CLOSED_RUNTIME_PROVEN. The bounded Production identity rehearsal, exact-head conformance, binding integrity, runtime-log inspection, fail-closed restoration and exact-candidate Production canary all passed for the bounded readiness claim.
 
-## 7. Exit criteria
+## 7. Exit criteria — final assessment
 
-RC3 may be declared `GO_RC3` only when:
+RC3 readiness satisfies the exit criteria for the authorization actually claimed:
 
 1. all RC3 blockers are CLOSED with evidence;
 2. production identity is cryptographically verified and application-bound;
 3. no hard-coded Preview actor is relied upon for production authority;
-4. exact-head canon, traceability, typecheck, full tests, kernel tests, PostgreSQL durability/backup/restore and adapter-race checks pass;
-5. Vercel production deployment of the exact candidate is READY;
-6. production negative-authentication matrix passes;
-7. runtime-log inspection passes;
-8. payment production envelope is either proven under explicitly authorized live-funds conditions or remains separately withheld with `liveFundsAuthorized=false`;
-9. zero unresolved P0/P1 findings remain for the authorization actually claimed;
-10. a final machine-readable RC3 review records exact commit, environment, identity-provider envelope, payment-provider envelope, limitations and verdict.
+4. exact-head conformance gates passed on reviewed candidate `a4ddbd08430a6293b622c84db950fd224fa36caa`;
+5. Vercel Production deployment `dpl_CuXVr8MjtDYo76RAuEspbf4DBd66` of that exact candidate is `READY`;
+6. the production negative-authentication matrix passed;
+7. runtime-log inspection passed;
+8. the payment envelope is runtime-proven in Paystack TEST mode while live activation remains separately withheld with `liveFundsAuthorized=false`;
+9. zero unresolved P0/P1 findings remain for the bounded readiness authorization actually claimed;
+10. `docs/traceability/SW1-RC3-final-review-2026-09-14.json` records the exact commit, environment, identity envelope, payment envelope, limitations and verdict.
 
-`GO_RC3` must state separately whether production application access is authorized and whether live funds are authorized. Those are distinct decisions.
+## 8. Final authorization statement
+
+`GO_RC3_READINESS_ACTIVATIONS_WITHHELD` means the RC3 production-readiness falsification gate has passed for the bounded non-live-funds envelope.
+
+It does **not** authorize turning on persistent Production application access. `PRODUCTION_APPLICATION_ACCESS_ENABLED` remains OFF/fail-closed pending a separate deliberate authorization.
+
+It does **not** authorize live member funds or Paystack live mode. Future live activation requires the separately governed evidence package defined above.
+
+The release index remains unchanged by this review unless and until the release/merge governance step is separately authorized.
