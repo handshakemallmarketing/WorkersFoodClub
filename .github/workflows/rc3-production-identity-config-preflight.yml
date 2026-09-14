@@ -1,0 +1,79 @@
+name: RC3 production identity configuration preflight
+
+on:
+  push:
+    branches:
+      - sw1-rc3-production-identity-live-provider-falsification
+
+permissions:
+  contents: read
+
+jobs:
+  identity-config-preflight:
+    if: "${{ github.event.head_commit.message == 'RC3 execute production identity configuration preflight' }}"
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
+      VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
+      RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
+      RC3_PRODUCTION_OPERATOR_TOKEN: ${{ secrets.RC3_PRODUCTION_OPERATOR_TOKEN }}
+    steps:
+      - name: Require Vercel deployment credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.11.7
+
+      - name: Pull Production environment without exposing values
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club
+
+      - name: Check required Production identity configuration names
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = '.vercel/.env.production.local';
+          const text = fs.readFileSync(path, 'utf8');
+          const names = new Set();
+          for (const line of text.split(/\r?\n/)) {
+            const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
+            if (m) names.add(m[1]);
+          }
+          const required = ['OIDC_ISSUER','OIDC_AUDIENCE','OIDC_JWKS_URI','DATABASE_URL'];
+          const missing = required.filter((name) => !names.has(name));
+          console.log(JSON.stringify({
+            requiredProductionVariables: required,
+            presentProductionVariables: required.filter((name) => names.has(name)),
+            missingProductionVariables: missing,
+            valuesExposed: false
+          }, null, 2));
+          if (missing.length) process.exitCode = 2;
+          NODE
+
+      - name: Check protected rehearsal credential presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          member=missing
+          operator=missing
+          [ -n "${RC3_PRODUCTION_MEMBER_TOKEN:-}" ] && member=present
+          [ -n "${RC3_PRODUCTION_OPERATOR_TOKEN:-}" ] && operator=present
+          echo "RC3_PRODUCTION_MEMBER_TOKEN=$member"
+          echo "RC3_PRODUCTION_OPERATOR_TOKEN=$operator"
+          if [ "$member" != present ] || [ "$operator" != present ]; then
+            exit 3
+          fi
+
+      - name: Preserve governance boundary
+        run: |
+          echo 'Preflight only: Production application access remains disabled.'
+          echo 'No Production deployment, write authorization, Paystack live mode, or live funds are authorized by this workflow.'

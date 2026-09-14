@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
+import { requireApplicationAuth } from '../lib/application-auth.js';
+import { canonicalRuntimeMetadata, durableId, runtimeEnvironment, runtimeOwnerToken } from '../lib/durable-runtime-semantics.js';
 
-const PARTICIPANT_ID = 'preview:member:001';
+const PREVIEW_PARTICIPANT_ID = 'preview:member:001';
 const REQUEST_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const OBLIGATION_ID_RE = /^preview:obligation:[0-9a-f-]{36}$/i;
+const OBLIGATION_ID_RE = /^(?:preview:obligation:|wfc:obligation:)[0-9a-f-]{36}$/i;
 
 function serialize(row, idempotent = false) {
   return {
@@ -45,13 +46,16 @@ export default async function handler(req, res) {
     return res.status(403).json({ ok: false, error: 'SANDBOX_PAYMENT_DISABLED_IN_PRODUCTION' });
   }
 
-  const principal = requirePreviewApiAuth(
+  const principal = await requireApplicationAuth(
     req,
     res,
     'member:payment.execute',
-    PARTICIPANT_ID,
+    PREVIEW_PARTICIPANT_ID,
   );
   if (!principal) return;
+
+  const runtime = canonicalRuntimeMetadata({ principal, environment: runtimeEnvironment() });
+  const ownerToken = runtimeOwnerToken(runtime.environment);
 
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
@@ -71,18 +75,18 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, payment: serialize(existing, true) });
     }
 
-    const paymentId = `preview:payment:${randomUUID()}`;
+    const paymentId = durableId('payment');
     const providerReference = `sandbox-ref:${randomUUID()}`;
     const evidenceId = `evidence:payment:${randomUUID()}`;
-    const eventId = `preview:event:${randomUUID()}`;
-    const commandId = `preview:command:${randomUUID()}`;
+    const eventId = durableId('event');
+    const commandId = durableId('command');
 
     const rows = await sql`
       WITH obligation AS (
         SELECT obligation_id, participant_id, offer_id, committed_price_minor, currency, state
           FROM preview_member_commitment
          WHERE obligation_id = ${obligationId}
-           AND participant_id = ${PARTICIPANT_ID}
+           AND participant_id = ${runtime.actorId}
            AND state = 'OPEN'
          FOR UPDATE
       ), payment AS (
@@ -102,7 +106,7 @@ export default async function handler(req, res) {
           idempotency_key, command_id, state, owner_token, lease_until, fence_generation,
           result_json, created_at, updated_at
         )
-        SELECT ${requestId}, ${commandId}, 'COMMITTED', 'vercel-preview', now(), 1,
+        SELECT ${requestId}, ${commandId}, 'COMMITTED', ${ownerToken}, now(), 1,
                jsonb_build_object(
                  'status','CONFIRMED',
                  'obligationId',obligation_id,
@@ -133,7 +137,8 @@ export default async function handler(req, res) {
                  'providerStatusMappingVersion', p.provider_status_mapping_version,
                  'economicTreatment', p.economic_treatment,
                  'authorizedCommandId', ${commandId}::text,
-                 'environment', 'preview'
+                 'actorId', ${runtime.actorId}::text,
+                 'environment', ${runtime.environment}::text
                ), p.observed_at
           FROM payment p
           JOIN obligation o ON o.obligation_id = p.obligation_id

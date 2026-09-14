@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "SW1-RC3",
+  "reviewDate": "2026-09-14",
+  "status": "GO_RC3_READINESS_ACTIVATIONS_WITHHELD",
+  "reviewedCandidateCommit": "a4ddbd08430a6293b622c84db950fd224fa36caa",
+  "governanceTriggerCommit": "6c72d43de35c30b6549126cee2a0fbd3f91cbb28",
+  "parentRelease": "SW1-RC2",
+  "environment": {
+    "hosting": "Vercel Production",
+    "database": "Neon PostgreSQL",
+    "productionDeploymentId": "dpl_CuXVr8MjtDYo76RAuEspbf4DBd66",
+    "productionDeploymentUrl": "https://workers-food-club-chxobx1ji-food-club.vercel.app",
+    "canonicalProductionAlias": "https://workers-food-club-chi.vercel.app",
+    "deploymentState": "READY",
+    "deploymentCandidateCommit": "a4ddbd08430a6293b622c84db950fd224fa36caa",
+    "productionApplicationAccessCurrentlyEnabled": false,
+    "liveFundsAuthorized": false
+  },
+  "exactHeadConformance": {
+    "candidateCommit": "a4ddbd08430a6293b622c84db950fd224fa36caa",
+    "constitutionalConformance": {
+      "runId": 34810204306,
+      "runNumber": 1513,
+      "conclusion": "SUCCESS"
+    },
+    "rc3BindingIntegrity": {
+      "runId": 34810204250,
+      "runNumber": 124,
+      "conclusion": "SUCCESS"
+    },
+    "governanceTriggerCommit": "6c72d43de35c30b6549126cee2a0fbd3f91cbb28",
+    "governanceConstitutionalConformance": {
+      "runId": 34811023792,
+      "runNumber": 1515,
+      "conclusion": "SUCCESS"
+    },
+    "governanceBindingIntegrity": {
+      "runId": 34811023812,
+      "runNumber": 126,
+      "conclusion": "SUCCESS"
+    },
+    "boundedProductionCanary": {
+      "runId": 34811020416,
+      "runNumber": 90,
+      "conclusion": "SUCCESS"
+    }
+  },
+  "identityProviderEnvelope": {
+    "provider": "GOOGLE",
+    "protocol": "OIDC",
+    "signatureVerification": "RS256_JWKS_SIGNATURE_FIRST",
+    "applicationOwnedPrincipalBinding": true,
+    "applicationOwnedAuthority": true,
+    "upstreamClaimsCannotChooseCanonicalActorOrAuthority": true,
+    "validUnboundIdentityFailsClosed": true,
+    "disabledApplicationPrincipalFailsClosed": true,
+    "memberToOperatorEscalationFailsClosed": true,
+    "previewHmacCannotAuthenticateProduction": true,
+    "tokenPersistence": "MEMORY_ONLY",
+    "runtimeLoggingHygiene": "PASS",
+    "rollbackKillSwitch": "RUNTIME_PROVEN",
+    "productionApplicationAccessCurrentlyEnabled": false
+  },
+  "paymentProviderEnvelope": {
+    "provider": "PAYSTACK",
+    "mode": "TEST",
+    "currency": "GHS",
+    "realProviderTestEvidenceCommit": "ee2179d0cc45c24dc678af8900164dd45322d8f2",
+    "workflowRunId": 34808988687,
+    "result": "PASS_BOUNDED_REAL_PAYSTACK_TEST_PROVIDER_REHEARSAL",
+    "initiationProven": true,
+    "transactionVerificationProven": true,
+    "delayedRequeryProven": true,
+    "refundCreationProven": true,
+    "refundStatusRequeryProven": true,
+    "refundCanonicalCompletionClaimed": false,
+    "webhookHmacSha512ExecutableProof": true,
+    "tamperAndBadSignatureRejectionExecutableProof": true,
+    "testLiveCredentialSeparation": true,
+    "operatorReconciliationProcedure": "docs/traceability/SW1-RC3-paystack-operator-reconciliation-procedure-2026-09-14.md",
+    "liveMerchantWebhookDeliveryProven": false,
+    "paystackLiveModeAuthorized": false,
+    "liveFundsAuthorized": false
+  },
+  "productionFailClosedVerification": {
+    "authClientConfigStatus": 200,
+    "configured": true,
+    "productionApplicationAccessEnabled": false,
+    "tokenPersistence": "MEMORY_ONLY",
+    "liveFundsAuthorized": false,
+    "memberOrdersStatus": 503,
+    "memberOrdersError": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
+  },
+  "blockingFindings": {
+    "unresolvedP0": [],
+    "unresolvedP1ForClaimedAuthorization": []
+  },
+  "authorizationDecision": {
+    "rc3Readiness": "GO_RC3",
+    "productionApplicationAccessAuthorized": false,
+    "productionApplicationAccessCurrentState": "OFF_FAIL_CLOSED",
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "releaseIndexAdvanceAuthorizedByThisReview": false
+  },
+  "limitations": [
+    "GO_RC3 is a readiness verdict for the bounded non-live-funds envelope; it does not authorize turning on persistent Production application access.",
+    "Live funds and Paystack live mode remain unauthorized.",
+    "Live Paystack merchant webhook delivery authenticity has not been claimed or proven.",
+    "The observed Paystack refund remained PENDING during the bounded TEST rehearsal; no canonical refund completion is claimed from that provider observation.",
+    "Any future Production access enablement requires a separate deliberate authorization while preserving the proven rollback kill switch.",
+    "Any future Paystack live activation requires approved live credential provisioning, exact production merchant/account binding, live webhook authenticity proof, explicit enablement and kill switch, a minimal controlled live transaction after authorization, and rollback verification."
+  ],
+  "verdict": {
+    "rc3": "GO_RC3_READINESS_ACTIVATIONS_WITHHELD",
+    "productionApplicationAccess": "NOT_AUTHORIZED_REMAINS_OFF_FAIL_CLOSED",
+    "liveFunds": "NO_GO_NOT_AUTHORIZED",
+    "paystackLiveMode": "NO_GO_NOT_AUTHORIZED"
+  }
+}

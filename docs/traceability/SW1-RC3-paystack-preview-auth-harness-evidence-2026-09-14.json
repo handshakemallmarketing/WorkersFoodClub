@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "SW1-RC3",
+  "evidenceId": "SW1-RC3-PAYSTACK-TEST-PROVIDER-RUNTIME-2026-09-14",
+  "result": "PASS_BOUNDED_REAL_PAYSTACK_TEST_PROVIDER_REHEARSAL",
+  "branch": "sw1-rc3-production-identity-live-provider-falsification",
+  "testedCommit": "ee2179d0cc45c24dc678af8900164dd45322d8f2",
+  "previewDeployment": {
+    "url": "https://workers-food-club-5wpwd4iyr-food-club.vercel.app",
+    "deploymentId": "dpl_44Nc8MTNWYAF3BWiqidHqVGMNfaR",
+    "deploymentProtectionTransport": "AUTHENTICATED_VERCEL_CLI",
+    "applicationAuth": "VERCEL_PROTECTED_PREVIEW_BOUNDARY",
+    "previewOnly": true
+  },
+  "workflow": {
+    "name": "rc2-paystack-provider-rehearsal",
+    "runId": 34808988687,
+    "runNumber": 13,
+    "jobId": 103866363944,
+    "conclusion": "success",
+    "artifactId": 10334151804,
+    "artifactDigest": "sha256:d055add5d9486a733fb52a57afea090fa33889d629fc47dfc69dd4f909e637c6"
+  },
+  "providerEnvelope": {
+    "provider": "PAYSTACK",
+    "environment": "test",
+    "credentialClass": "sk_test_*",
+    "currency": "GHS",
+    "amountMinor": "100",
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "productionApplicationAccessChanged": false,
+    "secretExposed": false
+  },
+  "runtimeProof": {
+    "initiation": {
+      "providerContacted": true,
+      "result": "PASS",
+      "state": "PENDING_EXTERNAL_CONFIRMATION"
+    },
+    "verification": {
+      "result": "PASS",
+      "attempts": 1,
+      "finalState": "CONFIRMED",
+      "amountMinor": "100",
+      "currency": "GHS"
+    },
+    "delayedRequery": {
+      "result": "PASS",
+      "finalState": "CONFIRMED",
+      "sameReferencePreserved": true
+    },
+    "refundCreation": {
+      "result": "PASS",
+      "providerRefundId": "18263270",
+      "state": "PENDING",
+      "amountMinor": "100",
+      "currency": "GHS"
+    },
+    "refundStatusRetry": {
+      "result": "PASS_NONTERMINAL_PROVIDER_EVIDENCE",
+      "attempts": 6,
+      "allQueriesSucceeded": true,
+      "observedState": "PENDING",
+      "canonicalCompletionClaimed": false
+    }
+  },
+  "operatorReconciliationProcedure": "docs/traceability/SW1-RC3-paystack-operator-reconciliation-procedure-2026-09-14.md",
+  "priorExecutableProviderSecurityProof": {
+    "source": "docs/traceability/SW1-RC2-paystack-production-provider-candidate.json",
+    "proved": [
+      "test/live credential class separation",
+      "live mode fails closed until explicitly authorized",
+      "exact raw-body HMAC-SHA512 verification",
+      "tampered body and bad signature fail closed",
+      "unsupported authenticated events fail closed",
+      "provider reference rebinding fails closed",
+      "refund lifecycle remains transaction-bound",
+      "provider retries cannot independently authorize canonical economic truth"
+    ]
+  },
+  "authorizationBoundary": {
+    "liveMerchantWebhookDeliveryProven": false,
+    "reason": "Live funds and Paystack live mode are not authorized. The RC3 specification explicitly permits the production payment envelope to remain separately withheld with liveFundsAuthorized=false.",
+    "requiresLiveCredentialsToCloseLiveActivation": true,
+    "requiresExplicitFutureAuthorization": true,
+    "currentClaim": "Production application/identity readiness with Paystack live activation withheld",
+    "liveActivationStatus": "WITHHELD_NOT_AUTHORIZED"
+  },
+  "requiredFutureLiveActivationEvidence": [
+    "exact production Paystack merchant/account/environment identification",
+    "approved live credential provisioning under secret management",
+    "live webhook delivery authenticity from the exact merchant integration",
+    "explicit live-mode enablement and kill-switch proof",
+    "minimal-value controlled live transaction only after explicit live-funds authorization",
+    "rollback verification"
+  ]
+}

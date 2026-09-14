@@ -1,0 +1,35 @@
+name: RC3 production access rollback rehearsal
+on:
+  workflow_dispatch:
+    inputs:
+      production_base_url:
+        description: Exact immutable Production deployment origin
+        required: true
+        type: string
+      expected_commit_sha:
+        description: Exact 40-character deployed commit SHA
+        required: true
+        type: string
+  push:
+    branches:
+      - sw1-rc3-production-identity-live-provider-falsification
+permissions:
+  contents: read
+jobs:
+  rollback-rehearsal:
+    if: "${{ github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'RC3 execute production rollback rehearsal' }}"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prove Production access rollback kill switch
+        env:
+          PRODUCTION_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.production_base_url || 'https://workers-food-club-chi.vercel.app' }}
+          EXPECTED_COMMIT_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_commit_sha || '5377b89c92529c130ee9e78e89550fa3c28af488' }}
+        run: node scripts/test-production-access-rollback.mjs
+      - name: Preserve governance boundary
+        run: |
+          echo "This rehearsal proves application-access rollback only."
+          echo "It does not authorize Production writes, Paystack live mode, or live funds."

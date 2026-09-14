@@ -1,0 +1,1 @@
+Trigger bounded Production canary rollback after identity-enabled RC3 rehearsal. Application candidate remains b5cdf0d01359415f5da1e1f5ea5d81aa0fe307bf. This trigger does not authorize live funds or Paystack live mode.

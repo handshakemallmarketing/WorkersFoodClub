@@ -9,10 +9,47 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/003_command_fencing.sql
 "${PSQL[@]}" -f packages/durability/sql/004_physical_lineage.sql
 "${PSQL[@]}" -f packages/durability/sql/005_member_communications.sql
+"${PSQL[@]}" -f packages/durability/sql/006_application_identity_binding.sql
+"${PSQL[@]}" -f packages/durability/sql/007_application_authority_membership.sql
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+TRUNCATE application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
 SQL
+
+# RC3-BIND-001: durable participant, membership and operator authority are independent governed records.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES
+ ('participant:member','PERSON','ACTIVE'),
+ ('participant:operator','PERSON','ACTIVE'),
+ ('participant:system','SYSTEM','ACTIVE');
+
+INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids)
+VALUES('membership:live','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:1']);
+
+INSERT INTO application_authority_grant(grant_id,grantor_id,actor_id,actions,valid_from)
+VALUES('grant:operator:orders','participant:system','participant:operator',ARRAY['operator:orders.read'],now()-interval '1 minute');
+SQL
+participant=$("${PSQL[@]}" -Atc "SELECT participant_id||':'||state FROM application_participant WHERE participant_id='participant:member'")
+[[ "$participant" == "participant:member:ACTIVE" ]] || { echo "application participant did not survive connection boundary" >&2; exit 1; }
+membership=$("${PSQL[@]}" -Atc "SELECT membership_id||':'||state FROM application_membership WHERE participant_id='participant:member'")
+[[ "$membership" == "membership:live:ACTIVE" ]] || { echo "active membership did not survive connection boundary" >&2; exit 1; }
+authority=$("${PSQL[@]}" -Atc "SELECT grant_id FROM application_authority_grant WHERE actor_id='participant:operator' AND 'operator:orders.read'=ANY(actions) AND valid_from<=now() AND (valid_until IS NULL OR valid_until>=now()) AND (revoked_at IS NULL OR revoked_at>now())")
+[[ "$authority" == "grant:operator:orders" ]] || { echo "operator authority did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:duplicate','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:2'])" >/dev/null 2>&1; then
+  echo "second ACTIVE membership unexpectedly succeeded" >&2; exit 1
+fi
+
+# RC3-BIND-001: external identity resolves to one durable canonical participant and governed scopes.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id)
+VALUES('binding:live','https://issuer.example/','subject:1','participant:member',ARRAY['member:orders.read'],'ACTIVE','evidence:identity:1',now(),'participant:operator','grant:operator:orders');
+SQL
+binding=$("${PSQL[@]}" -Atc "SELECT participant_id||':'||state FROM application_identity_binding WHERE issuer='https://issuer.example/' AND subject='subject:1'")
+[[ "$binding" == "participant:member:ACTIVE" ]] || { echo "application identity binding did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:rebind','https://issuer.example/','subject:1','participant:operator',ARRAY['operator:orders.read'],'ACTIVE','evidence:identity:2',now(),'participant:operator','grant:operator:orders')" >/dev/null 2>&1; then
+  echo "external identity was silently rebound" >&2; exit 1
+fi
 
 # INV-027: durable result survives a fresh connection.
 "${PSQL[@]}" <<'SQL'
@@ -92,7 +129,6 @@ inputs=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform_input WHERE t
 outputs=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform_output WHERE transform_id='transform:blend'")
 [[ "$inputs" == "2" && "$outputs" == "2" ]] || { echo "durable lineage ancestry ports missing" >&2; exit 1; }
 
-# A failed overconsuming transform must leave no transform/output/partial consumption behind.
 if "${PSQL[@]}" -c "SELECT record_lineage_transform('transform:bad','REPACK','kg',0,'2026-09-08T02:11:00Z','[\"evidence:bad\"]'::jsonb,'[{\"lotId\":\"lot:c\",\"quantity\":71}]'::jsonb,'[{\"lotId\":\"lot:e\",\"quantity\":71}]'::jsonb)" >/dev/null 2>&1; then
   echo "lineage overconsumption unexpectedly succeeded" >&2; exit 1
 fi
@@ -118,4 +154,4 @@ fi
 claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
 [[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
 
- echo "live PostgreSQL durability, fencing, explicit lineage and communications proof passed"
+echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage and communications proof passed"

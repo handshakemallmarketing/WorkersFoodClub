@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "1.0",
+  "slice": "SW1-RC3",
+  "status": "CLOSED_GO_RC3_READINESS_ACTIVATIONS_WITHHELD",
+  "startingMainCommit": "eb191168ec121b6d4dfde9acbfc0db3e7b43f06e",
+  "parentRelease": "SW1-RC2",
+  "reviewedCandidateCommit": "a4ddbd08430a6293b622c84db950fd224fa36caa",
+  "productionApplicationAccessAuthorized": false,
+  "productionApplicationAccessCurrentlyEnabled": false,
+  "liveFundsAuthorized": false,
+  "baselineEvidence": "docs/traceability/SW1-RC3-production-baseline-nonpromotion-evidence-2026-09-12.json",
+  "rollbackEvidence": "docs/traceability/SW1-RC3-production-rollback-rehearsal-evidence-2026-09-12.json",
+  "identityConfigPreflightEvidence": "docs/traceability/SW1-RC3-production-identity-config-preflight-evidence-2026-09-12.json",
+  "identityRehearsalEvidence": "docs/traceability/SW1-RC3-production-identity-rehearsal-evidence-2026-09-13.json",
+  "paymentRehearsalHarnessEvidence": "docs/traceability/SW1-RC3-paystack-preview-auth-harness-evidence-2026-09-14.json",
+  "paymentOperatorReconciliationProcedure": "docs/traceability/SW1-RC3-paystack-operator-reconciliation-procedure-2026-09-14.md",
+  "finalReviewEvidence": "docs/traceability/SW1-RC3-final-review-2026-09-14.json",
+  "finalProductionDeployment": {
+    "deploymentId": "dpl_CuXVr8MjtDYo76RAuEspbf4DBd66",
+    "candidateCommit": "a4ddbd08430a6293b622c84db950fd224fa36caa",
+    "state": "READY",
+    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+    "productionApplicationAccessEnabled": false,
+    "liveFundsAuthorized": false,
+    "memberOrdersFailClosedStatus": 503,
+    "memberOrdersFailClosedError": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
+  },
+  "startingEnvelope": {
+    "hosting": "Vercel production deployment exists",
+    "database": "Neon PostgreSQL",
+    "applicationAuthentication": "Production OIDC with application-owned binding and authority; current access switch remains disabled until separately authorized",
+    "paymentProvider": "PAYSTACK",
+    "paymentMode": "test"
+  },
+  "findings": {
+    "RC3-AUTH-001": {
+      "severity": "P1",
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "Production OIDC is runtime-proven against Google Identity Services using the RS256/JWKS signature-first verifier. A verified bound Google subject resolved through the application binding store and authenticated the member read path. Missing bearer traffic failed closed with HTTP 401."
+    },
+    "RC3-BIND-001": {
+      "severity": "P1",
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "Runtime proof confirms a verified Google subject resolves to a durable application participant with ACTIVE membership and governed member scopes; the same member identity was denied operator access with HTTP 403. A valid Google subject with no matching application binding was denied member access with HTTP 403. A controlled disabled-binding falsification caused member access to fail closed with HTTP 403 and the binding was restored immediately afterward."
+    },
+    "RC3-ENV-001": {
+      "severity": "P1",
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "Production OIDC issuer, audience, JWKS and DATABASE_URL configuration are present and runtime-proven during bounded identity-enabled rehearsals."
+    },
+    "RC3-LOG-001": {
+      "severity": "P1",
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "Production runtime logs from the identity-enabled rehearsal showed route/status metadata for exercised OIDC paths without bearer token material, Google subject, issuer value or provider secret material."
+    },
+    "RC3-PAY-001": {
+      "severity": "P1",
+      "status": "CLOSED_RUNTIME_PROVEN_LIVE_ACTIVATION_WITHHELD",
+      "finding": "The currently claimed payment envelope is runtime-proven in real Paystack TEST mode on commit ee2179d0cc45c24dc678af8900164dd45322d8f2. Workflow run 34808988687 proved GHS 1.00 initiation, provider confirmation, delayed transaction re-query, refund creation, and six successful refund-status re-queries while the refund remained nonterminal PENDING. Executable tests prove exact raw-body HMAC-SHA512 webhook verification, bad-signature/tamper rejection, reference binding, provider-neutral semantics, idempotency controls, and test/live credential separation. Live merchant webhook delivery remains deliberately unclaimed because Paystack live mode and live funds are unauthorized."
+    },
+    "RC3-ROLLBACK-001": {
+      "severity": "P1",
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "Rollback to fail-closed Production application access is runtime-proven. Final exact-candidate Production deployment dpl_CuXVr8MjtDYo76RAuEspbf4DBd66 is READY with productionApplicationAccessEnabled=false, and the canonical member-orders route returns HTTP 503 PRODUCTION_APPLICATION_ACCESS_DISABLED."
+    },
+    "RC3-REHEARSAL-001": {
+      "severity": "P1",
+      "status": "CLOSED_RUNTIME_PROVEN",
+      "finding": "The bounded Production identity-enabled rehearsal passed for the governed member positive path, unauthenticated member/operator denial, member-to-operator denial, valid-but-unbound Google subject denial, disabled application principal denial, log hygiene, and rollback behavior. No identity runtime residual remains."
+    }
+  },
+  "negativeAssertionsRequired": [
+    "missing bearer fails closed",
+    "malformed bearer fails closed",
+    "bad signature fails closed before untrusted claims are accepted",
+    "wrong issuer fails closed",
+    "wrong audience fails closed",
+    "expired or not-yet-valid token fails closed",
+    "IdP actor and scope claims cannot choose application actor or authority",
+    "valid upstream subject without application binding fails closed",
+    "member cannot acquire operator scope",
+    "authenticated actor cannot be replaced by request actor input",
+    "disabled application principal fails closed",
+    "Preview HMAC token cannot authenticate production",
+    "production application access kill switch fails closed before OIDC verification",
+    "production mutation cannot emit Preview-only durable or canonical identity semantics",
+    "sensitive bearer/identity/provider configuration material absent from logs",
+    "unauthenticated provider traffic cannot create economic truth",
+    "provider retries cannot duplicate canonical effects"
+  ],
+  "runtimeResiduals": [],
+  "unresolvedP0": [],
+  "unresolvedP1ForClaimedAuthorization": [],
+  "withheldCapabilities": {
+    "productionApplicationAccess": {
+      "authorized": false,
+      "currentlyEnabled": false,
+      "blockingRc3ReadinessClaim": false,
+      "futureAuthorizationRequired": true
+    },
+    "paystackLiveMode": {
+      "authorized": false,
+      "blockingCurrentClaim": false,
+      "futureAuthorizationRequired": true,
+      "futureEvidenceRequired": [
+        "exact production Paystack merchant/account/environment",
+        "approved live credential provisioning",
+        "live webhook delivery authenticity from the exact merchant integration",
+        "explicit live-mode enablement and kill switch",
+        "minimal-value controlled live transaction after explicit authorization",
+        "rollback verification"
+      ]
+    }
+  },
+  "releaseIndexAdvanced": false,
+  "verdict": {
+    "rc3": "GO_RC3_READINESS_ACTIVATIONS_WITHHELD",
+    "productionApplicationAccess": "NOT_AUTHORIZED_REMAINS_OFF_FAIL_CLOSED",
+    "liveFunds": "NO_GO_NOT_AUTHORIZED",
+    "paystackLiveMode": "NO_GO_NOT_AUTHORIZED"
+  }
+}

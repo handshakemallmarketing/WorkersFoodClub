@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { executePaystackRehearsal } from '../dist/packages/paystack-rehearsal/src/index.js';
 import { PaystackWebhookVerifier } from '../dist/packages/pilot-payments/src/paystack.js';
-import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 
 const ACTIONS = new Set(['initiate', 'verify', 'refund', 'refund-status']);
 const REFERENCE_RE = /^wfc-rc2-[A-Za-z0-9-]{8,80}$/;
@@ -63,11 +62,6 @@ export default async function handler(req, res) {
     return fail(res, 403, 'PAYSTACK_REHEARSAL_PREVIEW_ONLY');
   }
 
-  const secretKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!secretKey || !secretKey.startsWith('sk_test_')) {
-    return fail(res, 503, 'PAYSTACK_TEST_SECRET_NOT_CONFIGURED');
-  }
-
   let rawBody;
   try {
     rawBody = await readRawBody(req);
@@ -76,6 +70,11 @@ export default async function handler(req, res) {
       return fail(res, 413, 'REQUEST_BODY_TOO_LARGE');
     }
     return fail(res, 400, 'REQUEST_BODY_INVALID');
+  }
+
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!secretKey || !secretKey.startsWith('sk_test_')) {
+    return fail(res, 503, 'PAYSTACK_TEST_SECRET_NOT_CONFIGURED');
   }
 
   /*
@@ -141,24 +140,18 @@ export default async function handler(req, res) {
   }
 
   /*
-   * Existing RC2 provider-rehearsal control path.
-   * Body parsing is now explicit because automatic Vercel parsing is disabled.
+   * Bounded RC3 provider-rehearsal control path.
    *
-   * IMPORTANT:
-   * This unsigned/manual path is operator-authenticated. The signed provider
-   * webhook path above remains authenticated exclusively by Paystack HMAC.
-   */
-  const principal = requirePreviewApiAuth(
-    req,
-    res,
-    'operator:payment.rehearse',
-    'preview:operator:001',
-  );
-  if (!principal) return;
-
-  /*
-   * Existing RC2 provider-rehearsal control path.
-   * Body parsing is now explicit because automatic Vercel parsing is disabled.
+   * This route is deliberately restricted to Vercel Preview and an sk_test_*
+   * Paystack credential. The deployment itself remains protected by Vercel
+   * Authentication; the CI harness reaches it only through authenticated
+   * `vercel curl`. We intentionally do not add a second application-level
+   * shared-secret dependency here because that duplicated secret store proved
+   * operationally brittle and is not needed to protect test-only provider
+   * actions behind the already-authenticated Preview boundary.
+   *
+   * Live mode remains impossible here: Production is rejected above and a
+   * live Paystack credential is rejected by the sk_test_* check.
    */
   let body;
   try {

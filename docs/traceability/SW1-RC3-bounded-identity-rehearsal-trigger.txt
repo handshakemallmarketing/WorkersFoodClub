@@ -1,0 +1,5 @@
+Bounded Production identity-enabled rehearsal trigger.
+Candidate: b5cdf0d01359415f5da1e1f5ea5d81aa0fe307bf
+Live funds authorized: false
+Paystack live authorized: false
+Production mutation scope authorized by trigger: none

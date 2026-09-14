@@ -1,3 +1,13 @@
+import { productionApplicationAccessEnabled } from '../lib/production-access-policy.js';
+import {
+  readProductionOidcConfig,
+  verifyProductionOidcRequest,
+} from '../lib/production-oidc-auth.js';
+
+function configured(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -15,6 +25,79 @@ export default async function handler(req, res) {
       deploymentUrl: process.env.VERCEL_URL || null,
       branchUrl: process.env.VERCEL_BRANCH_URL || null,
       deploymentId: process.env.VERCEL_DEPLOYMENT_ID || null,
+    });
+  }
+
+  if (url.searchParams.get('probe') === 'identity-readiness') {
+    res.setHeader('Cache-Control', 'no-store');
+    const environment = process.env.VERCEL_ENV || 'unknown';
+    const production = environment === 'production';
+    const oidc = readProductionOidcConfig(process.env);
+    const databaseConfigured = configured(process.env.DATABASE_URL);
+    const accessEnabled = production && productionApplicationAccessEnabled(process.env);
+
+    return res.status(200).json({
+      ok: true,
+      environment,
+      authenticationMode: production ? 'OIDC' : 'PREVIEW',
+      productionApplicationAccessEnabled: accessEnabled,
+      oidcConfigured: oidc.ok === true,
+      applicationBindingStoreConfigured: databaseConfigured,
+      identityRuntimeReady: production
+        ? oidc.ok === true && databaseConfigured && accessEnabled
+        : true,
+      liveFundsAuthorized: false,
+    });
+  }
+
+  if (url.searchParams.get('probe') === 'auth-client-config') {
+    res.setHeader('Cache-Control', 'no-store');
+    const environment = process.env.VERCEL_ENV || 'unknown';
+    const provider = process.env.OIDC_BROWSER_PROVIDER === 'google' ? 'google' : null;
+    const clientId = provider === 'google' && configured(process.env.OIDC_AUDIENCE)
+      ? process.env.OIDC_AUDIENCE
+      : null;
+
+    return res.status(200).json({
+      ok: true,
+      environment,
+      authenticationMode: environment === 'production' ? 'OIDC' : 'PREVIEW',
+      provider,
+      clientId,
+      productionApplicationAccessEnabled:
+        environment === 'production' && productionApplicationAccessEnabled(process.env),
+      configured: provider === 'google' && configured(clientId),
+      tokenPersistence: 'MEMORY_ONLY',
+      liveFundsAuthorized: false,
+    });
+  }
+
+  if (url.searchParams.get('probe') === 'identity-subject') {
+    res.setHeader('Cache-Control', 'no-store');
+    if ((process.env.VERCEL_ENV || 'unknown') !== 'production') {
+      return res.status(403).json({
+        ok: false,
+        error: 'IDENTITY_SUBJECT_DISCOVERY_PRODUCTION_ONLY',
+      });
+    }
+
+    const verified = await verifyProductionOidcRequest(req);
+    if (!verified.ok) {
+      return res.status(verified.status).json({
+        ok: false,
+        error: verified.error,
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      verified: true,
+      issuer: verified.principal.issuer,
+      subject: verified.principal.subject,
+      expiresAt: verified.principal.expiresAt,
+      applicationAccessEnabled: productionApplicationAccessEnabled(process.env),
+      bindingCreated: false,
+      liveFundsAuthorized: false,
     });
   }
 

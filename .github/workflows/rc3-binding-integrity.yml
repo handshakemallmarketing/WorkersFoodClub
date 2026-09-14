@@ -1,0 +1,88 @@
+name: RC3 binding integrity
+
+on:
+  push:
+    branches:
+      - sw1-rc3-production-identity-live-provider-falsification
+  pull_request:
+    paths:
+      - 'packages/durability/sql/006_application_identity_binding.sql'
+      - 'packages/durability/sql/007_application_authority_membership.sql'
+      - 'packages/durability/sql/008_identity_binding_referential_integrity.sql'
+      - '.github/workflows/rc3-binding-integrity.yml'
+
+jobs:
+  binding-integrity:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: foodclub_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d foodclub_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/foodclub_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply RC3 identity migrations
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/durability/sql/006_application_identity_binding.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/durability/sql/007_application_authority_membership.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/durability/sql/008_identity_binding_referential_integrity.sql
+      - name: Seed governed principals and grant
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO application_participant(participant_id,kind,state)
+          VALUES
+            ('participant:member','PERSON','ACTIVE'),
+            ('participant:operator','PERSON','ACTIVE'),
+            ('participant:system','SYSTEM','ACTIVE');
+
+          INSERT INTO application_membership(
+            membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids
+          ) VALUES(
+            'membership:member','participant:member','ACTIVE',now(),'rc3-test-v1',ARRAY['evidence:eligibility:test']
+          );
+
+          INSERT INTO application_authority_grant(
+            grant_id,grantor_id,actor_id,actions,valid_from
+          ) VALUES(
+            'grant:operator','participant:system','participant:operator',ARRAY['operator:orders.read'],now()-interval '1 minute'
+          );
+          SQL
+      - name: Prove valid binding succeeds
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO application_identity_binding(
+            binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id
+          ) VALUES(
+            'binding:valid','https://accounts.google.com','subject:valid','participant:member',ARRAY['member:orders.read'],'ACTIVE',
+            'evidence:identity:valid',now(),'participant:operator','grant:operator'
+          );
+          SQL
+      - name: Prove orphan participant binding is rejected
+        run: |
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:orphan-participant','https://accounts.google.com','subject:orphan-participant','participant:missing',ARRAY['member:orders.read'],'ACTIVE','evidence:identity:orphan-participant',now(),'participant:operator','grant:operator')"; then
+            echo 'orphan participant binding unexpectedly succeeded' >&2
+            exit 1
+          fi
+      - name: Prove orphan binder binding is rejected
+        run: |
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:orphan-binder','https://accounts.google.com','subject:orphan-binder','participant:member',ARRAY['member:orders.read'],'ACTIVE','evidence:identity:orphan-binder',now(),'participant:missing','grant:operator')"; then
+            echo 'orphan binder binding unexpectedly succeeded' >&2
+            exit 1
+          fi
+      - name: Prove orphan grant binding is rejected
+        run: |
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:orphan-grant','https://accounts.google.com','subject:orphan-grant','participant:member',ARRAY['member:orders.read'],'ACTIVE','evidence:identity:orphan-grant',now(),'participant:operator','grant:missing')"; then
+            echo 'orphan authority grant binding unexpectedly succeeded' >&2
+            exit 1
+          fi

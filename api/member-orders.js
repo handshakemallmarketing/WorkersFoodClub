@@ -1,5 +1,6 @@
-import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
-const PARTICIPANT_ID = 'preview:member:001';
+import { requireApplicationAuth } from '../lib/application-auth.js';
+
+const PREVIEW_PARTICIPANT_ID = 'preview:member:001';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -7,14 +8,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   }
 
-  const principal = requirePreviewApiAuth(
+  const principal = await requireApplicationAuth(
     req,
     res,
     'member:orders.read',
-    PARTICIPANT_ID,
+    PREVIEW_PARTICIPANT_ID,
   );
   if (!principal) return;
 
+  const participantId = principal.actorId;
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
 
@@ -40,7 +42,7 @@ export default async function handler(req, res) {
         LEFT JOIN preview_fulfillment f ON f.obligation_id = c.obligation_id
         LEFT JOIN preview_fulfillment_exception x ON x.obligation_id = c.obligation_id
         LEFT JOIN preview_refund_remedy r ON r.obligation_id = c.obligation_id
-       WHERE c.participant_id = ${PARTICIPANT_ID}
+       WHERE c.participant_id = ${participantId}
        ORDER BY c.created_at DESC
        LIMIT 50
     `;

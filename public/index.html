@@ -10,13 +10,13 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">FC</div><div><strong>Food Club Ghana</strong><span>Member Preview</span></div></div>
+      <div class="brand"><div class="brand-mark">FC</div><div><strong>Food Club Ghana</strong><span id="audience-label">Public Preview</span></div></div>
       <nav>
         <button class="nav-item active" data-view="dashboard">Overview</button>
-        <button class="nav-item" data-view="catalog">Member Offers</button>
-        <button class="nav-item" data-view="orders">My Orders</button>
-        <button class="nav-item" data-view="operator">Operations</button>
-        <button class="nav-item" data-view="controls">RC2 Controls</button>
+        <button class="nav-item" data-view="catalog">Browse Offers</button>
+        <button class="nav-item" data-view="orders" hidden>My Orders</button>
+        <button class="nav-item" data-view="operator" hidden>Operations</button>
+        <button class="nav-item" data-view="controls" hidden>RC2 Controls</button>
       </nav>
       <div class="sidebar-footer"><span class="status-dot"></span>Preview environment</div>
     </aside>
@@ -24,7 +24,7 @@
     <main>
       <header class="topbar">
         <div><p class="eyebrow">Workers Food Club</p><h1 id="page-title">Member Overview</h1></div>
-        <div class="env-badges"><span id="db-status" class="badge neutral">Checking Neon…</span><span class="badge warning">Sandbox payments only</span></div>
+        <div class="env-badges"><div id="auth-panel" aria-live="polite"><span class="badge neutral">Checking identity…</span></div><span id="db-status" class="badge neutral">Checking Neon…</span><span class="badge warning">Sandbox payments only</span></div>
       </header>
 
       <section id="dashboard" class="view active">
@@ -33,7 +33,7 @@
             <p class="eyebrow">Pilot cohort preview</p>
             <h2>Better food buying through pooled member demand.</h2>
             <p>Food Club Ghana organizes member commitments, governed sourcing, physical inventory, fulfillment and savings evidence into one auditable operating flow.</p>
-            <div class="hero-actions"><button class="primary" data-go="catalog">Browse current offers</button><button class="secondary" data-go="orders">View order history</button></div>
+            <div class="hero-actions"><button class="primary" data-go="catalog">Browse current offers</button><button class="secondary" data-go="orders" hidden>View order history</button></div>
           </div>
           <div class="metric-stack">
             <div class="metric"><span>Preview status</span><strong>RC2 staging</strong></div>
@@ -49,7 +49,7 @@
       </section>
 
       <section id="catalog" class="view">
-        <div class="section-intro"><div><p class="eyebrow">Current pilot offers</p><h2>Member Offers</h2></div><span id="offers-source" class="badge neutral">Loading Neon data…</span></div>
+        <div class="section-intro"><div><p class="eyebrow">Current pilot offers</p><h2>Browse Offers</h2></div><span id="offers-source" class="badge neutral">Loading Neon data…</span></div>
         <div id="offer-grid" class="offer-grid" aria-live="polite"><article class="offer-card muted"><div class="offer-icon">…</div><div><h3>Loading offers</h3><p>Reading staging catalog from Neon PostgreSQL.</p></div><button class="secondary small" disabled>Please wait</button></article></div>
       </section>
 
@@ -82,6 +82,7 @@
       </section>
     </main>
   </div>
+  <script src="/auth.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
