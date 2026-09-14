@@ -17,6 +17,7 @@ jobs:
       ACTIVATION_SHA: '81ca013cc8f6706bc4aeee6669345ff1fb7b3755'
       EXPECTED_MEMBER_SUBJECT: '105166970902157294779'
       EXPECTED_OPERATOR_SUBJECT: '100561209688774684064'
+      AUTHORIZATION_EVIDENCE_PATH: docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json
       VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
       VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
       PRODUCTION_BASE_URL: https://workers-food-club-chi.vercel.app
@@ -80,6 +81,42 @@ jobs:
           print('Controlled identity subjects match the reviewed Production bindings.')
           PY
 
+      - name: Checkout activation-control evidence
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify bounded governed activation authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, sys
+          path = os.environ['AUTHORIZATION_EVIDENCE_PATH']
+          with open(path, 'r', encoding='utf-8') as f:
+              evidence = json.load(f)
+          grant = evidence.get('grant') or {}
+          exclusions = evidence.get('explicitExclusions') or {}
+          checks = {
+              'status': evidence.get('status') == 'ACTIVE_BOUNDED_AUTHORIZATION',
+              'authorizedBy': evidence.get('authorizedBy') == 'participant:willie-adofo',
+              'action': grant.get('action') == 'EnableProductionApplicationAccess',
+              'environment': grant.get('environment') == 'production',
+              'candidateSha': grant.get('candidateSha') == os.environ['ACTIVATION_SHA'],
+              'repository': grant.get('repository') == 'handshakemallmarketing/WorkersFoodClub',
+              'revoked': grant.get('revoked') is False,
+              'liveFundsWithheld': exclusions.get('liveFundsAuthorized') is False,
+              'paystackLiveWithheld': exclusions.get('paystackLiveModeAuthorized') is False,
+              'liveCredentialsWithheld': exclusions.get('livePaystackCredentialsAuthorized') is False,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          if failed:
+              print('Governed activation authorization evidence failed: ' + ', '.join(failed), file=sys.stderr)
+              sys.exit(1)
+          print('Governed activation authorization evidence matches exact environment, action, and candidate SHA.')
+          PY
+
       - name: Checkout immutable green activation candidate
         uses: actions/checkout@v4
         with:
@@ -131,6 +168,8 @@ jobs:
         shell: bash
         env:
           BASE_URL: ${{ env.PRODUCTION_BASE_URL }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           call() {
@@ -141,12 +180,29 @@ jobs:
               curl --silent --show-error --write-out $'\n%{http_code}' --header 'accept: application/json' "${BASE_URL}${path}" || true
             fi
           }
+          post() {
+            local token="$1" path="$2"
+            curl --silent --show-error --write-out $'\n%{http_code}' \
+              --request POST \
+              --header 'accept: application/json' \
+              --header 'content-type: application/json' \
+              --header "authorization: Bearer ${token}" \
+              --data '{"obligationId":"wfc:obligation:activation-falsification","requestId":"00000000-0000-4000-8000-000000000054"}' \
+              "${BASE_URL}${path}" || true
+          }
           assert_status() {
             local name="$1" expected="$2" response="$3"
             local status="${response##*$'\n'}"
             local body="${response%$'\n'*}"
             test "$status" = "$expected" || { echo "$name expected HTTP $expected, got $status" >&2; echo "$body" >&2; exit 1; }
             echo "$name: HTTP $status"
+          }
+          assert_sha_json() {
+            local name="$1" body="$2"
+            local runtime_sha
+            runtime_sha="$(printf '%s' "$body" | jq -r '.commitSha // .gitCommitSha // .sha // empty')"
+            test "$runtime_sha" = "$ACTIVATION_SHA" || { echo "$name expected runtime SHA $ACTIVATION_SHA, got ${runtime_sha:-<empty>}" >&2; echo "$body" >&2; exit 1; }
+            echo "$name: runtime SHA $runtime_sha"
           }
           wait_for_canonical_activation() {
             local response status body
@@ -165,16 +221,40 @@ jobs:
             echo "$body" >&2
             return 1
           }
+
+          test -n "$DEPLOY_URL"
+          immutable_build="$(vercel curl /api/build-info --deployment "$DEPLOY_URL" --scope=food-club)"
+          assert_sha_json 'immutable Production deployment identity' "$immutable_build"
+
           wait_for_canonical_activation
+
+          canonical_build="$(curl --silent --show-error "${BASE_URL}/api/build-info")"
+          assert_sha_json 'canonical Production alias identity before falsification' "$canonical_build"
+
           unauth_member="$(call '' '/api/member-orders')"
           assert_status 'unauthenticated member route denied' '401' "$unauth_member"
           member_orders="$(call "$RC3_PRODUCTION_MEMBER_TOKEN" '/api/member-orders')"
           assert_status 'governed member route authorized' '200' "$member_orders"
           member_operator="$(call "$RC3_PRODUCTION_MEMBER_TOKEN" '/api/operator-orders')"
           assert_status 'member-to-operator escalation denied' '403' "$member_operator"
+          operator_member="$(call "$RC3_PRODUCTION_OPERATOR_TOKEN" '/api/member-notifications')"
+          assert_status 'operator-to-member escalation denied' '403' "$operator_member"
           operator_orders="$(call "$RC3_PRODUCTION_OPERATOR_TOKEN" '/api/operator-orders')"
           assert_status 'governed operator route authorized' '200' "$operator_orders"
-          echo 'Production authorization boundary falsification passed.'
+
+          for path in /api/commit-sandbox /api/pay-sandbox; do
+            response="$(post "$RC3_PRODUCTION_MEMBER_TOKEN" "$path")"
+            assert_status "Production mutation disabled: $path" '403' "$response"
+          done
+          for path in /api/fulfillment-ready /api/authorize-refund /api/complete-refund; do
+            response="$(post "$RC3_PRODUCTION_OPERATOR_TOKEN" "$path")"
+            assert_status "Production mutation disabled: $path" '403' "$response"
+          done
+
+          canonical_build_after="$(curl --silent --show-error "${BASE_URL}/api/build-info")"
+          assert_sha_json 'canonical Production alias identity after falsification' "$canonical_build_after"
+
+          echo 'Production authorization boundary and no-live-economic-effect falsification passed.'
 
       - name: Roll back immediately if post-activation falsification failed
         if: ${{ failure() && steps.deploy.outputs.url != '' }}
@@ -212,7 +292,7 @@ jobs:
       - name: Record activation authorization envelope
         if: ${{ success() }}
         run: |
-          echo 'Production application access is enabled by explicit authorization.'
+          echo 'Production application access is enabled by governed explicit authorization.'
           echo 'Live funds remain NOT authorized.'
           echo 'Paystack live mode remains NOT authorized.'
           echo 'No live Paystack credential creation, reading, provisioning, synchronization, or use is authorized.'

@@ -4,21 +4,56 @@
   "parentBaseline": "SW1-RC3",
   "startingMainCommit": "5bb24c8ab7ae4af8febc97fd7a1109991731125f",
   "activationCandidate": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
-  "activationGateHead": "82c0e8ce72bcf071e3f2af8b37b20c5010020503",
+  "activationGateHead": "92099dae6a956a4e002ca8218eb7e189163e2d4b",
+  "governedAuthorization": {
+    "evidencePath": "docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json",
+    "authorizedBy": "participant:willie-adofo",
+    "grantId": "grant:willie-adofo:production-application-access:v1",
+    "action": "EnableProductionApplicationAccess",
+    "environment": "production",
+    "candidateSha": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
+    "revoked": false
+  },
+  "controlledIdentities": {
+    "memberSubject": "105166970902157294779",
+    "operatorSubject": "100561209688774684064"
+  },
   "activationEvidence": {
-    "workflowRunId": 34901468240,
-    "jobId": 104168168026,
+    "workflowRunNumber": 11,
+    "workflowRunId": 34902403050,
+    "jobId": 104171180974,
     "conclusion": "success",
-    "productionDeployment": "https://workers-food-club-l2nar0o29-food-club.vercel.app",
+    "productionDeployment": "https://workers-food-club-relw3ycdp-food-club.vercel.app",
+    "deploymentInspect": "https://vercel.com/food-club/workers-food-club/4MQeb9J8zKxxmgwtnpJNv2ZRK1As",
     "canonicalAlias": "https://workers-food-club-chi.vercel.app",
     "canonicalActivationObserved": true,
+    "runtimeIdentityProof": {
+      "immutableDeploymentCommitSha": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
+      "canonicalAliasCommitShaBeforeFalsification": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
+      "canonicalAliasCommitShaAfterFalsification": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
+      "result": "PASS"
+    },
     "authorizationBoundaryFalsification": {
       "unauthenticatedMemberRoute": {"httpStatus": 401, "result": "PASS"},
       "governedMemberRoute": {"httpStatus": 200, "result": "PASS"},
       "memberToOperatorEscalation": {"httpStatus": 403, "result": "PASS"},
+      "operatorToMemberEscalation": {"httpStatus": 403, "result": "PASS"},
       "governedOperatorRoute": {"httpStatus": 200, "result": "PASS"}
     },
+    "noLiveEconomicEffectFalsification": {
+      "commitSandbox": {"httpStatus": 403, "result": "PASS"},
+      "paySandbox": {"httpStatus": 403, "result": "PASS"},
+      "fulfillmentReady": {"httpStatus": 403, "result": "PASS"},
+      "authorizeRefund": {"httpStatus": 403, "result": "PASS"},
+      "completeRefund": {"httpStatus": 403, "result": "PASS"}
+    },
     "rollback": "SKIPPED_SUCCESS_PATH"
+  },
+  "constitutionalConformance": {
+    "head": "92099dae6a956a4e002ca8218eb7e189163e2d4b",
+    "runNumber": 1608,
+    "runId": 34902402983,
+    "conclusion": "success"
   },
   "authorization": {
     "productionApplicationAccess": true,
@@ -30,7 +65,8 @@
     "productionApplicationAccessOnly": true,
     "liveFundsAuthorized": false,
     "paystackLiveModeAuthorized": false,
-    "livePaystackCredentialOperationsAuthorized": false
+    "livePaystackCredentialOperationsAuthorized": false,
+    "paymentOrFulfillmentMutationAuthorityGranted": false
   },
   "currentVerdict": "GO_PRODUCTION_APPLICATION_ACCESS_ENABLED_LIVE_FUNDS_WITHHELD"
 }

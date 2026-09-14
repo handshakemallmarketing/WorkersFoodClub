@@ -1,8 +1,9 @@
 # SW1 — Production Application Access Activation Gate
 
-Status: PRE_AUTHORIZATION_READINESS
+Status: ACTIVATED_AND_FALSIFIED
 Parent evidence baseline: `SW1-RC3`
 Starting main commit: `5bb24c8ab7ae4af8febc97fd7a1109991731125f`
+Activation candidate: `81ca013cc8f6706bc4aeee6669345ff1fb7b3755`
 
 ## Purpose
 
@@ -10,93 +11,79 @@ This is the separate deliberate authorization gate required by SW1-RC3 before pe
 
 It is **not** an RC4 gate and it does **not** authorize Paystack live mode, live member funds, live Paystack credentials, or any other live economic effect.
 
-## Current authorization boundary
+## Governed authorization
 
-Until a separate explicit Production-access authorization is recorded:
+Production application access was explicitly authorized and recorded as a bounded governance action in `docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json`.
 
-- `PRODUCTION_APPLICATION_ACCESS_ENABLED` remains `false`;
-- the canonical Production application remains fail-closed;
-- `/api/member-orders` must continue to return HTTP 503 `PRODUCTION_APPLICATION_ACCESS_DISABLED`;
-- live funds remain unauthorized;
-- Paystack live mode remains unauthorized;
-- live Paystack credentials must not be created, read, provisioned, synchronized, or used;
-- no Production deployment may be created with persistent application access enabled.
+The authorization is constrained to:
 
-The user instruction to continue work on this gate is authorization to prepare and falsify activation readiness only. It is not itself authorization to turn Production access on.
+- actor: `participant:willie-adofo`;
+- action: `EnableProductionApplicationAccess`;
+- environment: `production`;
+- repository: `handshakemallmarketing/WorkersFoodClub`;
+- exact candidate SHA: `81ca013cc8f6706bc4aeee6669345ff1fb7b3755`;
+- live funds: **not authorized**;
+- Paystack live mode: **not authorized**;
+- live Paystack credentials: **not authorized**;
+- payment or fulfillment mutation authority: **not granted**.
 
-## Verified starting baseline
+This authorization is independent of, and does not widen, `TRANSFER_POLICY_GOVERNANCE-v1`.
 
-At gate creation:
+## Verified activation result
 
-1. `main` is `5bb24c8ab7ae4af8febc97fd7a1109991731125f`, the merge of PR #53;
-2. constitutional-conformance run #1584 (`34829783606`) succeeded on that exact commit;
-3. Vercel status for that exact commit is green;
-4. the canonical release index has `head=SW1-RC3`;
-5. the canonical Production route `/api/member-orders` returns HTTP 503 `PRODUCTION_APPLICATION_ACCESS_DISABLED`;
-6. RC3 production OIDC/JWKS identity verification, application binding, negative authorization, log hygiene, and rollback behavior were already runtime-proven;
-7. live funds and Paystack live mode remain explicitly withheld.
+GitHub Actions Production application access activation run #11 (`34902403050`) succeeded.
 
-## Preconditions before any enablement authorization can be executed
+Production deployment:
 
-All of the following must be true on the exact activation candidate:
+`https://workers-food-club-relw3ycdp-food-club.vercel.app`
 
-1. constitutional conformance succeeds;
-2. exact-head Vercel deployment status is green;
-3. Production database/binding dependencies are ready and no schema drift blocker exists;
-4. Production OIDC configuration is complete and uses the governed application-principal binding path;
-5. controlled member and operator identities needed for post-enable smoke tests are known and governed;
-6. disabled/unbound/escalation denial paths remain covered by executable tests;
-7. a rollback deployment/path with `PRODUCTION_APPLICATION_ACCESS_ENABLED=false` is ready and has been proven;
-8. runtime-log inspection remains free of bearer tokens, provider subjects, issuer configuration, secrets, or sensitive claims;
-9. no unresolved P0/P1 finding exists for Production application access;
-10. live funds remain unauthorized and no Paystack-live configuration is introduced.
+Canonical Production alias:
 
-## Pre-authorization work permitted by this gate
+`https://workers-food-club-chi.vercel.app`
 
-Before explicit activation authorization, this branch may:
+The activation workflow proved all of the following before recording success:
 
-- inspect current Production behavior and configuration metadata without exposing secrets;
-- add or strengthen tests and observability needed for activation falsification;
-- create an activation runbook and machine-readable evidence package;
-- rehearse rollback with application access disabled;
-- validate exact-head deployment behavior while the kill switch remains OFF;
-- prepare, but not execute, an enablement procedure.
+1. the controlled member token subject was `105166970902157294779`;
+2. the controlled operator token subject was `100561209688774684064`;
+3. governed activation evidence matched the exact action, environment, repository, and candidate SHA;
+4. the immutable Production deployment reported runtime commit SHA `81ca013cc8f6706bc4aeee6669345ff1fb7b3755`;
+5. the canonical Production alias reported that same runtime SHA before authorization-boundary falsification;
+6. unauthenticated member access returned HTTP 401;
+7. the governed member route returned HTTP 200;
+8. member-to-operator escalation returned HTTP 403;
+9. operator-to-member escalation returned HTTP 403;
+10. the governed operator route returned HTTP 200;
+11. `/api/commit-sandbox` returned HTTP 403;
+12. `/api/pay-sandbox` returned HTTP 403;
+13. `/api/fulfillment-ready` returned HTTP 403;
+14. `/api/authorize-refund` returned HTTP 403;
+15. `/api/complete-refund` returned HTTP 403;
+16. the canonical Production alias still reported the exact candidate runtime SHA after falsification;
+17. rollback was not invoked because every activation criterion passed.
 
-## Explicit authorization required to enable Production access
+Constitutional-conformance run #1608 (`34902402983`) also succeeded on activation-control head `92099dae6a956a4e002ca8218eb7e189163e2d4b`.
 
-Persistent Production application access may only be enabled after an explicit instruction whose substance unambiguously authorizes enabling Production application access.
+## Current Production authorization boundary
 
-Examples of sufficient authorization include: `Enable Production application access` or `Authorize Production application access activation`.
+Production application access is enabled under the bounded authorization above.
 
-Generic continuation instructions such as `Next`, `Go`, `continue`, or `proceed` authorize readiness work only and must not be interpreted as permission to flip the Production access switch.
+The following remain explicitly withheld:
 
-## Activation execution contract after explicit authorization
+- live funds;
+- Paystack live mode;
+- creation, reading, provisioning, synchronization, or use of live Paystack credentials;
+- Production payment, refund, fulfillment, or other live economic mutation authority.
 
-Once explicit authorization exists, the activation must be bounded and reversible:
+Any future request to cross one of those boundaries requires a separate explicit governance action and fresh falsification evidence.
 
-1. freeze the exact reviewed candidate SHA;
-2. verify all required checks are green on that exact SHA;
-3. deploy Production with `PRODUCTION_APPLICATION_ACCESS_ENABLED=true` without changing Paystack/live-funds posture;
-4. confirm the kill-switch denial has disappeared only because the switch is enabled;
-5. verify unauthenticated access fails with the authentication boundary rather than executing commands;
-6. verify a governed member identity can access only member-authorized routes and cannot obtain operator authority;
-7. verify a governed operator identity can access only explicitly granted operator scopes;
-8. verify unbound, disabled, actor-substitution, and scope-escalation cases remain denied;
-9. inspect runtime logs for secret/token/claim leakage;
-10. on any unexpected result, immediately restore a deployment with `PRODUCTION_APPLICATION_ACCESS_ENABLED=false` and re-prove HTTP 503 fail-closed behavior.
+## Fail-closed rollback contract
 
-## Exit verdicts
+The activation workflow retains an automatic failure path. Any failed post-enable falsification redeploys the same prebuilt candidate with `PRODUCTION_APPLICATION_ACCESS_ENABLED=false` and polls the canonical alias until HTTP 503 with `PRODUCTION_APPLICATION_ACCESS_DISABLED` is re-proven.
 
-Before explicit authorization, the strongest permitted verdict is:
+That rollback path was repeatedly runtime-proven during failed activation attempts before the successful activation.
 
-`READY_FOR_EXPLICIT_PRODUCTION_ACCESS_AUTHORIZATION`
-
-After an explicitly authorized, successful activation and post-enable falsification, the gate may record:
+## Final verdict
 
 `GO_PRODUCTION_APPLICATION_ACCESS_ENABLED_LIVE_FUNDS_WITHHELD`
 
-A failure at any activation criterion requires:
-
-`NO_GO_PRODUCTION_APPLICATION_ACCESS_ROLLED_BACK`
-
-None of these verdicts authorizes Paystack live mode or live member funds.
+This verdict authorizes Production application access only. It does not authorize Paystack live mode, live member funds, or live Paystack credentials.
