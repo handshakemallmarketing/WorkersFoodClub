@@ -113,6 +113,26 @@ jobs:
             echo "$name: HTTP $status"
           }
 
+          wait_for_canonical_activation() {
+            local response status body
+            for attempt in $(seq 1 30); do
+              response="$(call '' '/api/member-orders')"
+              status="${response##*$'\n'}"
+              body="${response%$'\n'*}"
+              if [ "$status" = '401' ]; then
+                echo "Canonical Production activation observed after attempt $attempt."
+                return 0
+              fi
+              echo "Waiting for canonical Production activation propagation (attempt $attempt/30): HTTP $status"
+              sleep 2
+            done
+            echo 'Canonical Production alias did not converge to enabled state within 60 seconds.' >&2
+            echo "$body" >&2
+            return 1
+          }
+
+          wait_for_canonical_activation
+
           unauth_member="$(call '' '/api/member-orders')"
           assert_status 'unauthenticated member route denied' '401' "$unauth_member"
 
@@ -139,11 +159,30 @@ jobs:
             --token="$VERCEL_TOKEN" \
             --scope=food-club \
             --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false >/tmp/rollback-url.txt
-          response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
-          status="${response##*$'\n'}"
-          body="${response%$'\n'*}"
-          test "$status" = '503'
-          echo "$body" | grep -q 'PRODUCTION_APPLICATION_ACCESS_DISABLED'
+
+          rollback_proven=false
+          last_body=''
+          last_status=''
+          for attempt in $(seq 1 30); do
+            response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
+            status="${response##*$'\n'}"
+            body="${response%$'\n'*}"
+            last_status="$status"
+            last_body="$body"
+            if [ "$status" = '503' ] && echo "$body" | grep -q 'PRODUCTION_APPLICATION_ACCESS_DISABLED'; then
+              rollback_proven=true
+              echo "Fail-closed rollback observed after attempt $attempt."
+              break
+            fi
+            echo "Waiting for canonical fail-closed rollback propagation (attempt $attempt/30): HTTP $status"
+            sleep 2
+          done
+
+          test "$rollback_proven" = 'true' || {
+            echo "Fail-closed rollback was not re-proven within 60 seconds; last HTTP status: $last_status" >&2
+            echo "$last_body" >&2
+            exit 1
+          }
           echo 'Fail-closed rollback re-proven on canonical Production alias.'
 
       - name: Record activation authorization envelope
