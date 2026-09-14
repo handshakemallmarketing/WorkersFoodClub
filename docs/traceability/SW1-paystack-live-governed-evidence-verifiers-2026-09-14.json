@@ -6,7 +6,11 @@
   "implemented": {
     "durableAuthorizationEvidenceReaderContract": true,
     "governedAuthorizationEvidenceVerification": true,
-    "revocationFailClosed": true,
+    "atomicAuthorizationReservationBeforeArming": true,
+    "singleUseAuthorizationAcrossConcurrentControllers": true,
+    "atomicAuthorizationConsumptionAtClaim": true,
+    "claimBoundaryAuthorizationRevalidation": true,
+    "revocationAfterArmFailsClosed": true,
     "exactCandidateBinding": true,
     "exactMerchantBinding": true,
     "exactAuthorizationExpiryBinding": true,
@@ -16,7 +20,15 @@
     "watchdogMustBeArmed": true,
     "watchdogMustBeActivatingRunnerIndependent": true,
     "watchdogContainmentActionMustDisableLive": true,
-    "watchdogCandidateMerchantExpiryBinding": true
+    "watchdogCandidateMerchantExpiryBinding": true,
+    "claimBoundaryWatchdogRevalidation": true,
+    "watchdogFailureAfterArmFailsClosed": true,
+    "watchdogRevalidationFailureMarksContainmentUnproven": true
+  },
+  "reviewRemediations": {
+    "P1_revalidateAuthorityAtClaim": true,
+    "P1_revalidateWatchdogAtClaim": true,
+    "P1_atomicallyConsumeDurableAuthorization": true
   },
   "notImplementedInThisSlice": [
     "production durable authorization evidence store adapter",
