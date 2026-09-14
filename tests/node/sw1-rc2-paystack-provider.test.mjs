@@ -63,7 +63,7 @@ test('Paystack verification rejects provider reference rebinding',async()=>{
 test('Paystack refunds remain provider evidence with explicit lifecycle state and transaction binding',async()=>{
  const calls=[];const fetcher=queueFetcher([
   {body:{status:true,data:{id:77,status:'pending',transaction_reference:'wfc-order-4',amount:3000,currency:'GHS'}}},
-  {body:{status:true,data:{id:77,status:'processed',transaction_reference:'wfc-order-4',amount:3000,currency:'GHS'}}
+  {body:{status:true,data:{id:77,status:'processed',transaction_reference:'wfc-order-4',amount:3000,currency:'GHS'}}}
  ],calls);
  const adapter=new PaystackPaymentAdapter({environment:'test',secretKey:'sk_test_example'},fetcher);
  const started=await adapter.initiateRefund({transactionReference:'wfc-order-4',amount:money(3000),merchantNote:'authorized-remedy:remedy-1'});assert.equal(started.state,'PENDING');assert.equal(started.refundId,'77');
