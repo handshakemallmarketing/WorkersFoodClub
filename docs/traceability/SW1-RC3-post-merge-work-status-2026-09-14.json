@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "1.0",
+  "asOf": "2026-09-14T06:01:46Z",
+  "repository": "handshakemallmarketing/WorkersFoodClub",
+  "mainCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
+  "rc3": {
+    "pullRequest": 52,
+    "merged": true,
+    "mergeCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
+    "verdict": "GO_RC3_READINESS_ACTIVATIONS_WITHHELD",
+    "finalReview": "docs/traceability/SW1-RC3-final-review-2026-09-14.json",
+    "specification": "docs/sw1/SW1-RC3-production-identity-live-provider-activation-falsification.md"
+  },
+  "postMergeVerification": {
+    "github": {
+      "mainAtMergeCommit": true,
+      "constitutionalConformance": {
+        "runId": 34811478516,
+        "runNumber": 1522,
+        "headSha": "fba4bdcca19146ebea12e0e56517c912a49d3699",
+        "conclusion": "SUCCESS"
+      }
+    },
+    "vercel": {
+      "projectId": "prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE",
+      "productionDeploymentId": "dpl_4FWSxkHj7B6xjB5yXBRxAZnUKSKB",
+      "deploymentCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
+      "state": "READY",
+      "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+      "memberOrdersStatus": 503,
+      "memberOrdersError": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
+    },
+    "neon": {
+      "projectId": "wispy-dawn-96331519",
+      "projectName": "Food Club",
+      "branchId": "br-winter-poetry-ae8qho57",
+      "branchName": "production",
+      "branchState": "ready",
+      "default": true
+    }
+  },
+  "safetyPosture": {
+    "productionApplicationAccessEnabled": false,
+    "productionApplicationAccess": "OFF_FAIL_CLOSED",
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "livePaystackCredentialsAccessedOrProvisionedInThisStep": false
+  },
+  "releaseGovernance": {
+    "currentReleaseIndexHead": "SW1-RC2",
+    "rc3ReleaseEvidenceIndexed": false,
+    "releaseIndexAdvanceAuthorizedByRC3FinalReview": false,
+    "nextGovernedStep": "SW1-RC3_RELEASE_RATIFICATION_AND_INDEX_ADVANCEMENT_GATE",
+    "indexMutatedByThisStatusStep": false
+  }
+}
