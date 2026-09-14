@@ -63,7 +63,7 @@ test('Paystack verification rejects provider reference rebinding',async()=>{
 test('Paystack refunds remain provider evidence with explicit lifecycle state and transaction binding',async()=>{
  const calls=[];const fetcher=queueFetcher([
   {body:{status:true,data:{id:77,status:'pending',transaction_reference:'wfc-order-4',amount:3000,currency:'GHS'}}},
-  {body:{status:true,data:{id:77,status:'processed',transaction_reference:'wfc-order-4',amount:3000,currency:'GHS'}}}
+  {body:{status:true,data:{id:77,status:'processed',transaction_reference:'wfc-order-4',amount:3000,currency:'GHS'}}
  ],calls);
  const adapter=new PaystackPaymentAdapter({environment:'test',secretKey:'sk_test_example'},fetcher);
  const started=await adapter.initiateRefund({transactionReference:'wfc-order-4',amount:money(3000),merchantNote:'authorized-remedy:remedy-1'});assert.equal(started.state,'PENDING');assert.equal(started.refundId,'77');
@@ -162,7 +162,7 @@ async function invokePaystackManual(body,{vercelEnv='preview',paystackSecret='sk
  const priorEnv=process.env.VERCEL_ENV;
  const priorPaystackSecret=process.env.PAYSTACK_SECRET_KEY;
  process.env.VERCEL_ENV=vercelEnv;
- if(paystackSecret===undefined) delete process.env.PAYSTACK_SECRET_KEY;
+ if(paystackSecret===null) delete process.env.PAYSTACK_SECRET_KEY;
  else process.env.PAYSTACK_SECRET_KEY=paystackSecret;
  try{
   await paystackRehearsalHandler(req,res);
@@ -189,7 +189,7 @@ test('Paystack manual rehearsal remains preview-only even when a test credential
 
 test('Paystack manual rehearsal requires sk_test credential class before any provider action',async()=>{
  const request={action:'verify',reference:'wfc-rc2-auth-test-credential-gate'};
- const missing=await invokePaystackManual(request,{paystackSecret:undefined});
+ const missing=await invokePaystackManual(request,{paystackSecret:null});
  assert.equal(missing.statusCode,503);
  assert.equal(missing.payload.error,'PAYSTACK_TEST_SECRET_NOT_CONFIGURED');
  const live=await invokePaystackManual(request,{paystackSecret:'sk_live_not_authorized'});
