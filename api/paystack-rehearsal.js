@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { executePaystackRehearsal } from '../dist/packages/paystack-rehearsal/src/index.js';
 import { PaystackWebhookVerifier } from '../dist/packages/pilot-payments/src/paystack.js';
 import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
@@ -7,6 +7,7 @@ const ACTIONS = new Set(['initiate', 'verify', 'refund', 'refund-status']);
 const REFERENCE_RE = /^wfc-rc2-[A-Za-z0-9-]{8,80}$/;
 const REFUND_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_BODY_BYTES = 1024 * 1024;
+const FINGERPRINT_LABEL = 'wfc-preview-api-auth-fingerprint-v1';
 
 export const config = {
   api: {
@@ -17,6 +18,13 @@ export const config = {
 function fail(res, status, error) {
   res.setHeader('Cache-Control', 'no-store');
   return res.status(status).json({ ok: false, error });
+}
+
+function previewAuthFingerprint(secret) {
+  return createHmac('sha256', secret)
+    .update(FINGERPRINT_LABEL)
+    .digest('hex')
+    .slice(0, 24);
 }
 
 async function readRawBody(req) {
@@ -63,11 +71,6 @@ export default async function handler(req, res) {
     return fail(res, 403, 'PAYSTACK_REHEARSAL_PREVIEW_ONLY');
   }
 
-  const secretKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!secretKey || !secretKey.startsWith('sk_test_')) {
-    return fail(res, 503, 'PAYSTACK_TEST_SECRET_NOT_CONFIGURED');
-  }
-
   let rawBody;
   try {
     rawBody = await readRawBody(req);
@@ -76,6 +79,46 @@ export default async function handler(req, res) {
       return fail(res, 413, 'REQUEST_BODY_TOO_LARGE');
     }
     return fail(res, 400, 'REQUEST_BODY_INVALID');
+  }
+
+  /*
+   * Bounded Preview-auth diagnostic.
+   *
+   * This runs only behind Vercel Preview protection, returns a 96-bit derived
+   * HMAC fingerprint rather than the secret, and is handled before application
+   * bearer authentication so GitHub Actions can prove whether its shared key
+   * matches the Preview runtime key. It never contacts Paystack.
+   */
+  if (!req.headers['x-paystack-signature']) {
+    let diagnosticBody;
+    try {
+      diagnosticBody = parseJson(rawBody);
+    } catch {
+      diagnosticBody = null;
+    }
+
+    if (diagnosticBody?.action === 'auth-fingerprint') {
+      const previewAuthSecret = process.env.PREVIEW_API_AUTH_SECRET;
+      if (typeof previewAuthSecret !== 'string' || previewAuthSecret.length < 32) {
+        return fail(res, 503, 'PREVIEW_AUTH_NOT_CONFIGURED');
+      }
+
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({
+        ok: true,
+        diagnostic: 'PREVIEW_API_AUTH_SECRET_FINGERPRINT',
+        algorithm: 'HMAC-SHA256',
+        label: FINGERPRINT_LABEL,
+        fingerprint: previewAuthFingerprint(previewAuthSecret),
+        secretExposed: false,
+        providerContacted: false,
+      });
+    }
+  }
+
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!secretKey || !secretKey.startsWith('sk_test_')) {
+    return fail(res, 503, 'PAYSTACK_TEST_SECRET_NOT_CONFIGURED');
   }
 
   /*
@@ -156,10 +199,6 @@ export default async function handler(req, res) {
   );
   if (!principal) return;
 
-  /*
-   * Existing RC2 provider-rehearsal control path.
-   * Body parsing is now explicit because automatic Vercel parsing is disabled.
-   */
   let body;
   try {
     body = parseJson(rawBody);
