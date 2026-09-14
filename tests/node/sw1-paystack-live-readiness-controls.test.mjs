@@ -14,40 +14,59 @@ const baseEnvelope={
  paystackLiveModeAuthorized:true,
  watchdog:{armed:true,independent:true,expiresAt:'2026-09-15T00:20:00Z'}
 };
+const validAuthority={verify:()=>Object.freeze({valid:true,authorizationId:'authz:bounded-live:001'})};
+const validWatchdog={verify:()=>Object.freeze({valid:true,watchdogId:'watchdog:external:001'})};
+const makeControl=(authority=validAuthority,watchdog=validWatchdog)=>new PaystackLiveReadinessController(authority,watchdog);
 
-test('Paystack live readiness control defaults OFF and refuses use before an exact bounded authorization is armed',()=>{
- const control=new PaystackLiveReadinessController();
+test('Paystack live readiness control defaults OFF and refuses use before verified bounded authorization is armed',()=>{
+ const control=makeControl();
  assert.deepEqual(control.snapshot(),{state:'DISABLED'});
  assert.throws(()=>control.assertBoundedTransactionAllowed({candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId,reference:'live-ref-1',now:'2026-09-14T23:00:00Z'}),/PAYSTACK_LIVE_CONTROL_DISABLED/);
 });
 
 test('Paystack live readiness control requires both live-mode and live-funds authorization',()=>{
- const control=new PaystackLiveReadinessController();
+ const control=makeControl();
  assert.throws(()=>control.arm({...baseEnvelope,liveFundsAuthorized:false},'2026-09-14T23:00:00Z'),/PAYSTACK_LIVE_AUTHORIZATION_INCOMPLETE/);
  assert.throws(()=>control.arm({...baseEnvelope,paystackLiveModeAuthorized:false},'2026-09-14T23:00:00Z'),/PAYSTACK_LIVE_AUTHORIZATION_INCOMPLETE/);
  assert.deepEqual(control.snapshot(),{state:'DISABLED'});
 });
 
+test('Paystack live readiness control rejects caller assertions without independently verified authority evidence',()=>{
+ const invalidAuthority={verify:()=>Object.freeze({valid:false})};
+ const control=makeControl(invalidAuthority);
+ assert.throws(()=>control.arm(baseEnvelope,'2026-09-14T23:00:00Z'),/PAYSTACK_LIVE_AUTHORIZATION_EVIDENCE_INVALID/);
+ assert.deepEqual(control.snapshot(),{state:'DISABLED'});
+});
+
+test('Paystack live readiness control rejects watchdog assertions without independent watchdog evidence',()=>{
+ const invalidWatchdog={verify:()=>Object.freeze({valid:false})};
+ const control=makeControl(validAuthority,invalidWatchdog);
+ assert.throws(()=>control.arm(baseEnvelope,'2026-09-14T23:00:00Z'),/PAYSTACK_LIVE_WATCHDOG_EVIDENCE_INVALID/);
+ assert.deepEqual(control.snapshot(),{state:'DISABLED'});
+});
+
 test('Paystack live readiness control binds candidate SHA, merchant, expiry and independent watchdog',()=>{
- const control=new PaystackLiveReadinessController();
+ const control=makeControl();
  assert.throws(()=>control.arm({...baseEnvelope,runtimeSha:'0'.repeat(40)},'2026-09-14T23:00:00Z'),/PAYSTACK_LIVE_RUNTIME_SHA_MISMATCH/);
  assert.throws(()=>control.arm({...baseEnvelope,watchdog:{...baseEnvelope.watchdog,independent:false}},'2026-09-14T23:00:00Z'),/PAYSTACK_LIVE_INDEPENDENT_WATCHDOG_REQUIRED/);
  const armed=control.arm(baseEnvelope,'2026-09-14T23:00:00Z');
  assert.equal(armed.state,'BOUNDED_WINDOW_ARMED');
+ assert.equal(armed.authorizationId,'authz:bounded-live:001');
+ assert.equal(armed.watchdogId,'watchdog:external:001');
  assert.throws(()=>control.assertBoundedTransactionAllowed({candidateSha:'1'.repeat(40),merchantAccountId:baseEnvelope.merchantAccountId,reference:'live-ref-1',now:'2026-09-14T23:05:00Z'}),/PAYSTACK_LIVE_CANDIDATE_REBOUND/);
  assert.throws(()=>control.assertBoundedTransactionAllowed({candidateSha:sha,merchantAccountId:'merchant:wrong',reference:'live-ref-1',now:'2026-09-14T23:05:00Z'}),/PAYSTACK_LIVE_MERCHANT_REBOUND/);
  control.assertBoundedTransactionAllowed({candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId,reference:'live-ref-1',now:'2026-09-14T23:05:00Z'});
 });
 
 test('Paystack live readiness control automatically fails closed when authorization/watchdog window expires',()=>{
- const control=new PaystackLiveReadinessController();
+ const control=makeControl();
  control.arm(baseEnvelope,'2026-09-14T23:00:00Z');
  assert.throws(()=>control.assertBoundedTransactionAllowed({candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId,reference:'live-ref-1',now:'2026-09-15T00:20:00Z'}),/PAYSTACK_LIVE_CONTROL_WINDOW_EXPIRED/);
  assert.deepEqual(control.snapshot(),{state:'DISABLED'});
 });
 
 test('Paystack readiness state distinguishes unresolved transaction outcome from unproven containment',()=>{
- const control=new PaystackLiveReadinessController();
+ const control=makeControl();
  assert.equal(control.markTransactionOutcomeUnresolved().state,'TRANSACTION_OUTCOME_UNRESOLVED');
  assert.throws(()=>control.assertBoundedTransactionAllowed({candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId,reference:'live-ref-1',now:'2026-09-14T23:05:00Z'}),/PAYSTACK_LIVE_CONTROL_DISABLED/);
  assert.equal(control.markContainmentUnproven().state,'CONTAINMENT_UNPROVEN');
