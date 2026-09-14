@@ -1,0 +1,146 @@
+name: Production application access activation
+
+on:
+  push:
+    branches:
+      - sw1-production-application-access-activation-gate
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    if: "${{ github.event.head_commit.message == 'AUTHORIZED: enable Production application access' }}"
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ACTIVATION_SHA: 81ca013cc8f6706bc4aeee6669345ff1fb7b3755
+      VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
+      VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
+      RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
+      RC3_PRODUCTION_OPERATOR_TOKEN: ${{ secrets.RC3_PRODUCTION_OPERATOR_TOKEN }}
+    steps:
+      - name: Require authorized deployment and controlled identity credentials
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo 'VERCEL_TOKEN missing; refusing Production activation.' >&2; exit 1; }
+          test -n "${RC3_PRODUCTION_MEMBER_TOKEN:-}" || { echo 'RC3_PRODUCTION_MEMBER_TOKEN missing; refusing Production activation.' >&2; exit 1; }
+          test -n "${RC3_PRODUCTION_OPERATOR_TOKEN:-}" || { echo 'RC3_PRODUCTION_OPERATOR_TOKEN missing; refusing Production activation.' >&2; exit 1; }
+          echo 'Explicit Production application access authorization recorded.'
+          echo 'Live funds remain NOT authorized.'
+          echo 'Paystack live mode remains NOT authorized.'
+
+      - name: Checkout immutable green activation candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ACTIVATION_SHA }}
+          fetch-depth: 1
+
+      - name: Verify immutable activation candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$ACTIVATION_SHA"
+          echo "Production access activation candidate: $actual"
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.11.7
+
+      - name: Pull Production project settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club
+
+      - name: Build immutable candidate with Production semantics
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=food-club
+
+      - name: Deploy authorized Production application access
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --yes \
+            --token="$VERCEL_TOKEN" \
+            --scope=food-club \
+            --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Authorized Production deployment: $url"
+
+      - name: Falsify Production authorization boundaries after activation
+        id: falsify
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+
+          call() {
+            local token="$1" path="$2"
+            if [ -n "$token" ]; then
+              curl --silent --show-error --write-out $'\n%{http_code}' \
+                --header 'accept: application/json' \
+                --header "authorization: Bearer ${token}" \
+                "${BASE_URL}${path}" || true
+            else
+              curl --silent --show-error --write-out $'\n%{http_code}' \
+                --header 'accept: application/json' \
+                "${BASE_URL}${path}" || true
+            fi
+          }
+
+          assert_status() {
+            local name="$1" expected="$2" response="$3"
+            local status="${response##*$'\n'}"
+            local body="${response%$'\n'*}"
+            test "$status" = "$expected" || { echo "$name expected HTTP $expected, got $status" >&2; echo "$body" >&2; exit 1; }
+            echo "$name: HTTP $status"
+          }
+
+          unauth_member="$(call '' '/api/member-orders')"
+          assert_status 'unauthenticated member route denied' '401' "$unauth_member"
+
+          member_orders="$(call "$RC3_PRODUCTION_MEMBER_TOKEN" '/api/member-orders')"
+          assert_status 'governed member route authorized' '200' "$member_orders"
+
+          member_operator="$(call "$RC3_PRODUCTION_MEMBER_TOKEN" '/api/operator-orders')"
+          assert_status 'member-to-operator escalation denied' '403' "$member_operator"
+
+          operator_orders="$(call "$RC3_PRODUCTION_OPERATOR_TOKEN" '/api/operator-orders')"
+          assert_status 'governed operator route authorized' '200' "$operator_orders"
+
+          echo 'Production authorization boundary falsification passed.'
+
+      - name: Roll back immediately if post-activation falsification failed
+        if: ${{ failure() && steps.deploy.outputs.url != '' }}
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo 'Post-activation falsification failed; restoring fail-closed Production access.' >&2
+          rollback_url="$(vercel deploy --prebuilt --prod --yes \
+            --token="$VERCEL_TOKEN" \
+            --scope=food-club \
+            --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false)"
+          response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${rollback_url}/api/member-orders" || true)"
+          status="${response##*$'\n'}"
+          body="${response%$'\n'*}"
+          test "$status" = '503'
+          echo "$body" | grep -q 'PRODUCTION_APPLICATION_ACCESS_DISABLED'
+          echo 'Fail-closed rollback re-proven.'
+
+      - name: Record activation authorization envelope
+        if: ${{ success() }}
+        run: |
+          echo 'Production application access is enabled by explicit authorization.'
+          echo 'Live funds remain NOT authorized.'
+          echo 'Paystack live mode remains NOT authorized.'
+          echo 'No live Paystack credential creation, reading, provisioning, synchronization, or use is authorized.'
