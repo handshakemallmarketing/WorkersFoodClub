@@ -55,3 +55,8 @@ test('RC3 binding scopes remain necessary but are no longer sufficient',async()=
   const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding([]),participant,memberships:[{membership_id:'membership:1'}]})});
   assert.deepEqual(denied,{ok:false,status:403,error:'AUTHORIZATION_SCOPE_REQUIRED'});
 });
+
+test('RC3 governed principal fails closed for unsupported scope families',async()=>{
+  const denied=await resolveApplicationPrincipal(identity,'admin:audit.read',{sql:fakeSql({binding:binding(['admin:audit.read']),participant})});
+  assert.deepEqual(denied,{ok:false,status:403,error:'AUTHORIZATION_SCOPE_FAMILY_UNSUPPORTED'});
+});
