@@ -17,6 +17,7 @@ jobs:
       ACTIVATION_SHA: 81ca013cc8f6706bc4aeee6669345ff1fb7b3755
       VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
       VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
+      PRODUCTION_BASE_URL: https://workers-food-club-chi.vercel.app
       RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
       RC3_PRODUCTION_OPERATOR_TOKEN: ${{ secrets.RC3_PRODUCTION_OPERATOR_TOKEN }}
     steps:
@@ -80,12 +81,13 @@ jobs:
             --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Authorized Production deployment: $url"
+          echo "Canonical Production alias under test: $PRODUCTION_BASE_URL"
 
       - name: Falsify Production authorization boundaries after activation
         id: falsify
         shell: bash
         env:
-          BASE_URL: ${{ steps.deploy.outputs.url }}
+          BASE_URL: ${{ env.PRODUCTION_BASE_URL }}
         run: |
           set -euo pipefail
 
@@ -133,16 +135,16 @@ jobs:
         run: |
           set -euo pipefail
           echo 'Post-activation falsification failed; restoring fail-closed Production access.' >&2
-          rollback_url="$(vercel deploy --prebuilt --prod --yes \
+          vercel deploy --prebuilt --prod --yes \
             --token="$VERCEL_TOKEN" \
             --scope=food-club \
-            --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false)"
-          response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${rollback_url}/api/member-orders" || true)"
+            --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false >/tmp/rollback-url.txt
+          response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
           status="${response##*$'\n'}"
           body="${response%$'\n'*}"
           test "$status" = '503'
           echo "$body" | grep -q 'PRODUCTION_APPLICATION_ACCESS_DISABLED'
-          echo 'Fail-closed rollback re-proven.'
+          echo 'Fail-closed rollback re-proven on canonical Production alias.'
 
       - name: Record activation authorization envelope
         if: ${{ success() }}
