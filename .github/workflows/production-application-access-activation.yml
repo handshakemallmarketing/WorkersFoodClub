@@ -144,3 +144,5 @@ jobs:
           echo 'Live funds remain NOT authorized.'
           echo 'Paystack live mode remains NOT authorized.'
           echo 'No live Paystack credential creation, reading, provisioning, synchronization, or use is authorized.'
+
+# second authorized push triggers this already-present workflow
