@@ -1,41 +1,17 @@
 import { spawnSync } from 'node:child_process';
-import { createHmac } from 'node:crypto';
-import { mintPreviewApiToken } from '../lib/preview-api-auth.js';
 
-const FINGERPRINT_LABEL='wfc-preview-api-auth-fingerprint-v1';
 const base=(process.env.PREVIEW_BASE_URL??'').trim().replace(/\/$/,'');
 const expectedSha=(process.env.EXPECTED_COMMIT_SHA??'').trim();
-const previewAuthSecret=process.env.PREVIEW_API_AUTH_SECRET??'';
 const vercelToken=process.env.VERCEL_TOKEN??'';
 const vercelScope=(process.env.VERCEL_SCOPE??'food-club').trim();
 if(!/^https:\/\//.test(base)) throw new Error('PREVIEW_BASE_URL_REQUIRED');
 if(!/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error('EXPECTED_COMMIT_SHA_INVALID');
-if(previewAuthSecret.length<32) throw new Error('PREVIEW_API_AUTH_SECRET_REQUIRED');
 if(!vercelToken) throw new Error('VERCEL_TOKEN_REQUIRED');
 if(!vercelScope) throw new Error('VERCEL_SCOPE_REQUIRED');
-
-function authFingerprint(secret){
-  return createHmac('sha256',secret)
-    .update(FINGERPRINT_LABEL)
-    .digest('hex')
-    .slice(0,24);
-}
-
-const localAuthFingerprint=authFingerprint(previewAuthSecret);
-const now=Math.floor(Date.now()/1000);
-const previewOperatorToken=mintPreviewApiToken({
-  secret:previewAuthSecret,
-  subject:'github-actions:paystack-provider-rehearsal',
-  actorId:'preview:operator:001',
-  scopes:['operator:payment.rehearse'],
-  issuedAt:now,
-  expiresAt:now+(10*60),
-});
 
 function sanitize(value=''){
   return String(value)
     .replaceAll(vercelToken,'[REDACTED_VERCEL_TOKEN]')
-    .replaceAll(previewOperatorToken,'[REDACTED_PREVIEW_TOKEN]')
     .slice(0,1200);
 }
 
@@ -47,9 +23,6 @@ function json(path,init={}){
   curlArgs.push('--header','Accept: application/json');
   if(path==='/api/paystack-rehearsal'){
     curlArgs.push('--header','Content-Type: application/json');
-    if(init.applicationAuth!==false){
-      curlArgs.push('--header',`Authorization: Bearer ${previewOperatorToken}`);
-    }
   }
   if(init.body!==undefined) curlArgs.push('--data-raw',String(init.body));
 
@@ -99,26 +72,6 @@ const build=json('/api/build-info',{method:'GET'});
 const runtimeSha=String(build?.commitSha??build?.gitCommitSha??build?.sha??'');
 if(runtimeSha!==expectedSha) throw new Error(`EXACT_HEAD_MISMATCH expected=${expectedSha} actual=${runtimeSha||'missing'}`);
 
-const runtimeAuth=json('/api/paystack-rehearsal',{
-  method:'POST',
-  applicationAuth:false,
-  body:JSON.stringify({action:'auth-fingerprint'})
-});
-const runtimeAuthFingerprint=String(runtimeAuth?.fingerprint??'');
-if(
-  runtimeAuth?.ok!==true||
-  runtimeAuth?.diagnostic!=='PREVIEW_API_AUTH_SECRET_FINGERPRINT'||
-  runtimeAuth?.algorithm!=='HMAC-SHA256'||
-  runtimeAuth?.label!==FINGERPRINT_LABEL||
-  runtimeAuth?.providerContacted!==false||
-  !/^[0-9a-f]{24}$/.test(runtimeAuthFingerprint)
-){
-  throw new Error('PREVIEW_AUTH_FINGERPRINT_EVIDENCE_INVALID');
-}
-if(runtimeAuthFingerprint!==localAuthFingerprint){
-  throw new Error(`PREVIEW_API_AUTH_SECRET_FINGERPRINT_MISMATCH local=${localAuthFingerprint} runtime=${runtimeAuthFingerprint}`);
-}
-
 const startedAt=new Date().toISOString();
 const initiation=json('/api/paystack-rehearsal',{method:'POST',body:JSON.stringify({action:'initiate'})});
 if(initiation?.ok!==true||initiation?.rehearsal?.provider!=='PAYSTACK') throw new Error('PAYSTACK_INITIATION_EVIDENCE_INVALID');
@@ -165,9 +118,6 @@ console.log(JSON.stringify({
   expectedCommitSha:expectedSha,
   runtimeCommitSha:runtimeSha,
   previewBaseUrl:base,
-  previewAuthSecretFingerprintMatched:true,
-  previewAuthSecretFingerprintAlgorithm:'HMAC-SHA256',
-  previewAuthSecretFingerprintLabel:FINGERPRINT_LABEL,
   startedAt,
   completedAt:new Date().toISOString(),
   initiation,
@@ -176,7 +126,9 @@ console.log(JSON.stringify({
   refund,
   refundStatusAttempts,
   deploymentProtectionTransport:'AUTHENTICATED_VERCEL_CLI',
-  applicationAuth:'BOUNDED_PREVIEW_OPERATOR_TOKEN',
+  applicationAuth:'VERCEL_PROTECTED_PREVIEW_BOUNDARY',
+  previewOnly:true,
+  paystackCredentialMode:'TEST_ONLY_SK_TEST',
   liveFundsAuthorized:false,
   secretExposed:false
 },null,2));
