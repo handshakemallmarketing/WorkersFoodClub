@@ -1,0 +1,40 @@
+{
+  "evidenceId": "SW1-PAYSTACK-LIVE-ACTIVATION-READINESS-START-2026-09-14",
+  "status": "READINESS_ONLY",
+  "parentBaseline": "SW1-RC3",
+  "startingMainCommit": "6b9d14f91220142654d8f2e1333a9ff69935506a",
+  "productionApplicationAccessEnabled": true,
+  "paymentProvider": {
+    "provider": "PAYSTACK",
+    "currentModeAuthorized": "TEST_ONLY",
+    "testModeProviderRehearsalProven": true,
+    "liveMerchantWebhookDeliveryProven": false
+  },
+  "authorization": {
+    "paystackLiveMode": false,
+    "liveFunds": false,
+    "livePaystackCredentialsAccessedOrProvisioned": false,
+    "genericContinuationAuthorizesLiveActivation": false
+  },
+  "requiredBeforeFutureActivation": [
+    "explicit live activation and live funds authorization",
+    "approved live credential provisioning path",
+    "exact production merchant/account binding",
+    "runtime test/live environment isolation proof",
+    "default-OFF live-payment switch and rollback proof",
+    "live merchant webhook delivery authenticity proof",
+    "live checkout/reference binding and uniqueness proof",
+    "live reconciliation and incident runbook review",
+    "sensitive-log hygiene verification",
+    "approved bounded minimal live transaction plan",
+    "post-activation adversarial falsification",
+    "automatic disablement and independent rollback proof on any unexpected result"
+  ],
+  "forbiddenUntilExplicitAuthorization": [
+    "enable Paystack live mode",
+    "authorize or move live funds",
+    "create/read/provision/synchronize/use live Paystack credentials",
+    "execute any live charge, refund, transfer, or payment-provider transaction"
+  ],
+  "currentVerdict": "CONTINUE_PAYSTACK_LIVE_READINESS_ACTIVATION_WITHHELD"
+}
