@@ -306,7 +306,6 @@ jobs:
           test -n "$response"
           echo 'Persisted project-level Production application-access switch as true after successful runtime falsification.'
 
-          rm -rf .vercel
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club >/dev/null
           python - <<'PY'
           import pathlib, re, sys
