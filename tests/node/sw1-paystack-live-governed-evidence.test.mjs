@@ -103,7 +103,7 @@ test('governed authority verifier atomically reserves exact durable authorizatio
 });
 
 test('governed authority reservation rejects missing, revoked, rebound, or incomplete evidence',()=>{
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore(undefined).reader).reserve(envelope),{valid:false});
+ assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore(null).reader).reserve(envelope),{valid:false});
  assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,status:'REVOKED',revokedAt:'2026-09-14T23:10:00Z'}).reader).reserve(envelope),{valid:false});
  assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,candidateSha:'0'.repeat(40)}).reader).reserve(envelope),{valid:false});
  assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,merchantAccountId:'merchant:other'}).reader).reserve(envelope),{valid:false});
@@ -158,7 +158,7 @@ test('independent watchdog verifier accepts exact independently enforced contain
 
 test('independent watchdog verifier rejects missing, inactive, non-independent, rebound, or malformed evidence',()=>{
  const input={candidateSha:sha,merchantAccountId:envelope.merchantAccountId,expiresAt:envelope.watchdog.expiresAt};
- assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore(undefined).reader).verify(input),{valid:false});
+ assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore(null).reader).verify(input),{valid:false});
  assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,status:'EXPIRED'}).reader).verify(input),{valid:false});
  assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,activatingRunnerIndependent:false}).reader).verify(input),{valid:false});
  assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,candidateSha:'f'.repeat(40)}).reader).verify(input),{valid:false});
