@@ -31,7 +31,8 @@ function sanitize(value=''){
 
 function json(path,init={}){
   const method=String(init.method??'GET').toUpperCase();
-  const curlArgs=['--silent','--show-error','--fail-with-body'];
+  const statusMarker='__WFC_HTTP_STATUS__:';
+  const curlArgs=['--silent','--show-error','--write-out',`\n${statusMarker}%{http_code}`];
   if(method!=='GET') curlArgs.push('--request',method);
   curlArgs.push('--header','Accept: application/json');
   if(path==='/api/paystack-rehearsal'){
@@ -55,14 +56,29 @@ function json(path,init={}){
   if(result.error){
     throw new Error(`VERCEL_CURL_EXECUTION_FAILED:${sanitize(result.error.message)}`);
   }
+  if(result.status!==0){
+    const detail=sanitize(result.stderr||result.stdout||`exit=${result.status}`);
+    throw new Error(`${path} VERCEL_CURL_EXECUTION_FAILED:${detail}`);
+  }
 
-  const text=String(result.stdout??'').trim();
+  const output=String(result.stdout??'');
+  const markerIndex=output.lastIndexOf(`\n${statusMarker}`);
+  if(markerIndex<0){
+    throw new Error(`${path} VERCEL_CURL_STATUS_MISSING:${sanitize(output)}`);
+  }
+
+  const text=output.slice(0,markerIndex).trim();
+  const statusText=output.slice(markerIndex+1+statusMarker.length).trim();
+  const status=Number.parseInt(statusText,10);
+  if(!Number.isInteger(status)){
+    throw new Error(`${path} VERCEL_CURL_STATUS_INVALID:${sanitize(statusText)}`);
+  }
+
   let body;
   try{body=JSON.parse(text);}catch{body={raw:sanitize(text)}}
 
-  if(result.status!==0){
-    const detail=sanitize(result.stderr||text||`exit=${result.status}`);
-    throw new Error(`${path} VERCEL_CURL_FAILED:${detail}`);
+  if(status<200||status>=300){
+    throw new Error(`${path} HTTP ${status}: ${sanitize(JSON.stringify(body))}`);
   }
   return body;
 }
