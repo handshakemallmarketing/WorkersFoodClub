@@ -19,12 +19,22 @@ export interface PaystackLiveAuthorizationEnvelope {
  }>;
 }
 
+export interface PaystackLiveAuthorityVerifier {
+ verify(input:PaystackLiveAuthorizationEnvelope):Readonly<{valid:true;authorizationId:string}|{valid:false}>;
+}
+
+export interface PaystackIndependentWatchdogVerifier {
+ verify(input:Readonly<{candidateSha:string;merchantAccountId:string;expiresAt:string}>):Readonly<{valid:true;watchdogId:string}|{valid:false}>;
+}
+
 export interface PaystackLiveControlSnapshot {
  readonly state:PaystackLiveControlState;
  readonly candidateSha?:string;
  readonly merchantAccountId?:string;
  readonly authorizationExpiresAt?:string;
  readonly watchdogExpiresAt?:string;
+ readonly authorizationId?:string;
+ readonly watchdogId?:string;
 }
 
 export interface PaystackReconciliationResult {
@@ -46,11 +56,16 @@ const parseTime=(value:string,error:string)=>{
 
 /**
  * Pure readiness control. It does not configure Paystack, read credentials, or move funds.
- * A future runtime integration must still separately wire the provider adapter behind this
- * control and the independently enforced watchdog described by the activation gate.
+ * Authorization and watchdog state must be verified by independent evidence providers rather
+ * than accepted as caller assertions. A future runtime integration must still separately wire
+ * the provider adapter behind this control.
  */
 export class PaystackLiveReadinessController {
  private snapshotValue:PaystackLiveControlSnapshot=Object.freeze({state:'DISABLED'});
+ constructor(
+  private readonly authorityVerifier:PaystackLiveAuthorityVerifier,
+  private readonly watchdogVerifier:PaystackIndependentWatchdogVerifier
+ ){}
 
  snapshot():PaystackLiveControlSnapshot{return this.snapshotValue;}
 
@@ -66,12 +81,18 @@ export class PaystackLiveReadinessController {
   if(authorizationExpiry<=nowMs) throw new Error('PAYSTACK_LIVE_AUTHORIZATION_EXPIRED');
   if(!input.watchdog.armed||!input.watchdog.independent) throw new Error('PAYSTACK_LIVE_INDEPENDENT_WATCHDOG_REQUIRED');
   if(watchdogExpiry<=nowMs||watchdogExpiry>authorizationExpiry) throw new Error('PAYSTACK_LIVE_WATCHDOG_WINDOW_INVALID');
+  const authority=this.authorityVerifier.verify(input);
+  if(!authority.valid||!nonBlank(authority.authorizationId)) throw new Error('PAYSTACK_LIVE_AUTHORIZATION_EVIDENCE_INVALID');
+  const watchdog=this.watchdogVerifier.verify({candidateSha:input.candidateSha,merchantAccountId:input.merchantAccountId,expiresAt:input.watchdog.expiresAt});
+  if(!watchdog.valid||!nonBlank(watchdog.watchdogId)) throw new Error('PAYSTACK_LIVE_WATCHDOG_EVIDENCE_INVALID');
   this.snapshotValue=Object.freeze({
    state:'BOUNDED_WINDOW_ARMED',
    candidateSha:input.candidateSha,
    merchantAccountId:input.merchantAccountId,
    authorizationExpiresAt:input.authorizationExpiresAt,
-   watchdogExpiresAt:input.watchdog.expiresAt
+   watchdogExpiresAt:input.watchdog.expiresAt,
+   authorizationId:authority.authorizationId,
+   watchdogId:watchdog.watchdogId
   });
   return this.snapshotValue;
  }
