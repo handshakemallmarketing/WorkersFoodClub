@@ -5,7 +5,7 @@
   "status": "REMEDIATED_PENDING_EXACT_HEAD_CONFORMANCE",
   "parentMainCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
   "branch": "sw1-rc3-release-ratification-index-advancement",
-  "source": "post-merge adversarial code review of production-facing HTTP and identity boundaries",
+  "source": "post-merge adversarial code review of production-facing HTTP, database reproducibility and identity boundaries",
   "findings": [
     {
       "id": "RC3-POSTMERGE-REFUND-RACE-001",
@@ -13,27 +13,24 @@
       "disposition": "CONFIRMED_REMEDIATED",
       "problem": "api/authorize-refund.js lacked PostgreSQL 23505 race recovery used by sibling idempotent handlers, allowing a concurrent winning write to surface as 503.",
       "remediation": "Recover unique-violation races by re-reading the winning preview_refund_remedy row and returning the governed idempotent result, while preserving request rebound rejection.",
-      "proof": [
-        "api/authorize-refund.js",
-        "tests/node/sw1-rc3-refund-durable-semantics.test.mjs"
-      ]
+      "proof": ["api/authorize-refund.js","tests/node/sw1-rc3-refund-durable-semantics.test.mjs"]
     },
     {
       "id": "RC3-POSTMERGE-SCHEMA-001",
       "severity": "P1",
       "disposition": "CONFIRMED_REMEDIATED",
       "problem": "The deployed preview runtime tables existed in Neon without a version-controlled migration, so fresh-database reproduction could not establish their constraints and foreign-key envelope.",
-      "remediation": "Introspect the existing bounded Production Neon preview schema read-only, version all seven preview runtime tables as migration 009, and execute migrations 008 and 009 in clean PostgreSQL conformance with explicit table and refund-uniqueness assertions.",
-      "proof": [
-        "packages/durability/sql/009_preview_runtime_schema.sql",
-        "scripts/test-postgres-durability.sh"
-      ],
-      "neon": {
-        "projectId": "wispy-dawn-96331519",
-        "branchId": "br-winter-poetry-ae8qho57",
-        "branchName": "production",
-        "mutationPerformed": false
-      }
+      "remediation": "Introspect the existing bounded Production Neon preview schema read-only, version all seven preview runtime tables as migration 009, and execute it in clean PostgreSQL conformance with explicit table and refund-uniqueness assertions.",
+      "proof": ["packages/durability/sql/009_preview_runtime_schema.sql","scripts/test-postgres-durability.sh"],
+      "neon": {"projectId":"wispy-dawn-96331519","branchId":"br-winter-poetry-ae8qho57","branchName":"production","mutationPerformed":false}
+    },
+    {
+      "id": "RC3-POSTMERGE-MIGRATION-HARNESS-001",
+      "severity": "P1_GOVERNANCE",
+      "disposition": "CONFIRMED_REMEDIATED",
+      "problem": "The clean PostgreSQL durability harness applied migrations only through 007 even though migration 008 already existed, so required CI did not exercise the full checked-in migration sequence.",
+      "remediation": "Advance scripts/test-postgres-durability.sh to execute migrations 008 and 009 before conformance assertions.",
+      "proof": ["scripts/test-postgres-durability.sh","packages/durability/sql/008_identity_binding_referential_integrity.sql","packages/durability/sql/009_preview_runtime_schema.sql"]
     },
     {
       "id": "RC3-POSTMERGE-SCOPE-FAMILY-001",
@@ -41,10 +38,7 @@
       "disposition": "CONFIRMED_REMEDIATED",
       "problem": "resolveApplicationPrincipal performed deep membership/authority checks only for member: and operator: scope families; an unknown future scope family could otherwise rely only on the binding scope array.",
       "remediation": "Fail closed for every unsupported scope family until that family has an explicit governed authorization contract.",
-      "proof": [
-        "lib/application-principal-binding.js",
-        "tests/node/sw1-rc3-governed-principal-binding.test.mjs"
-      ]
+      "proof": ["lib/application-principal-binding.js","tests/node/sw1-rc3-governed-principal-binding.test.mjs"]
     }
   ],
   "safetyBoundary": {
