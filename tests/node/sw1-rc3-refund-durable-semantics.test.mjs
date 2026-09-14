@@ -25,4 +25,11 @@ for (const file of files) {
     assert.doesNotMatch(source, /'operatorId',\$\{PREVIEW_OPERATOR_ID\}/);
     assert.doesNotMatch(source, /'environment','preview'/);
   });
+
+  test(`RC3 ${file.pathname.split('/').pop()} treats database uniqueness races as replayable outcomes`, async () => {
+    const source = await readFile(file, 'utf8');
+    assert.match(source, /error\?\.code==='23505'/);
+    assert.match(source, /SELECT \* FROM preview_refund_remedy WHERE obligation_id=\$\{obligationId\} OR .*request_id=\$\{requestId\} LIMIT 1/);
+    assert.match(source, /idempotent:true/);
+  });
 }
