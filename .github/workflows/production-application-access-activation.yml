@@ -21,6 +21,7 @@ jobs:
       VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
       VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
       PRODUCTION_BASE_URL: https://workers-food-club-chi.vercel.app
+      MIN_TOKEN_LIFETIME_SECONDS: '900'
       RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
       RC3_PRODUCTION_OPERATOR_TOKEN: ${{ secrets.RC3_PRODUCTION_OPERATOR_TOKEN }}
     steps:
@@ -37,12 +38,12 @@ jobs:
           echo 'Live funds remain NOT authorized.'
           echo 'Paystack live mode remains NOT authorized.'
 
-      - name: Preflight controlled Google identity subjects before any Production deploy
+      - name: Preflight controlled Google identities and token lifetime before any Production deploy
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import base64, json, os, sys
+          import base64, json, os, sys, time
           def payload(token):
               parts = token.split('.')
               if len(parts) != 3:
@@ -53,6 +54,8 @@ jobs:
               ('member', os.environ['RC3_PRODUCTION_MEMBER_TOKEN'], os.environ['EXPECTED_MEMBER_SUBJECT']),
               ('operator', os.environ['RC3_PRODUCTION_OPERATOR_TOKEN'], os.environ['EXPECTED_OPERATOR_SUBJECT']),
           ]
+          now = int(time.time())
+          minimum_lifetime = int(os.environ['MIN_TOKEN_LIFETIME_SECONDS'])
           failed = False
           for role, token, expected in checks:
               try:
@@ -64,6 +67,8 @@ jobs:
               subject = str(claims.get('sub', ''))
               issuer = str(claims.get('iss', ''))
               audience = claims.get('aud')
+              exp = claims.get('exp')
+              nbf = claims.get('nbf')
               print(f'{role} token subject: {subject}')
               print(f'{role} token issuer: {issuer}')
               if subject != expected:
@@ -75,10 +80,19 @@ jobs:
               if not audience:
                   print(f'{role} token audience missing', file=sys.stderr)
                   failed = True
+              if not isinstance(exp, int):
+                  print(f'{role} token expiration missing or invalid', file=sys.stderr)
+                  failed = True
+              elif exp - now < minimum_lifetime:
+                  print(f'{role} token has less than {minimum_lifetime} seconds remaining; refusing Production deployment', file=sys.stderr)
+                  failed = True
+              if isinstance(nbf, int) and nbf > now + 30:
+                  print(f'{role} token is not yet valid', file=sys.stderr)
+                  failed = True
           if failed:
-              print('Controlled identity preflight failed before Production deployment.', file=sys.stderr)
+              print('Controlled identity preflight failed before Production deployment. No Production state was changed.', file=sys.stderr)
               sys.exit(1)
-          print('Controlled identity subjects match the reviewed Production bindings.')
+          print('Controlled identity subjects, issuer, audience, and remaining lifetime satisfy the pre-deployment gate.')
           PY
 
       - name: Checkout activation-control evidence
@@ -150,6 +164,26 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel build --prod --token="$VERCEL_TOKEN" --scope=food-club
+
+      - name: Recheck controlled token lifetime immediately before Production deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, json, os, sys, time
+          def exp(token):
+              parts = token.split('.')
+              raw = parts[1] + '=' * (-len(parts[1]) % 4)
+              return json.loads(base64.urlsafe_b64decode(raw.encode()).decode()).get('exp')
+          now = int(time.time())
+          minimum_lifetime = int(os.environ['MIN_TOKEN_LIFETIME_SECONDS'])
+          for role, token in [('member', os.environ['RC3_PRODUCTION_MEMBER_TOKEN']), ('operator', os.environ['RC3_PRODUCTION_OPERATOR_TOKEN'])]:
+              expiry = exp(token)
+              if not isinstance(expiry, int) or expiry - now < minimum_lifetime:
+                  print(f'{role} token lifetime is insufficient immediately before deploy; refusing Production state change', file=sys.stderr)
+                  sys.exit(1)
+          print('Controlled identity token lifetime remains sufficient immediately before deploy.')
+          PY
 
       - name: Deploy authorized Production application access
         id: deploy
@@ -256,14 +290,50 @@ jobs:
 
           echo 'Production authorization boundary and no-live-economic-effect falsification passed.'
 
-      - name: Roll back immediately if post-activation falsification failed
+      - name: Persist authorized Production application access for subsequent Production deployments
+        id: persist_access
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '[{"key":"PRODUCTION_APPLICATION_ACCESS_ENABLED","value":"true","type":"plain","target":["production"],"comment":"Persistent Production application access explicitly authorized and runtime-falsified"}]')"
+          test -n "$response"
+          echo 'Persisted project-level Production application-access switch as true after successful runtime falsification.'
+
+          rm -rf .vercel
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club >/dev/null
+          python - <<'PY'
+          import pathlib, re, sys
+          path = pathlib.Path('.vercel/.env.production.local')
+          text = path.read_text(encoding='utf-8') if path.exists() else ''
+          match = re.search(r'^PRODUCTION_APPLICATION_ACCESS_ENABLED=(.*)$', text, re.MULTILINE)
+          if not match or match.group(1).strip().strip('"\'') != 'true':
+              print('Persistent Production application-access switch could not be independently re-read as true.', file=sys.stderr)
+              sys.exit(1)
+          print('Persistent Production application-access switch independently re-read as true.')
+          PY
+
+      - name: Roll back immediately if post-activation or persistence verification failed
         if: ${{ failure() && steps.deploy.outputs.url != '' }}
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          echo 'Post-activation falsification failed; restoring fail-closed Production access.' >&2
+          echo 'Post-activation falsification or persistence verification failed; restoring fail-closed Production access.' >&2
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '[{"key":"PRODUCTION_APPLICATION_ACCESS_ENABLED","value":"false","type":"plain","target":["production"],"comment":"Fail-closed rollback after Production application-access activation failure"}]' \
+            >/dev/null
           vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=food-club --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false >/tmp/rollback-url.txt
           rollback_proven=false
           last_body=''
@@ -287,12 +357,12 @@ jobs:
             echo "$last_body" >&2
             exit 1
           }
-          echo 'Fail-closed rollback re-proven on canonical Production alias.'
+          echo 'Fail-closed rollback re-proven on canonical Production alias and project-level switch persisted false.'
 
       - name: Record activation authorization envelope
         if: ${{ success() }}
         run: |
-          echo 'Production application access is enabled by governed explicit authorization.'
+          echo 'Production application access is enabled persistently by governed explicit authorization.'
           echo 'Live funds remain NOT authorized.'
           echo 'Paystack live mode remains NOT authorized.'
           echo 'No live Paystack credential creation, reading, provisioning, synchronization, or use is authorized.'
