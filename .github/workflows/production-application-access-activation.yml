@@ -50,6 +50,13 @@ jobs:
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@59.11.7
 
+      - name: Install pinned pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global pnpm@9.15.4
+          test "$(pnpm --version)" = '9.15.4'
+
       - name: Pull Production project settings
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -144,5 +151,3 @@ jobs:
           echo 'Live funds remain NOT authorized.'
           echo 'Paystack live mode remains NOT authorized.'
           echo 'No live Paystack credential creation, reading, provisioning, synchronization, or use is authorized.'
-
-# second authorized push triggers this already-present workflow
