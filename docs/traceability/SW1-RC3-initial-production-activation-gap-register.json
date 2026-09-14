@@ -11,6 +11,7 @@
   "identityConfigPreflightEvidence": "docs/traceability/SW1-RC3-production-identity-config-preflight-evidence-2026-09-12.json",
   "identityRehearsalEvidence": "docs/traceability/SW1-RC3-production-identity-rehearsal-evidence-2026-09-13.json",
   "paymentRehearsalHarnessEvidence": "docs/traceability/SW1-RC3-paystack-preview-auth-harness-evidence-2026-09-14.json",
+  "paymentOperatorReconciliationProcedure": "docs/traceability/SW1-RC3-paystack-operator-reconciliation-procedure-2026-09-14.md",
   "startingEnvelope": {
     "hosting": "Vercel production deployment exists",
     "database": "Neon PostgreSQL",
@@ -41,8 +42,8 @@
     },
     "RC3-PAY-001": {
       "severity": "P1",
-      "status": "OPEN_AUTHORIZATION_BOUNDARY",
-      "finding": "Paystack authenticity/replay semantics remain proven in test mode only. Additional bounded provider evidence is currently blocked before provider contact because the hardened Preview application rejects the GitHub Actions rehearsal token with HTTP 401 TOKEN_INVALID, after Vercel deployment protection is successfully traversed. This isolates a Preview HMAC shared-secret synchronization problem between GitHub Actions and Vercel Preview; no live credential, Production-access, or protection weakening is required to resolve it. Paystack live-mode activation and live funds remain explicitly unauthorized."
+      "status": "CLOSED_RUNTIME_PROVEN_LIVE_ACTIVATION_WITHHELD",
+      "finding": "The currently claimed payment envelope is runtime-proven in real Paystack TEST mode on exact commit ee2179d0cc45c24dc678af8900164dd45322d8f2. Workflow run 34808988687 proved GHS 1.00 initiation, provider confirmation, delayed transaction re-query, refund creation, and six successful refund-status re-queries while the refund remained nonterminal PENDING. Existing executable tests prove exact raw-body HMAC-SHA512 webhook verification, bad-signature/tamper rejection, reference binding, provider-neutral semantics, idempotency controls, and test/live credential separation. An operator reconciliation procedure now links transaction verification and refund-status query APIs. Live merchant webhook delivery remains deliberately unclaimed because Paystack live mode and live funds are unauthorized. Under the RC3 exit criteria, live activation may remain separately withheld with liveFundsAuthorized=false; any future live activation requires a distinct authorization and evidence package."
     },
     "RC3-ROLLBACK-001": {
       "severity": "P1",
@@ -75,10 +76,25 @@
     "provider retries cannot duplicate canonical effects"
   ],
   "runtimeResiduals": [],
+  "withheldCapabilities": {
+    "paystackLiveMode": {
+      "authorized": false,
+      "blockingCurrentClaim": false,
+      "futureAuthorizationRequired": true,
+      "futureEvidenceRequired": [
+        "exact production Paystack merchant/account/environment",
+        "approved live credential provisioning",
+        "live webhook delivery authenticity from the exact merchant integration",
+        "explicit live-mode enablement and kill switch",
+        "minimal-value controlled live transaction after explicit authorization",
+        "rollback verification"
+      ]
+    }
+  },
   "releaseIndexAdvanced": false,
   "verdict": {
-    "rc3": "NO_GO",
-    "productionApplicationAccess": "NO_GO",
+    "rc3": "NO_GO_PENDING_FINAL_EXACT_HEAD_CONFORMANCE_REVIEW",
+    "productionApplicationAccess": "NO_GO_PENDING_FINAL_EXACT_HEAD_CONFORMANCE_REVIEW",
     "liveFunds": "NO_GO"
   }
 }
