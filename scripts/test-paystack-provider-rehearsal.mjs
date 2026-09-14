@@ -47,7 +47,9 @@ function json(path,init={}){
   curlArgs.push('--header','Accept: application/json');
   if(path==='/api/paystack-rehearsal'){
     curlArgs.push('--header','Content-Type: application/json');
-    curlArgs.push('--header',`Authorization: Bearer ${previewOperatorToken}`);
+    if(init.applicationAuth!==false){
+      curlArgs.push('--header',`Authorization: Bearer ${previewOperatorToken}`);
+    }
   }
   if(init.body!==undefined) curlArgs.push('--data-raw',String(init.body));
 
@@ -97,12 +99,18 @@ const build=json('/api/build-info',{method:'GET'});
 const runtimeSha=String(build?.commitSha??build?.gitCommitSha??build?.sha??'');
 if(runtimeSha!==expectedSha) throw new Error(`EXACT_HEAD_MISMATCH expected=${expectedSha} actual=${runtimeSha||'missing'}`);
 
-const runtimeAuth=json('/api/preview-auth-fingerprint',{method:'GET'});
+const runtimeAuth=json('/api/paystack-rehearsal',{
+  method:'POST',
+  applicationAuth:false,
+  body:JSON.stringify({action:'auth-fingerprint'})
+});
 const runtimeAuthFingerprint=String(runtimeAuth?.fingerprint??'');
 if(
   runtimeAuth?.ok!==true||
+  runtimeAuth?.diagnostic!=='PREVIEW_API_AUTH_SECRET_FINGERPRINT'||
   runtimeAuth?.algorithm!=='HMAC-SHA256'||
   runtimeAuth?.label!==FINGERPRINT_LABEL||
+  runtimeAuth?.providerContacted!==false||
   !/^[0-9a-f]{24}$/.test(runtimeAuthFingerprint)
 ){
   throw new Error('PREVIEW_AUTH_FINGERPRINT_EVIDENCE_INVALID');
