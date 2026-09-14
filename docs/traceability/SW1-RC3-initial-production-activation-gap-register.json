@@ -1,10 +1,12 @@
 {
   "schemaVersion": "1.0",
   "slice": "SW1-RC3",
-  "status": "OPEN_NO_GO",
+  "status": "CLOSED_GO_RC3_READINESS_ACTIVATIONS_WITHHELD",
   "startingMainCommit": "eb191168ec121b6d4dfde9acbfc0db3e7b43f06e",
   "parentRelease": "SW1-RC2",
+  "reviewedCandidateCommit": "a4ddbd08430a6293b622c84db950fd224fa36caa",
   "productionApplicationAccessAuthorized": false,
+  "productionApplicationAccessCurrentlyEnabled": false,
   "liveFundsAuthorized": false,
   "baselineEvidence": "docs/traceability/SW1-RC3-production-baseline-nonpromotion-evidence-2026-09-12.json",
   "rollbackEvidence": "docs/traceability/SW1-RC3-production-rollback-rehearsal-evidence-2026-09-12.json",
@@ -12,10 +14,21 @@
   "identityRehearsalEvidence": "docs/traceability/SW1-RC3-production-identity-rehearsal-evidence-2026-09-13.json",
   "paymentRehearsalHarnessEvidence": "docs/traceability/SW1-RC3-paystack-preview-auth-harness-evidence-2026-09-14.json",
   "paymentOperatorReconciliationProcedure": "docs/traceability/SW1-RC3-paystack-operator-reconciliation-procedure-2026-09-14.md",
+  "finalReviewEvidence": "docs/traceability/SW1-RC3-final-review-2026-09-14.json",
+  "finalProductionDeployment": {
+    "deploymentId": "dpl_CuXVr8MjtDYo76RAuEspbf4DBd66",
+    "candidateCommit": "a4ddbd08430a6293b622c84db950fd224fa36caa",
+    "state": "READY",
+    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+    "productionApplicationAccessEnabled": false,
+    "liveFundsAuthorized": false,
+    "memberOrdersFailClosedStatus": 503,
+    "memberOrdersFailClosedError": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
+  },
   "startingEnvelope": {
     "hosting": "Vercel production deployment exists",
     "database": "Neon PostgreSQL",
-    "applicationAuthentication": "Production OIDC with application-owned binding and authority; current access switch must be disabled outside bounded rehearsal",
+    "applicationAuthentication": "Production OIDC with application-owned binding and authority; current access switch remains disabled until separately authorized",
     "paymentProvider": "PAYSTACK",
     "paymentMode": "test"
   },
@@ -28,7 +41,7 @@
     "RC3-BIND-001": {
       "severity": "P1",
       "status": "CLOSED_RUNTIME_PROVEN",
-      "finding": "Runtime proof confirms a verified Google subject resolves to a durable application participant with ACTIVE membership and governed member scopes; the same member identity was denied operator access with HTTP 403. A valid Google subject with no matching application binding was denied member access with HTTP 403. The final disabled-principal falsification also passed: with the same controlled Google identity, participant and membership remaining ACTIVE, changing only binding:rc3:google:member:001 from ACTIVE to DISABLED caused /api/member-orders to return HTTP 403, matching the deterministic APPLICATION_PRINCIPAL_DISABLED server branch. The binding was restored to ACTIVE immediately afterward."
+      "finding": "Runtime proof confirms a verified Google subject resolves to a durable application participant with ACTIVE membership and governed member scopes; the same member identity was denied operator access with HTTP 403. A valid Google subject with no matching application binding was denied member access with HTTP 403. A controlled disabled-binding falsification caused member access to fail closed with HTTP 403 and the binding was restored immediately afterward."
     },
     "RC3-ENV-001": {
       "severity": "P1",
@@ -43,12 +56,12 @@
     "RC3-PAY-001": {
       "severity": "P1",
       "status": "CLOSED_RUNTIME_PROVEN_LIVE_ACTIVATION_WITHHELD",
-      "finding": "The currently claimed payment envelope is runtime-proven in real Paystack TEST mode on exact commit ee2179d0cc45c24dc678af8900164dd45322d8f2. Workflow run 34808988687 proved GHS 1.00 initiation, provider confirmation, delayed transaction re-query, refund creation, and six successful refund-status re-queries while the refund remained nonterminal PENDING. Existing executable tests prove exact raw-body HMAC-SHA512 webhook verification, bad-signature/tamper rejection, reference binding, provider-neutral semantics, idempotency controls, and test/live credential separation. An operator reconciliation procedure now links transaction verification and refund-status query APIs. Live merchant webhook delivery remains deliberately unclaimed because Paystack live mode and live funds are unauthorized. Under the RC3 exit criteria, live activation may remain separately withheld with liveFundsAuthorized=false; any future live activation requires a distinct authorization and evidence package."
+      "finding": "The currently claimed payment envelope is runtime-proven in real Paystack TEST mode on commit ee2179d0cc45c24dc678af8900164dd45322d8f2. Workflow run 34808988687 proved GHS 1.00 initiation, provider confirmation, delayed transaction re-query, refund creation, and six successful refund-status re-queries while the refund remained nonterminal PENDING. Executable tests prove exact raw-body HMAC-SHA512 webhook verification, bad-signature/tamper rejection, reference binding, provider-neutral semantics, idempotency controls, and test/live credential separation. Live merchant webhook delivery remains deliberately unclaimed because Paystack live mode and live funds are unauthorized."
     },
     "RC3-ROLLBACK-001": {
       "severity": "P1",
       "status": "CLOSED_RUNTIME_PROVEN",
-      "finding": "Rollback to fail-closed Production application access is runtime-proven. After the final identity falsification, Production application access must again be returned to disabled before RC3 work is left at rest."
+      "finding": "Rollback to fail-closed Production application access is runtime-proven. Final exact-candidate Production deployment dpl_CuXVr8MjtDYo76RAuEspbf4DBd66 is READY with productionApplicationAccessEnabled=false, and the canonical member-orders route returns HTTP 503 PRODUCTION_APPLICATION_ACCESS_DISABLED."
     },
     "RC3-REHEARSAL-001": {
       "severity": "P1",
@@ -76,7 +89,15 @@
     "provider retries cannot duplicate canonical effects"
   ],
   "runtimeResiduals": [],
+  "unresolvedP0": [],
+  "unresolvedP1ForClaimedAuthorization": [],
   "withheldCapabilities": {
+    "productionApplicationAccess": {
+      "authorized": false,
+      "currentlyEnabled": false,
+      "blockingRc3ReadinessClaim": false,
+      "futureAuthorizationRequired": true
+    },
     "paystackLiveMode": {
       "authorized": false,
       "blockingCurrentClaim": false,
@@ -93,8 +114,9 @@
   },
   "releaseIndexAdvanced": false,
   "verdict": {
-    "rc3": "NO_GO_PENDING_FINAL_EXACT_HEAD_CONFORMANCE_REVIEW",
-    "productionApplicationAccess": "NO_GO_PENDING_FINAL_EXACT_HEAD_CONFORMANCE_REVIEW",
-    "liveFunds": "NO_GO"
+    "rc3": "GO_RC3_READINESS_ACTIVATIONS_WITHHELD",
+    "productionApplicationAccess": "NOT_AUTHORIZED_REMAINS_OFF_FAIL_CLOSED",
+    "liveFunds": "NO_GO_NOT_AUTHORIZED",
+    "paystackLiveMode": "NO_GO_NOT_AUTHORIZED"
   }
 }
