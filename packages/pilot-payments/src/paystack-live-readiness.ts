@@ -1,7 +1,16 @@
+import type {Money} from '../../kernel/src/index.js';
 import type {PaystackPaymentAdapter,PaystackVerification} from './paystack.js';
 
-export type PaystackLiveControlState='DISABLED'|'BOUNDED_WINDOW_ARMED'|'TRANSACTION_OUTCOME_UNRESOLVED'|'CONTAINMENT_UNPROVEN';
+export type PaystackLiveSwitchState='OFF'|'ARMED'|'TRANSACTION_CLAIMED';
+export type PaystackLiveIncidentState='NONE'|'TRANSACTION_OUTCOME_UNRESOLVED'|'CONTAINMENT_UNPROVEN';
 export type PaystackReconciliationState='RESOLVED_CONFIRMED'|'RESOLVED_FAILED'|'RESOLVED_REVERSED'|'LIVE_TRANSACTION_OUTCOME_UNRESOLVED';
+
+export interface PaystackApprovedLiveTransaction {
+ readonly reference:string;
+ readonly actorId:string;
+ readonly amountMinor:string;
+ readonly currency:'GHS';
+}
 
 export interface PaystackLiveAuthorizationEnvelope {
  readonly action:'EnablePaystackLiveBoundedTransaction';
@@ -12,6 +21,7 @@ export interface PaystackLiveAuthorizationEnvelope {
  readonly authorizationExpiresAt:string;
  readonly liveFundsAuthorized:boolean;
  readonly paystackLiveModeAuthorized:boolean;
+ readonly approvedTransaction:PaystackApprovedLiveTransaction;
  readonly watchdog:Readonly<{
   armed:boolean;
   independent:boolean;
@@ -28,13 +38,25 @@ export interface PaystackIndependentWatchdogVerifier {
 }
 
 export interface PaystackLiveControlSnapshot {
- readonly state:PaystackLiveControlState;
+ readonly switchState:PaystackLiveSwitchState;
+ readonly incidentState:PaystackLiveIncidentState;
  readonly candidateSha?:string;
  readonly merchantAccountId?:string;
  readonly authorizationExpiresAt?:string;
  readonly watchdogExpiresAt?:string;
  readonly authorizationId?:string;
  readonly watchdogId?:string;
+ readonly approvedTransaction?:PaystackApprovedLiveTransaction;
+}
+
+export interface PaystackCanonicalPaymentEvidence {
+ readonly providerReference:string;
+ readonly status:'CONFIRMED'|'FAILED'|'REVERSED';
+ readonly amount:Money;
+}
+
+export interface PaystackCanonicalEvidenceReader {
+ getByProviderReference(reference:string):PaystackCanonicalPaymentEvidence|undefined|Promise<PaystackCanonicalPaymentEvidence|undefined>;
 }
 
 export interface PaystackReconciliationResult {
@@ -44,6 +66,7 @@ export interface PaystackReconciliationResult {
  readonly retryAllowed:false;
  readonly verification?:PaystackVerification;
  readonly lastProviderError?:string;
+ readonly lastCanonicalIssue?:string;
 }
 
 const nonBlank=(value:string)=>typeof value==='string'&&value.trim().length>0;
@@ -53,6 +76,13 @@ const parseTime=(value:string,error:string)=>{
  if(!nonBlank(value)||Number.isNaN(parsed)) throw new Error(error);
  return parsed;
 };
+const parseMinor=(value:string)=>{
+ if(!/^\d+$/.test(value)) throw new Error('PAYSTACK_LIVE_APPROVED_AMOUNT_INVALID');
+ const parsed=BigInt(value);
+ if(parsed<=0n) throw new Error('PAYSTACK_LIVE_APPROVED_AMOUNT_INVALID');
+ return parsed;
+};
+const sameMoney=(a:Money,b:Money)=>a.currency===b.currency&&a.minor===b.minor;
 
 /**
  * Pure readiness control. It does not configure Paystack, read credentials, or move funds.
@@ -61,21 +91,41 @@ const parseTime=(value:string,error:string)=>{
  * the provider adapter behind this control.
  */
 export class PaystackLiveReadinessController {
- private snapshotValue:PaystackLiveControlSnapshot=Object.freeze({state:'DISABLED'});
+ private snapshotValue:PaystackLiveControlSnapshot=Object.freeze({switchState:'OFF',incidentState:'NONE'});
  constructor(
   private readonly authorityVerifier:PaystackLiveAuthorityVerifier,
-  private readonly watchdogVerifier:PaystackIndependentWatchdogVerifier
+  private readonly watchdogVerifier:PaystackIndependentWatchdogVerifier,
+  private readonly clock:()=>string
  ){}
 
- snapshot():PaystackLiveControlSnapshot{return this.snapshotValue;}
+ private refreshExpiry():void{
+  const current=this.snapshotValue;
+  if(current.switchState==='OFF') return;
+  const nowMs=parseTime(this.clock(),'PAYSTACK_LIVE_CONTROL_TIME_INVALID');
+  const authExpiry=parseTime(current.authorizationExpiresAt??'','PAYSTACK_LIVE_AUTHORIZATION_EXPIRY_INVALID');
+  const watchdogExpiry=parseTime(current.watchdogExpiresAt??'','PAYSTACK_LIVE_WATCHDOG_EXPIRY_INVALID');
+  if(nowMs>=authExpiry||nowMs>=watchdogExpiry){
+   this.snapshotValue=Object.freeze({...current,switchState:'OFF'});
+  }
+ }
 
- arm(input:PaystackLiveAuthorizationEnvelope,now:string):PaystackLiveControlSnapshot{
-  const nowMs=parseTime(now,'PAYSTACK_LIVE_CONTROL_TIME_INVALID');
+ snapshot():PaystackLiveControlSnapshot{
+  this.refreshExpiry();
+  return this.snapshotValue;
+ }
+
+ arm(input:PaystackLiveAuthorizationEnvelope):PaystackLiveControlSnapshot{
+  this.refreshExpiry();
+  const nowMs=parseTime(this.clock(),'PAYSTACK_LIVE_CONTROL_TIME_INVALID');
+  if(this.snapshotValue.incidentState!=='NONE') throw new Error('PAYSTACK_LIVE_INCIDENT_UNRESOLVED');
+  if(this.snapshotValue.switchState!=='OFF') throw new Error('PAYSTACK_LIVE_CONTROL_ALREADY_ARMED');
   if(input.action!=='EnablePaystackLiveBoundedTransaction') throw new Error('PAYSTACK_LIVE_ACTION_NOT_AUTHORIZED');
   if(input.environment!=='production') throw new Error('PAYSTACK_LIVE_ENVIRONMENT_INVALID');
   if(!input.liveFundsAuthorized||!input.paystackLiveModeAuthorized) throw new Error('PAYSTACK_LIVE_AUTHORIZATION_INCOMPLETE');
   if(!validSha(input.candidateSha)||input.runtimeSha!==input.candidateSha) throw new Error('PAYSTACK_LIVE_RUNTIME_SHA_MISMATCH');
   if(!nonBlank(input.merchantAccountId)) throw new Error('PAYSTACK_LIVE_MERCHANT_BINDING_REQUIRED');
+  if(!nonBlank(input.approvedTransaction.reference)||!nonBlank(input.approvedTransaction.actorId)) throw new Error('PAYSTACK_LIVE_TRANSACTION_BINDING_REQUIRED');
+  parseMinor(input.approvedTransaction.amountMinor);
   const authorizationExpiry=parseTime(input.authorizationExpiresAt,'PAYSTACK_LIVE_AUTHORIZATION_EXPIRY_INVALID');
   const watchdogExpiry=parseTime(input.watchdog.expiresAt,'PAYSTACK_LIVE_WATCHDOG_EXPIRY_INVALID');
   if(authorizationExpiry<=nowMs) throw new Error('PAYSTACK_LIVE_AUTHORIZATION_EXPIRED');
@@ -86,68 +136,105 @@ export class PaystackLiveReadinessController {
   const watchdog=this.watchdogVerifier.verify({candidateSha:input.candidateSha,merchantAccountId:input.merchantAccountId,expiresAt:input.watchdog.expiresAt});
   if(!watchdog.valid||!nonBlank(watchdog.watchdogId)) throw new Error('PAYSTACK_LIVE_WATCHDOG_EVIDENCE_INVALID');
   this.snapshotValue=Object.freeze({
-   state:'BOUNDED_WINDOW_ARMED',
+   switchState:'ARMED',
+   incidentState:'NONE',
    candidateSha:input.candidateSha,
    merchantAccountId:input.merchantAccountId,
    authorizationExpiresAt:input.authorizationExpiresAt,
    watchdogExpiresAt:input.watchdog.expiresAt,
    authorizationId:authority.authorizationId,
-   watchdogId:watchdog.watchdogId
+   watchdogId:watchdog.watchdogId,
+   approvedTransaction:Object.freeze({...input.approvedTransaction})
   });
   return this.snapshotValue;
  }
 
- assertBoundedTransactionAllowed(input:{candidateSha:string;merchantAccountId:string;reference:string;now:string}):void{
-  const nowMs=parseTime(input.now,'PAYSTACK_LIVE_CONTROL_TIME_INVALID');
+ claimBoundedTransaction(input:{candidateSha:string;merchantAccountId:string;reference:string;actorId:string;amountMinor:string;currency:'GHS'}):PaystackLiveControlSnapshot{
+  this.refreshExpiry();
   const current=this.snapshotValue;
-  if(current.state!=='BOUNDED_WINDOW_ARMED') throw new Error('PAYSTACK_LIVE_CONTROL_DISABLED');
+  if(current.incidentState!=='NONE') throw new Error('PAYSTACK_LIVE_INCIDENT_UNRESOLVED');
+  if(current.switchState!=='ARMED') throw new Error(current.switchState==='TRANSACTION_CLAIMED'?'PAYSTACK_LIVE_TRANSACTION_ALREADY_CLAIMED':'PAYSTACK_LIVE_CONTROL_DISABLED');
   if(current.candidateSha!==input.candidateSha) throw new Error('PAYSTACK_LIVE_CANDIDATE_REBOUND');
   if(current.merchantAccountId!==input.merchantAccountId) throw new Error('PAYSTACK_LIVE_MERCHANT_REBOUND');
-  if(!nonBlank(input.reference)) throw new Error('PAYSTACK_LIVE_REFERENCE_REQUIRED');
-  const authExpiry=parseTime(current.authorizationExpiresAt??'','PAYSTACK_LIVE_AUTHORIZATION_EXPIRY_INVALID');
-  const watchdogExpiry=parseTime(current.watchdogExpiresAt??'','PAYSTACK_LIVE_WATCHDOG_EXPIRY_INVALID');
-  if(nowMs>=authExpiry||nowMs>=watchdogExpiry){
-   this.snapshotValue=Object.freeze({state:'DISABLED'});
-   throw new Error('PAYSTACK_LIVE_CONTROL_WINDOW_EXPIRED');
-  }
+  const approved=current.approvedTransaction;
+  if(!approved) throw new Error('PAYSTACK_LIVE_TRANSACTION_BINDING_REQUIRED');
+  if(approved.reference!==input.reference||approved.actorId!==input.actorId||approved.amountMinor!==input.amountMinor||approved.currency!==input.currency) throw new Error('PAYSTACK_LIVE_TRANSACTION_REBOUND');
+  parseMinor(input.amountMinor);
+  this.snapshotValue=Object.freeze({...current,switchState:'TRANSACTION_CLAIMED'});
+  return this.snapshotValue;
  }
 
  markTransactionOutcomeUnresolved():PaystackLiveControlSnapshot{
-  this.snapshotValue=Object.freeze({state:'TRANSACTION_OUTCOME_UNRESOLVED'});
+  const current=this.snapshot();
+  if(current.incidentState!=='CONTAINMENT_UNPROVEN') this.snapshotValue=Object.freeze({...current,incidentState:'TRANSACTION_OUTCOME_UNRESOLVED'});
   return this.snapshotValue;
  }
 
  markContainmentUnproven():PaystackLiveControlSnapshot{
-  this.snapshotValue=Object.freeze({state:'CONTAINMENT_UNPROVEN'});
+  const current=this.snapshot();
+  this.snapshotValue=Object.freeze({...current,incidentState:'CONTAINMENT_UNPROVEN'});
   return this.snapshotValue;
  }
 
  disable():PaystackLiveControlSnapshot{
-  this.snapshotValue=Object.freeze({state:'DISABLED'});
+  const current=this.snapshot();
+  this.snapshotValue=Object.freeze({...current,switchState:'OFF'});
   return this.snapshotValue;
  }
 }
 
+const withTimeout=async<T>(promise:Promise<T>,timeoutMs:number):Promise<T>=>{
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ try{
+  return await Promise.race([
+   promise,
+   new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('PAYSTACK_RECONCILIATION_ATTEMPT_TIMEOUT')),timeoutMs);})
+  ]);
+ }finally{
+  if(timer!==undefined) clearTimeout(timer);
+ }
+};
+
+const canonicalIssue=(reference:string,verification:PaystackVerification,canonical:PaystackCanonicalPaymentEvidence|undefined):string|undefined=>{
+ if(!canonical) return 'CANONICAL_PAYMENT_EVIDENCE_MISSING';
+ if(canonical.providerReference!==reference) return 'CANONICAL_PROVIDER_REFERENCE_MISMATCH';
+ if(!sameMoney(canonical.amount,verification.amount)) return 'CANONICAL_PAYMENT_AMOUNT_MISMATCH';
+ if(canonical.status!==verification.state) return 'CANONICAL_PAYMENT_STATUS_MISMATCH';
+ return undefined;
+};
+
 /**
  * Bounded exact-reference reconciliation for ambiguous provider outcomes.
- * The result always forbids blind retry. A caller must resolve the exact reference first.
+ * Terminal provider evidence resolves the incident only when canonical application evidence
+ * agrees on reference, amount and terminal state. Blind replacement charges remain forbidden.
  */
 export class PaystackExactReferenceReconciler {
- constructor(private readonly adapter:Pick<PaystackPaymentAdapter,'verifyPayment'>){}
+ constructor(
+  private readonly adapter:Pick<PaystackPaymentAdapter,'verifyPayment'>,
+  private readonly canonicalReader:PaystackCanonicalEvidenceReader
+ ){}
 
- async reconcile(reference:string,maxAttempts=3):Promise<PaystackReconciliationResult>{
+ async reconcile(reference:string,maxAttempts=3,attemptTimeoutMs=5_000):Promise<PaystackReconciliationResult>{
   if(!nonBlank(reference)) throw new Error('PAYSTACK_REFERENCE_REQUIRED');
   if(!Number.isSafeInteger(maxAttempts)||maxAttempts<1||maxAttempts>10) throw new Error('PAYSTACK_RECONCILIATION_ATTEMPTS_INVALID');
+  if(!Number.isSafeInteger(attemptTimeoutMs)||attemptTimeoutMs<1||attemptTimeoutMs>60_000) throw new Error('PAYSTACK_RECONCILIATION_TIMEOUT_INVALID');
   let lastVerification:PaystackVerification|undefined;
   let lastProviderError:string|undefined;
+  let lastCanonicalIssue:string|undefined;
   for(let attempt=1;attempt<=maxAttempts;attempt++){
    try{
-    const verification=await this.adapter.verifyPayment(reference);
+    const verification=await withTimeout(this.adapter.verifyPayment(reference),attemptTimeoutMs);
     lastVerification=verification;
     if(verification.providerReference!==reference) throw new Error('PAYSTACK_VERIFY_REFERENCE_MISMATCH');
-    if(verification.state==='CONFIRMED') return Object.freeze({state:'RESOLVED_CONFIRMED',reference,attempts:attempt,retryAllowed:false,verification});
-    if(verification.state==='FAILED') return Object.freeze({state:'RESOLVED_FAILED',reference,attempts:attempt,retryAllowed:false,verification});
-    if(verification.state==='REVERSED') return Object.freeze({state:'RESOLVED_REVERSED',reference,attempts:attempt,retryAllowed:false,verification});
+    if(verification.state==='CONFIRMED'||verification.state==='FAILED'||verification.state==='REVERSED'){
+     let canonical:PaystackCanonicalPaymentEvidence|undefined;
+     try{canonical=await withTimeout(Promise.resolve(this.canonicalReader.getByProviderReference(reference)),attemptTimeoutMs);}
+     catch(error){lastCanonicalIssue=error instanceof Error?error.message:'CANONICAL_PAYMENT_EVIDENCE_READ_FAILED';continue;}
+     const issue=canonicalIssue(reference,verification,canonical);
+     if(issue){lastCanonicalIssue=issue;continue;}
+     const state=verification.state==='CONFIRMED'?'RESOLVED_CONFIRMED':verification.state==='FAILED'?'RESOLVED_FAILED':'RESOLVED_REVERSED';
+     return Object.freeze({state,reference,attempts:attempt,retryAllowed:false,verification});
+    }
    }catch(error){
     const message=error instanceof Error?error.message:'PAYSTACK_PROVIDER_REQUEST_FAILED';
     if(message==='PAYSTACK_VERIFY_REFERENCE_MISMATCH') throw error;
@@ -160,7 +247,8 @@ export class PaystackExactReferenceReconciler {
    attempts:maxAttempts,
    retryAllowed:false,
    ...(lastVerification?{verification:lastVerification}:{}),
-   ...(lastProviderError?{lastProviderError}:{})
+   ...(lastProviderError?{lastProviderError}:{}),
+   ...(lastCanonicalIssue?{lastCanonicalIssue}:{})
   });
  }
 }
