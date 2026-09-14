@@ -1,56 +1,48 @@
 {
   "schemaVersion": "1.0",
-  "asOf": "2026-09-14T06:01:46Z",
+  "asOf": "2026-09-14",
   "repository": "handshakemallmarketing/WorkersFoodClub",
   "mainCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
-  "rc3": {
-    "pullRequest": 52,
-    "merged": true,
-    "mergeCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
-    "verdict": "GO_RC3_READINESS_ACTIVATIONS_WITHHELD",
-    "finalReview": "docs/traceability/SW1-RC3-final-review-2026-09-14.json",
-    "specification": "docs/sw1/SW1-RC3-production-identity-live-provider-activation-falsification.md"
+  "rc3Merged": true,
+  "postMergeConformance": {"runId":34811478516,"runNumber":1522,"result":"SUCCESS"},
+  "production": {
+    "vercelProjectId": "prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE",
+    "deploymentId": "dpl_4FWSxkHj7B6xjB5yXBRxAZnUKSKB",
+    "deploymentCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
+    "state": "READY",
+    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+    "applicationAccessAuthorized": false,
+    "memberOrdersExpectedStatus": 503,
+    "memberOrdersExpectedError": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
   },
-  "postMergeVerification": {
-    "github": {
-      "mainAtMergeCommit": true,
-      "constitutionalConformance": {
-        "runId": 34811478516,
-        "runNumber": 1522,
-        "headSha": "fba4bdcca19146ebea12e0e56517c912a49d3699",
-        "conclusion": "SUCCESS"
-      }
-    },
-    "vercel": {
-      "projectId": "prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE",
-      "productionDeploymentId": "dpl_4FWSxkHj7B6xjB5yXBRxAZnUKSKB",
-      "deploymentCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
-      "state": "READY",
-      "canonicalAlias": "https://workers-food-club-chi.vercel.app",
-      "memberOrdersStatus": 503,
-      "memberOrdersError": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
-    },
-    "neon": {
-      "projectId": "wispy-dawn-96331519",
-      "projectName": "Food Club",
-      "branchId": "br-winter-poetry-ae8qho57",
-      "branchName": "production",
-      "branchState": "ready",
-      "default": true
-    }
+  "neon": {
+    "projectId": "wispy-dawn-96331519",
+    "projectName": "Food Club",
+    "branchId": "br-winter-poetry-ae8qho57",
+    "branchName": "production",
+    "default": true,
+    "state": "ready"
   },
-  "safetyPosture": {
-    "productionApplicationAccessEnabled": false,
-    "productionApplicationAccess": "OFF_FAIL_CLOSED",
+  "payments": {
     "liveFundsAuthorized": false,
     "paystackLiveModeAuthorized": false,
-    "livePaystackCredentialsAccessedOrProvisionedInThisStep": false
+    "liveCredentialsAccessedByThisGate": false
   },
-  "releaseGovernance": {
-    "currentReleaseIndexHead": "SW1-RC2",
-    "rc3ReleaseEvidenceIndexed": false,
-    "releaseIndexAdvanceAuthorizedByRC3FinalReview": false,
-    "nextGovernedStep": "SW1-RC3_RELEASE_RATIFICATION_AND_INDEX_ADVANCEMENT_GATE",
-    "indexMutatedByThisStatusStep": false
-  }
+  "releaseIndex": {
+    "currentCanonicalHead": "SW1-RC2",
+    "rc3ReleaseEvidencePresent": false,
+    "advancementStatus": "WITHHELD_PENDING_RATIFICATION_GATE"
+  },
+  "postMergeReview": {
+    "status": "REMEDIATED_PENDING_EXACT_HEAD_CONFORMANCE",
+    "evidence": "docs/traceability/SW1-RC3-post-merge-review-remediation-2026-09-14.json",
+    "closedFindings": [
+      "RC3-POSTMERGE-REFUND-RACE-001",
+      "RC3-POSTMERGE-SCHEMA-001",
+      "RC3-POSTMERGE-MIGRATION-HARNESS-001",
+      "RC3-POSTMERGE-SCOPE-FAMILY-001"
+    ],
+    "releaseIndexAdvanced": false
+  },
+  "nextGovernedStep": "Complete exact-head conformance of the remediated RC3 ratification candidate; only then create SW1-RC3 release evidence and synchronize release-index plus matrix."
 }
