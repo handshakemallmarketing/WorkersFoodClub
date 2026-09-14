@@ -1,0 +1,49 @@
+{
+  "evidenceId": "SW1-PRODUCTION-APPLICATION-ACCESS-ACTIVATION-START-2026-09-14",
+  "status": "PRE_AUTHORIZATION_READINESS",
+  "parentBaseline": "SW1-RC3",
+  "startingMainCommit": "5bb24c8ab7ae4af8febc97fd7a1109991731125f",
+  "postMergeVerification": {
+    "constitutionalConformance": {
+      "runNumber": 1584,
+      "runId": 34829783606,
+      "conclusion": "success",
+      "headSha": "5bb24c8ab7ae4af8febc97fd7a1109991731125f"
+    },
+    "vercel": {
+      "commitStatus": "success",
+      "canonicalAlias": "https://workers-food-club-chi.vercel.app"
+    },
+    "productionFailClosed": {
+      "path": "/api/member-orders",
+      "httpStatus": 503,
+      "error": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
+    },
+    "releaseIndexHead": "SW1-RC3"
+  },
+  "authorization": {
+    "productionApplicationAccess": false,
+    "liveFunds": false,
+    "paystackLiveMode": false,
+    "livePaystackCredentialsAccessedOrProvisioned": false
+  },
+  "interpretationRule": {
+    "genericContinuationAuthorizesEnablement": false,
+    "explicitProductionAccessAuthorizationRequired": true
+  },
+  "permittedPreAuthorizationWork": [
+    "readiness inspection",
+    "falsification tests",
+    "rollback rehearsal while access remains disabled",
+    "activation runbook preparation",
+    "machine-readable evidence preparation"
+  ],
+  "forbiddenWithoutExplicitAuthorization": [
+    "set PRODUCTION_APPLICATION_ACCESS_ENABLED=true persistently",
+    "create a persistent Production deployment with application access enabled",
+    "enable Paystack live mode",
+    "authorize live funds",
+    "create/read/provision/use live Paystack credentials"
+  ],
+  "currentVerdict": "CONTINUE_READINESS_ACCESS_REMAINS_OFF"
+}
