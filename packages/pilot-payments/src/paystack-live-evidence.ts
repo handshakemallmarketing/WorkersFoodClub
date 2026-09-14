@@ -6,6 +6,8 @@ import type {
  PaystackLiveAuthorityVerifier
 } from './paystack-live-readiness.js';
 
+export type Awaitable<T>=T|Promise<T>;
+
 export interface PaystackGovernedAuthorizationEvidence {
  readonly authorizationId:string;
  readonly action:'EnablePaystackLiveBoundedTransaction';
@@ -24,8 +26,8 @@ export interface PaystackGovernedAuthorizationEvidence {
 }
 
 export interface PaystackGovernedAuthorizationEvidenceReader {
- reserveActiveAuthorization(input:PaystackLiveAuthorizationEnvelope):PaystackGovernedAuthorizationEvidence|undefined;
- claimReservedAuthorization(input:PaystackLiveAuthorityClaimInput):PaystackGovernedAuthorizationEvidence|undefined;
+ reserveActiveAuthorization(input:PaystackLiveAuthorizationEnvelope):Awaitable<PaystackGovernedAuthorizationEvidence|undefined>;
+ claimReservedAuthorization(input:PaystackLiveAuthorityClaimInput):Awaitable<PaystackGovernedAuthorizationEvidence|undefined>;
 }
 
 export interface PaystackIndependentWatchdogEvidence {
@@ -40,8 +42,14 @@ export interface PaystackIndependentWatchdogEvidence {
  readonly evidenceSource:string;
 }
 
+export interface PaystackWatchdogEvidenceLookup {
+ readonly candidateSha:string;
+ readonly merchantAccountId:string;
+ readonly expiresAt:string;
+}
+
 export interface PaystackIndependentWatchdogEvidenceReader {
- getWatchdogEvidence():PaystackIndependentWatchdogEvidence|undefined;
+ getWatchdogEvidence(input:PaystackWatchdogEvidenceLookup):Awaitable<PaystackIndependentWatchdogEvidence|undefined>;
 }
 
 const nonBlank=(value:string|undefined|null):value is string=>typeof value==='string'&&value.trim().length>0;
@@ -76,14 +84,14 @@ const evidenceMatchesClaim=(evidence:PaystackGovernedAuthorizationEvidence,input
 /**
  * The reader is responsible for atomic durable state transitions:
  * ACTIVE -> RESERVED during reserveActiveAuthorization(), and RESERVED -> CLAIMED during
- * claimReservedAuthorization(). This prevents concurrent controllers or process restarts from
- * reusing one governed authorization for more than one live transaction.
+ * claimReservedAuthorization(). Awaitability is deliberate: a production PostgreSQL reader
+ * must complete the durable transition before authority can be accepted.
  */
 export class GovernedPaystackLiveAuthorityVerifier implements PaystackLiveAuthorityVerifier {
  constructor(private readonly reader:PaystackGovernedAuthorizationEvidenceReader){}
 
- reserve(input:PaystackLiveAuthorizationEnvelope):Readonly<{valid:true;authorizationId:string;reservationId:string}|{valid:false}>{
-  const evidence=this.reader.reserveActiveAuthorization(input);
+ async reserve(input:PaystackLiveAuthorizationEnvelope):Promise<Readonly<{valid:true;authorizationId:string;reservationId:string}|{valid:false}>>{
+  const evidence=await this.reader.reserveActiveAuthorization(input);
   if(!evidence) return Object.freeze({valid:false});
   if(evidence.status!=='RESERVED'||evidence.revokedAt) return Object.freeze({valid:false});
   if(!nonBlank(evidence.authorizationId)||!nonBlank(evidence.reservationId)||!nonBlank(evidence.authorizedBy)||!nonBlank(evidence.authorizationBasis)) return Object.freeze({valid:false});
@@ -91,8 +99,8 @@ export class GovernedPaystackLiveAuthorityVerifier implements PaystackLiveAuthor
   return Object.freeze({valid:true,authorizationId:evidence.authorizationId,reservationId:evidence.reservationId});
  }
 
- claim(input:PaystackLiveAuthorityClaimInput):Readonly<{valid:true}|{valid:false}>{
-  const evidence=this.reader.claimReservedAuthorization(input);
+ async claim(input:PaystackLiveAuthorityClaimInput):Promise<Readonly<{valid:true}|{valid:false}>>{
+  const evidence=await this.reader.claimReservedAuthorization(input);
   if(!evidence) return Object.freeze({valid:false});
   if(evidence.status!=='CLAIMED'||evidence.revokedAt) return Object.freeze({valid:false});
   if(!nonBlank(evidence.authorizationId)||!nonBlank(evidence.reservationId)||!nonBlank(evidence.authorizedBy)||!nonBlank(evidence.authorizationBasis)) return Object.freeze({valid:false});
@@ -104,13 +112,14 @@ export class GovernedPaystackLiveAuthorityVerifier implements PaystackLiveAuthor
 /**
  * Verifies that the watchdog claim is backed by current independent containment evidence.
  * The controller invokes this both before durable authorization reservation and immediately
- * before the bounded transaction claim/execution boundary.
+ * before the bounded transaction claim/execution boundary. The lookup is exact and awaitable,
+ * so a stale in-process cache cannot substitute for current durable watchdog evidence.
  */
 export class GovernedPaystackIndependentWatchdogVerifier implements PaystackIndependentWatchdogVerifier {
  constructor(private readonly reader:PaystackIndependentWatchdogEvidenceReader){}
 
- verify(input:Readonly<{candidateSha:string;merchantAccountId:string;expiresAt:string}>):Readonly<{valid:true;watchdogId:string}|{valid:false}>{
-  const evidence=this.reader.getWatchdogEvidence();
+ async verify(input:PaystackWatchdogEvidenceLookup):Promise<Readonly<{valid:true;watchdogId:string}|{valid:false}>>{
+  const evidence=await this.reader.getWatchdogEvidence(input);
   if(!evidence) return Object.freeze({valid:false});
   if(evidence.status!=='ARMED') return Object.freeze({valid:false});
   if(!nonBlank(evidence.watchdogId)||!nonBlank(evidence.evidenceSource)) return Object.freeze({valid:false});
