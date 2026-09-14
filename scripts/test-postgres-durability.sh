@@ -11,6 +11,13 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/005_member_communications.sql
 "${PSQL[@]}" -f packages/durability/sql/006_application_identity_binding.sql
 "${PSQL[@]}" -f packages/durability/sql/007_application_authority_membership.sql
+"${PSQL[@]}" -f packages/durability/sql/008_identity_binding_referential_integrity.sql
+"${PSQL[@]}" -f packages/durability/sql/009_preview_runtime_schema.sql
+
+preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
+[[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
+refund_unique_constraints=$("${PSQL[@]}" -Atc "SELECT count(*) FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='preview_refund_remedy' AND con.contype='u' AND con.conname IN ('preview_refund_remedy_source_exception_id_key','preview_refund_remedy_authorize_request_id_key','preview_refund_remedy_authorize_command_id_key','preview_refund_remedy_authorize_event_id_key','preview_refund_remedy_complete_request_id_key','preview_refund_remedy_complete_command_id_key','preview_refund_remedy_completion_event_id_key','preview_refund_remedy_provider_reference_key')")
+[[ "$refund_unique_constraints" == "8" ]] || { echo "preview refund idempotency constraints are incomplete" >&2; exit 1; }
 
 "${PSQL[@]}" <<'SQL'
 TRUNCATE application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
@@ -154,4 +161,4 @@ fi
 claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
 [[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
 
-echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage and communications proof passed"
+echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema and communications proof passed"
