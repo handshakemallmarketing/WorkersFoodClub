@@ -1,0 +1,36 @@
+{
+  "evidenceId": "SW1-PRODUCTION-APPLICATION-ACCESS-ACTIVATION-2026-09-14",
+  "status": "ACTIVATED_AND_FALSIFIED",
+  "parentBaseline": "SW1-RC3",
+  "startingMainCommit": "5bb24c8ab7ae4af8febc97fd7a1109991731125f",
+  "activationCandidate": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
+  "activationGateHead": "82c0e8ce72bcf071e3f2af8b37b20c5010020503",
+  "activationEvidence": {
+    "workflowRunId": 34901468240,
+    "jobId": 104168168026,
+    "conclusion": "success",
+    "productionDeployment": "https://workers-food-club-l2nar0o29-food-club.vercel.app",
+    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+    "canonicalActivationObserved": true,
+    "authorizationBoundaryFalsification": {
+      "unauthenticatedMemberRoute": {"httpStatus": 401, "result": "PASS"},
+      "governedMemberRoute": {"httpStatus": 200, "result": "PASS"},
+      "memberToOperatorEscalation": {"httpStatus": 403, "result": "PASS"},
+      "governedOperatorRoute": {"httpStatus": 200, "result": "PASS"}
+    },
+    "rollback": "SKIPPED_SUCCESS_PATH"
+  },
+  "authorization": {
+    "productionApplicationAccess": true,
+    "liveFunds": false,
+    "paystackLiveMode": false,
+    "livePaystackCredentialsAccessedOrProvisioned": false
+  },
+  "scopeBoundary": {
+    "productionApplicationAccessOnly": true,
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "livePaystackCredentialOperationsAuthorized": false
+  },
+  "currentVerdict": "GO_PRODUCTION_APPLICATION_ACCESS_ENABLED_LIVE_FUNDS_WITHHELD"
+}

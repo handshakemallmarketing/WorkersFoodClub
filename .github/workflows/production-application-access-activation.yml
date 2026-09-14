@@ -1,0 +1,218 @@
+name: Production application access activation
+
+on:
+  push:
+    branches:
+      - sw1-production-application-access-activation-gate
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    if: "${{ github.event.head_commit.message == 'AUTHORIZED: enable Production application access' }}"
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ACTIVATION_SHA: '81ca013cc8f6706bc4aeee6669345ff1fb7b3755'
+      EXPECTED_MEMBER_SUBJECT: '105166970902157294779'
+      EXPECTED_OPERATOR_SUBJECT: '100561209688774684064'
+      VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
+      VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
+      PRODUCTION_BASE_URL: https://workers-food-club-chi.vercel.app
+      RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
+      RC3_PRODUCTION_OPERATOR_TOKEN: ${{ secrets.RC3_PRODUCTION_OPERATOR_TOKEN }}
+    steps:
+      - name: Require authorized deployment and controlled identity credentials
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo 'VERCEL_TOKEN missing; refusing Production activation.' >&2; exit 1; }
+          test -n "${RC3_PRODUCTION_MEMBER_TOKEN:-}" || { echo 'RC3_PRODUCTION_MEMBER_TOKEN missing; refusing Production activation.' >&2; exit 1; }
+          test -n "${RC3_PRODUCTION_OPERATOR_TOKEN:-}" || { echo 'RC3_PRODUCTION_OPERATOR_TOKEN missing; refusing Production activation.' >&2; exit 1; }
+          echo 'Explicit Production application access authorization recorded.'
+          echo 'Live funds remain NOT authorized.'
+          echo 'Paystack live mode remains NOT authorized.'
+
+      - name: Preflight controlled Google identity subjects before any Production deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, json, os, sys
+          def payload(token):
+              parts = token.split('.')
+              if len(parts) != 3:
+                  raise ValueError('JWT_SHAPE_INVALID')
+              raw = parts[1] + '=' * (-len(parts[1]) % 4)
+              return json.loads(base64.urlsafe_b64decode(raw.encode()).decode())
+          checks = [
+              ('member', os.environ['RC3_PRODUCTION_MEMBER_TOKEN'], os.environ['EXPECTED_MEMBER_SUBJECT']),
+              ('operator', os.environ['RC3_PRODUCTION_OPERATOR_TOKEN'], os.environ['EXPECTED_OPERATOR_SUBJECT']),
+          ]
+          failed = False
+          for role, token, expected in checks:
+              try:
+                  claims = payload(token)
+              except Exception as exc:
+                  print(f'{role} token preflight decode failed: {exc}', file=sys.stderr)
+                  failed = True
+                  continue
+              subject = str(claims.get('sub', ''))
+              issuer = str(claims.get('iss', ''))
+              audience = claims.get('aud')
+              print(f'{role} token subject: {subject}')
+              print(f'{role} token issuer: {issuer}')
+              if subject != expected:
+                  print(f'{role} token subject mismatch: expected {expected}, got {subject}', file=sys.stderr)
+                  failed = True
+              if issuer != 'https://accounts.google.com':
+                  print(f'{role} token issuer mismatch: {issuer}', file=sys.stderr)
+                  failed = True
+              if not audience:
+                  print(f'{role} token audience missing', file=sys.stderr)
+                  failed = True
+          if failed:
+              print('Controlled identity preflight failed before Production deployment.', file=sys.stderr)
+              sys.exit(1)
+          print('Controlled identity subjects match the reviewed Production bindings.')
+          PY
+
+      - name: Checkout immutable green activation candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ACTIVATION_SHA }}
+          fetch-depth: 1
+
+      - name: Verify immutable activation candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$ACTIVATION_SHA"
+          echo "Production access activation candidate: $actual"
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.11.7
+
+      - name: Install pinned pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global pnpm@9.15.4
+          test "$(pnpm --version)" = '9.15.4'
+
+      - name: Pull Production project settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club
+
+      - name: Build immutable candidate with Production semantics
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=food-club
+
+      - name: Deploy authorized Production application access
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=food-club --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Authorized Production deployment: $url"
+          echo "Canonical Production alias under test: $PRODUCTION_BASE_URL"
+
+      - name: Falsify Production authorization boundaries after activation
+        id: falsify
+        shell: bash
+        env:
+          BASE_URL: ${{ env.PRODUCTION_BASE_URL }}
+        run: |
+          set -euo pipefail
+          call() {
+            local token="$1" path="$2"
+            if [ -n "$token" ]; then
+              curl --silent --show-error --write-out $'\n%{http_code}' --header 'accept: application/json' --header "authorization: Bearer ${token}" "${BASE_URL}${path}" || true
+            else
+              curl --silent --show-error --write-out $'\n%{http_code}' --header 'accept: application/json' "${BASE_URL}${path}" || true
+            fi
+          }
+          assert_status() {
+            local name="$1" expected="$2" response="$3"
+            local status="${response##*$'\n'}"
+            local body="${response%$'\n'*}"
+            test "$status" = "$expected" || { echo "$name expected HTTP $expected, got $status" >&2; echo "$body" >&2; exit 1; }
+            echo "$name: HTTP $status"
+          }
+          wait_for_canonical_activation() {
+            local response status body
+            for attempt in $(seq 1 30); do
+              response="$(call '' '/api/member-orders')"
+              status="${response##*$'\n'}"
+              body="${response%$'\n'*}"
+              if [ "$status" = '401' ]; then
+                echo "Canonical Production activation observed after attempt $attempt."
+                return 0
+              fi
+              echo "Waiting for canonical Production activation propagation (attempt $attempt/30): HTTP $status"
+              sleep 2
+            done
+            echo 'Canonical Production alias did not converge to enabled state within 60 seconds.' >&2
+            echo "$body" >&2
+            return 1
+          }
+          wait_for_canonical_activation
+          unauth_member="$(call '' '/api/member-orders')"
+          assert_status 'unauthenticated member route denied' '401' "$unauth_member"
+          member_orders="$(call "$RC3_PRODUCTION_MEMBER_TOKEN" '/api/member-orders')"
+          assert_status 'governed member route authorized' '200' "$member_orders"
+          member_operator="$(call "$RC3_PRODUCTION_MEMBER_TOKEN" '/api/operator-orders')"
+          assert_status 'member-to-operator escalation denied' '403' "$member_operator"
+          operator_orders="$(call "$RC3_PRODUCTION_OPERATOR_TOKEN" '/api/operator-orders')"
+          assert_status 'governed operator route authorized' '200' "$operator_orders"
+          echo 'Production authorization boundary falsification passed.'
+
+      - name: Roll back immediately if post-activation falsification failed
+        if: ${{ failure() && steps.deploy.outputs.url != '' }}
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo 'Post-activation falsification failed; restoring fail-closed Production access.' >&2
+          vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=food-club --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false >/tmp/rollback-url.txt
+          rollback_proven=false
+          last_body=''
+          last_status=''
+          for attempt in $(seq 1 30); do
+            response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
+            status="${response##*$'\n'}"
+            body="${response%$'\n'*}"
+            last_status="$status"
+            last_body="$body"
+            if [ "$status" = '503' ] && echo "$body" | grep -q 'PRODUCTION_APPLICATION_ACCESS_DISABLED'; then
+              rollback_proven=true
+              echo "Fail-closed rollback observed after attempt $attempt."
+              break
+            fi
+            echo "Waiting for canonical fail-closed rollback propagation (attempt $attempt/30): HTTP $status"
+            sleep 2
+          done
+          test "$rollback_proven" = 'true' || {
+            echo "Fail-closed rollback was not re-proven within 60 seconds; last HTTP status: $last_status" >&2
+            echo "$last_body" >&2
+            exit 1
+          }
+          echo 'Fail-closed rollback re-proven on canonical Production alias.'
+
+      - name: Record activation authorization envelope
+        if: ${{ success() }}
+        run: |
+          echo 'Production application access is enabled by explicit authorization.'
+          echo 'Live funds remain NOT authorized.'
+          echo 'Paystack live mode remains NOT authorized.'
+          echo 'No live Paystack credential creation, reading, provisioning, synchronization, or use is authorized.'
