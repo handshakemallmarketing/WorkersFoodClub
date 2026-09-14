@@ -1,63 +1,78 @@
 # SW1-RC3 — Release Ratification & Index Advancement Gate
 
-Status: IN_PROGRESS
-Parent canonical release head: `SW1-RC2`
-RC3 merged implementation commit: `fba4bdcca19146ebea12e0e56517c912a49d3699`
-RC3 final readiness verdict: `GO_RC3_READINESS_ACTIVATIONS_WITHHELD`
+Status: IN_PROGRESS_REMEDIATION_AND_EXACT_HEAD_CONFORMANCE
+Parent release: `SW1-RC2`
+Merged RC3 main commit: `fba4bdcca19146ebea12e0e56517c912a49d3699`
+RC3 readiness verdict: `GO_RC3_READINESS_ACTIVATIONS_WITHHELD`
 
 ## Purpose
 
-This gate is the separate governance step required after the RC3 readiness review and merge. It decides whether the bounded RC3 evidence may become the new canonical release-index head. It does not repeat RC3 falsification and it does not authorize Production application access, Paystack live mode, live funds, or live credential provisioning.
+This is the separate governance step required after RC3 readiness and merge. It exists to decide whether the bounded SW1-RC3 evidence baseline may become the canonical release-index head. It is not a Production-access activation and it is not a live-payment activation.
 
-## Preconditions
+## Non-negotiable boundaries
 
-All of the following must remain true on the exact candidate used for ratification:
-
-1. `main` contains RC3 merge commit `fba4bdcca19146ebea12e0e56517c912a49d3699`.
-2. Mandatory post-merge constitutional conformance is green on that commit.
-3. The Vercel Production deployment for that commit is `READY`.
-4. The canonical Production alias remains fail-closed: `/api/member-orders` returns HTTP 503 `PRODUCTION_APPLICATION_ACCESS_DISABLED`.
-5. Neon Production remains reachable/ready without schema mutation being required for ratification.
-6. No unresolved P0 or P1 finding exists for the bounded RC3 authorization actually claimed.
-7. No live Paystack secret is created, read, provisioned, or used by this gate.
-8. Live funds and Paystack live mode remain unauthorized.
-
-## Ratification artifacts
-
-The gate will add `evidence/releases/SW1-RC3.json` only after the exact-head ratification checks are green. That release record must preserve the RC3 limitations verbatim in substance, including:
-
+- `PRODUCTION_APPLICATION_ACCESS_ENABLED` remains false unless separately authorized.
 - Production application access remains OFF/fail-closed.
 - Live funds remain unauthorized.
 - Paystack live mode remains unauthorized.
-- Live merchant webhook authenticity remains unproven.
-- The TEST refund observation remained `PENDING`; refund completion is not claimed.
+- Live Paystack credentials must not be created, read, provisioned, synchronized, or used in this gate.
+- Live merchant webhook authenticity remains a future live-activation requirement.
+- Ratifying SW1-RC3 as an evidence baseline does not authorize persistent Production access or live economic effect.
 
-After the release record exists, `docs/traceability/release-index.json` may advance from `SW1-RC2` to `SW1-RC3`, and `docs/traceability/matrix.json` must advance its `slice` to the same value so `scripts/check-traceability.mjs` remains internally consistent.
+## Verified post-merge baseline
 
-## Required exact-head checks before advancement
+- `main` is the RC3 merge commit `fba4bdcca19146ebea12e0e56517c912a49d3699`.
+- Post-merge constitutional conformance #1522 succeeded on that exact merge commit.
+- Vercel Production deployment `dpl_4FWSxkHj7B6xjB5yXBRxAZnUKSKB` is READY from that exact merge commit.
+- Canonical alias is `https://workers-food-club-chi.vercel.app`.
+- `/api/member-orders` returns HTTP 503 `PRODUCTION_APPLICATION_ACCESS_DISABLED`.
+- Neon project `Food Club`, branch `production` (`br-winter-poetry-ae8qho57`), is the current default/primary database branch.
+- The canonical release index still has `head=SW1-RC2`, as required because the RC3 review explicitly withheld index-advance authority.
 
-- constitutional-conformance: SUCCESS
-- release evidence references the correct merged RC3 implementation and final-review artifacts
-- release index evidence list has no duplicates and exactly matches `evidence/releases/*.json`
-- traceability matrix slice equals release-index head
-- no safety-boundary mutation is introduced
-- Vercel Production still fails closed on the canonical member route
+## Post-merge adversarial review remediation
 
-## Authorization boundary
+A focused review of the production-facing HTTP, database-reproducibility and identity seams found concrete issues that must be closed before ratification:
 
-Passing this gate authorizes only canonical evidence-baseline advancement to `SW1-RC3`.
+1. `RC3-POSTMERGE-REFUND-RACE-001` — `api/authorize-refund.js` lacked `23505` uniqueness-race recovery. Remediated with winning-row reread/idempotent success semantics and regression proof.
+2. `RC3-POSTMERGE-SCHEMA-001` — the seven deployed `preview_*` runtime tables were not reproducible from version-controlled migrations. Remediated by read-only Neon schema reconciliation and migration `009_preview_runtime_schema.sql`.
+3. `RC3-POSTMERGE-MIGRATION-HARNESS-001` — clean PostgreSQL conformance executed only through migration 007 even though 008 existed. Remediated by executing 008 and 009 and asserting preview table/refund uniqueness structure.
+4. `RC3-POSTMERGE-SCOPE-FAMILY-001` — unsupported future scope families could rely on flat binding scopes without a family-specific deep authority check. Remediated by explicit fail-closed `AUTHORIZATION_SCOPE_FAMILY_UNSUPPORTED` behavior plus regression test.
 
-It does **not** authorize:
+Machine-readable evidence: `docs/traceability/SW1-RC3-post-merge-review-remediation-2026-09-14.json`.
 
-- setting `PRODUCTION_APPLICATION_ACCESS_ENABLED=true`;
-- persistent Production member/operator access;
-- Paystack live credentials;
-- Paystack live mode;
-- live member funds;
-- a controlled live transaction.
+## Ratification preconditions
 
-Any such activation remains a separate deliberate authorization with its own evidence package.
+Before release-index advancement, all of the following must be true on the exact ratification candidate head:
 
-## Current observed state
+1. constitutional conformance succeeds;
+2. fresh PostgreSQL migration execution succeeds through `009_preview_runtime_schema.sql`;
+3. refund race/idempotency regression proof succeeds;
+4. unsupported scope families fail closed;
+5. Vercel exact-head deployment boundary checks succeed;
+6. Production canonical route remains fail-closed;
+7. no live-funds or Paystack-live authorization has been introduced;
+8. no unresolved P0/P1 finding remains for the bounded non-live-funds RC3 baseline.
 
-Post-merge status is recorded in `docs/traceability/SW1-RC3-post-merge-work-status-2026-09-14.json`. The release index has intentionally not been changed by the gate-definition step.
+## Authorized advancement when green
+
+Only after all preconditions pass, this gate may:
+
+- create `evidence/releases/SW1-RC3.json` describing the bounded ratified release;
+- advance `docs/traceability/release-index.json` from `SW1-RC2` to `SW1-RC3`;
+- advance `docs/traceability/matrix.json` slice to `SW1-RC3` and extend only evidence mappings actually supported by RC3/post-merge proof;
+- rerun exact-head constitutional conformance;
+- verify Production remains OFF/fail-closed after the index-advancement commit.
+
+The release evidence must explicitly preserve:
+
+- Production application access: NOT AUTHORIZED / OFF;
+- live funds: NOT AUTHORIZED;
+- Paystack live mode: NOT AUTHORIZED;
+- live merchant webhook authenticity: NOT PROVEN;
+- test-mode refund completion: NOT CLAIMED where the observed provider refund remained PENDING.
+
+## Exit
+
+A green exit is `GO_SW1_RC3_RELEASE_BASELINE_RATIFIED_ACTIVATIONS_WITHHELD`.
+
+That verdict advances constitutional evidence bookkeeping only. It creates no authority to enable Production application access, use live Paystack credentials, or move live member funds.
