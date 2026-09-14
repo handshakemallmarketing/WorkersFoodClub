@@ -3,22 +3,22 @@
   "status": "GO_SW1_RC3_RELEASE_BASELINE_RATIFIED_ACTIVATIONS_WITHHELD",
   "parentRelease": "SW1-RC2",
   "mergedRc3Commit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
-  "validatedRatificationCommit": "461ee1bb34f9c264d3936d3503fc7560cce62911",
+  "validatedRatificationCommit": "88522392829285f80152bcc50b1fecb32b1fa838",
   "reviewArtifact": "docs/traceability/SW1-RC3-final-review-2026-09-14.json",
   "postMergeRemediationArtifact": "docs/traceability/SW1-RC3-post-merge-review-remediation-2026-09-14.json",
   "contract": "docs/sw1/SW1-RC3-production-identity-live-provider-activation-falsification.md",
   "ratificationContract": "docs/sw1/SW1-RC3-release-ratification-and-index-advancement-gate.md",
   "constitutionalConformance": {
-    "runNumber": 1555,
-    "runId": 34814799060,
+    "runNumber": 1561,
+    "runId": 34815017131,
     "result": "SUCCESS"
   },
   "deployedRuntime": {
     "productionMergeDeploymentId": "dpl_4FWSxkHj7B6xjB5yXBRxAZnUKSKB",
     "productionMergeCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
     "productionResult": "READY",
-    "ratificationPreviewDeploymentId": "dpl_4DyGEpgWEf6hZ3pckPm33jyKWggV",
-    "ratificationPreviewCommit": "461ee1bb34f9c264d3936d3503fc7560cce62911",
+    "ratificationPreviewDeploymentId": "dpl_F7RSZTZDnsDYoGsi4ZyYrzjL5CaB",
+    "ratificationPreviewCommit": "88522392829285f80152bcc50b1fecb32b1fa838",
     "ratificationPreviewResult": "READY",
     "canonicalProductionAlias": "https://workers-food-club-chi.vercel.app"
   },
