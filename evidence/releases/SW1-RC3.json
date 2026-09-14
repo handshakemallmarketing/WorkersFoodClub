@@ -1,0 +1,71 @@
+{
+  "slice": "SW1-RC3",
+  "status": "GO_SW1_RC3_RELEASE_BASELINE_RATIFIED_ACTIVATIONS_WITHHELD",
+  "parentRelease": "SW1-RC2",
+  "mergedRc3Commit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
+  "validatedRatificationCommit": "8ed53660fcd4455b3f37225d3970e91a668c853f",
+  "reviewArtifact": "docs/traceability/SW1-RC3-final-review-2026-09-14.json",
+  "postMergeRemediationArtifact": "docs/traceability/SW1-RC3-post-merge-review-remediation-2026-09-14.json",
+  "contract": "docs/sw1/SW1-RC3-production-identity-live-provider-activation-falsification.md",
+  "ratificationContract": "docs/sw1/SW1-RC3-release-ratification-and-index-advancement-gate.md",
+  "constitutionalConformance": {
+    "runNumber": 1563,
+    "runId": 34815186938,
+    "result": "SUCCESS"
+  },
+  "deployedRuntime": {
+    "productionMergeDeploymentId": "dpl_4FWSxkHj7B6xjB5yXBRxAZnUKSKB",
+    "productionMergeCommit": "fba4bdcca19146ebea12e0e56517c912a49d3699",
+    "productionResult": "READY",
+    "ratificationPreviewCommit": "8ed53660fcd4455b3f37225d3970e91a668c853f",
+    "ratificationPreviewResult": "READY",
+    "canonicalProductionAlias": "https://workers-food-club-chi.vercel.app"
+  },
+  "database": {
+    "provider": "Neon PostgreSQL",
+    "projectId": "wispy-dawn-96331519",
+    "branchId": "br-winter-poetry-ae8qho57",
+    "branchName": "production",
+    "postMergeSchemaInspectionMutationPerformed": false,
+    "freshMigrationConformanceThrough": "009_preview_runtime_schema.sql"
+  },
+  "closedPostMergeFindings": [
+    "RC3-POSTMERGE-REFUND-RACE-001",
+    "RC3-POSTMERGE-SCHEMA-001",
+    "RC3-POSTMERGE-MIGRATION-HARNESS-001",
+    "RC3-POSTMERGE-SCOPE-FAMILY-001"
+  ],
+  "unresolvedP0P1FindingsForRatifiedEnvelope": [],
+  "productionApplicationAccessAuthorized": false,
+  "productionApplicationAccessState": "OFF_FAIL_CLOSED",
+  "productionFailClosedProof": {
+    "route": "/api/member-orders",
+    "status": 503,
+    "error": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
+  },
+  "paymentProvider": {
+    "provider": "PAYSTACK",
+    "ratifiedMode": "TEST_ONLY",
+    "liveModeAuthorized": false,
+    "liveFundsAuthorized": false,
+    "liveCredentialsAccessedByRatification": false,
+    "liveMerchantWebhookDeliveryAuthenticityProven": false,
+    "testRefundCanonicalCompletionClaimed": false
+  },
+  "authorizes": "advancement of the canonical evidence baseline from SW1-RC2 to the bounded SW1-RC3 production-readiness baseline while all Production-access and live-payment activations remain separately withheld",
+  "doesNotAuthorize": [
+    "persistent Production application access",
+    "Paystack live mode",
+    "live member funds",
+    "creation, reading, provisioning or use of live Paystack credentials",
+    "a claim that the observed Paystack TEST refund completed",
+    "a claim that live Paystack merchant webhook delivery authenticity has been proven"
+  ],
+  "limitations": [
+    "The ratified SW1-RC3 baseline is a readiness/evidence baseline, not an activation authorization.",
+    "Production application access remains OFF and fail-closed pending a separate deliberate authorization.",
+    "Live funds and Paystack live mode remain NO_GO until separately authorized and proven.",
+    "The observed Paystack TEST refund remained PENDING during the bounded provider rehearsal; canonical completion is not claimed.",
+    "Live Paystack merchant webhook delivery authenticity remains a future live-activation requirement."
+  ]
+}

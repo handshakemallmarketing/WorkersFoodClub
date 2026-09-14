@@ -48,5 +48,17 @@ export default async function handler(req,res){
    SELECT r.* FROM remedy r JOIN cmd ON true JOIN ev ON ev.event_id=r.authorize_event_id`;
   if(!rows[0])return res.status(409).json({ok:false,error:'NO_REFUNDABLE_EXCEPTION'});
   return res.status(201).json({ok:true,remedy:serialize(rows[0],false)});
- }catch(error){console.error('Refund authorization failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'REFUND_AUTHORIZATION_FAILED'});}
+ }catch(error){
+  if(error?.code==='23505'){
+   try{
+    const {neon}=await import('@neondatabase/serverless');const sql=neon(connectionString);
+    const prior=await sql`SELECT * FROM preview_refund_remedy WHERE obligation_id=${obligationId} OR authorize_request_id=${requestId} LIMIT 1`;
+    if(prior[0]){
+     if(String(prior[0].obligation_id)!==obligationId)return res.status(409).json({ok:false,error:'REFUND_AUTH_REQUEST_REBOUND'});
+     return res.status(200).json({ok:true,remedy:serialize(prior[0],true)});
+    }
+   }catch{}
+  }
+  console.error('Refund authorization failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'REFUND_AUTHORIZATION_FAILED'});
+ }
 }
