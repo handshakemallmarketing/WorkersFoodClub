@@ -1,0 +1,38 @@
+{
+  "evidenceId": "SW1-PAYSTACK-LIVE-GOVERNED-EVIDENCE-VERIFIERS-2026-09-14",
+  "parentGate": "SW1-PAYSTACK-LIVE-ACTIVATION-READINESS",
+  "startingMainCommit": "dded810ee37a38c61afab0f647b701b3fac57805",
+  "scope": "NON_LIVE_GOVERNED_EVIDENCE_VERIFIERS_ONLY",
+  "implemented": {
+    "durableAuthorizationEvidenceReaderContract": true,
+    "governedAuthorizationEvidenceVerification": true,
+    "revocationFailClosed": true,
+    "exactCandidateBinding": true,
+    "exactMerchantBinding": true,
+    "exactAuthorizationExpiryBinding": true,
+    "exactApprovedTransactionBinding": ["reference", "actorId", "amountMinor", "currency"],
+    "callerEnvelopeNotAuthority": true,
+    "independentWatchdogEvidenceReaderContract": true,
+    "watchdogMustBeArmed": true,
+    "watchdogMustBeActivatingRunnerIndependent": true,
+    "watchdogContainmentActionMustDisableLive": true,
+    "watchdogCandidateMerchantExpiryBinding": true
+  },
+  "notImplementedInThisSlice": [
+    "production durable authorization evidence store adapter",
+    "production independently deployed watchdog service",
+    "production merchant/account identity evidence acquisition",
+    "runtime live/test adapter isolation proof",
+    "live credential provisioning",
+    "live provider transaction",
+    "live webhook delivery proof"
+  ],
+  "authorization": {
+    "productionApplicationAccess": true,
+    "paystackLiveMode": false,
+    "liveFunds": false,
+    "livePaystackCredentialsAccessedOrProvisioned": false,
+    "liveProviderTransactionExecuted": false
+  },
+  "currentVerdict": "CONTINUE_PAYSTACK_LIVE_READINESS_ACTIVATION_WITHHELD"
+}
