@@ -1,49 +1,36 @@
 {
-  "evidenceId": "SW1-PRODUCTION-APPLICATION-ACCESS-ACTIVATION-START-2026-09-14",
-  "status": "PRE_AUTHORIZATION_READINESS",
+  "evidenceId": "SW1-PRODUCTION-APPLICATION-ACCESS-ACTIVATION-2026-09-14",
+  "status": "ACTIVATED_AND_FALSIFIED",
   "parentBaseline": "SW1-RC3",
   "startingMainCommit": "5bb24c8ab7ae4af8febc97fd7a1109991731125f",
-  "postMergeVerification": {
-    "constitutionalConformance": {
-      "runNumber": 1584,
-      "runId": 34829783606,
-      "conclusion": "success",
-      "headSha": "5bb24c8ab7ae4af8febc97fd7a1109991731125f"
+  "activationCandidate": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
+  "activationGateHead": "82c0e8ce72bcf071e3f2af8b37b20c5010020503",
+  "activationEvidence": {
+    "workflowRunId": 34901468240,
+    "jobId": 104168168026,
+    "conclusion": "success",
+    "productionDeployment": "https://workers-food-club-l2nar0o29-food-club.vercel.app",
+    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+    "canonicalActivationObserved": true,
+    "authorizationBoundaryFalsification": {
+      "unauthenticatedMemberRoute": {"httpStatus": 401, "result": "PASS"},
+      "governedMemberRoute": {"httpStatus": 200, "result": "PASS"},
+      "memberToOperatorEscalation": {"httpStatus": 403, "result": "PASS"},
+      "governedOperatorRoute": {"httpStatus": 200, "result": "PASS"}
     },
-    "vercel": {
-      "commitStatus": "success",
-      "canonicalAlias": "https://workers-food-club-chi.vercel.app"
-    },
-    "productionFailClosed": {
-      "path": "/api/member-orders",
-      "httpStatus": 503,
-      "error": "PRODUCTION_APPLICATION_ACCESS_DISABLED"
-    },
-    "releaseIndexHead": "SW1-RC3"
+    "rollback": "SKIPPED_SUCCESS_PATH"
   },
   "authorization": {
-    "productionApplicationAccess": false,
+    "productionApplicationAccess": true,
     "liveFunds": false,
     "paystackLiveMode": false,
     "livePaystackCredentialsAccessedOrProvisioned": false
   },
-  "interpretationRule": {
-    "genericContinuationAuthorizesEnablement": false,
-    "explicitProductionAccessAuthorizationRequired": true
+  "scopeBoundary": {
+    "productionApplicationAccessOnly": true,
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "livePaystackCredentialOperationsAuthorized": false
   },
-  "permittedPreAuthorizationWork": [
-    "readiness inspection",
-    "falsification tests",
-    "rollback rehearsal while access remains disabled",
-    "activation runbook preparation",
-    "machine-readable evidence preparation"
-  ],
-  "forbiddenWithoutExplicitAuthorization": [
-    "set PRODUCTION_APPLICATION_ACCESS_ENABLED=true persistently",
-    "create a persistent Production deployment with application access enabled",
-    "enable Paystack live mode",
-    "authorize live funds",
-    "create/read/provision/use live Paystack credentials"
-  ],
-  "currentVerdict": "CONTINUE_READINESS_ACCESS_REMAINS_OFF"
+  "currentVerdict": "GO_PRODUCTION_APPLICATION_ACCESS_ENABLED_LIVE_FUNDS_WITHHELD"
 }
