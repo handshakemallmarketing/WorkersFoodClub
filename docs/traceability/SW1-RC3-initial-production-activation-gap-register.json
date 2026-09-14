@@ -10,6 +10,7 @@
   "rollbackEvidence": "docs/traceability/SW1-RC3-production-rollback-rehearsal-evidence-2026-09-12.json",
   "identityConfigPreflightEvidence": "docs/traceability/SW1-RC3-production-identity-config-preflight-evidence-2026-09-12.json",
   "identityRehearsalEvidence": "docs/traceability/SW1-RC3-production-identity-rehearsal-evidence-2026-09-13.json",
+  "paymentRehearsalHarnessEvidence": "docs/traceability/SW1-RC3-paystack-preview-auth-harness-evidence-2026-09-14.json",
   "startingEnvelope": {
     "hosting": "Vercel production deployment exists",
     "database": "Neon PostgreSQL",
@@ -41,7 +42,7 @@
     "RC3-PAY-001": {
       "severity": "P1",
       "status": "OPEN_AUTHORIZATION_BOUNDARY",
-      "finding": "Paystack authenticity/replay semantics remain proven in test mode only. Paystack live-mode activation and live funds remain explicitly unauthorized and were not exercised during RC3 identity rehearsal."
+      "finding": "Paystack authenticity/replay semantics remain proven in test mode only. Additional bounded provider evidence is currently blocked before provider contact because the hardened Preview application rejects the GitHub Actions rehearsal token with HTTP 401 TOKEN_INVALID, after Vercel deployment protection is successfully traversed. This isolates a Preview HMAC shared-secret synchronization problem between GitHub Actions and Vercel Preview; no live credential, Production-access, or protection weakening is required to resolve it. Paystack live-mode activation and live funds remain explicitly unauthorized."
     },
     "RC3-ROLLBACK-001": {
       "severity": "P1",
