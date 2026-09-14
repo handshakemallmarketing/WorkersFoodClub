@@ -1,5 +1,6 @@
 import type {
  PaystackApprovedLiveTransaction,
+ PaystackLiveAuthorityClaimInput,
  PaystackIndependentWatchdogVerifier,
  PaystackLiveAuthorizationEnvelope,
  PaystackLiveAuthorityVerifier
@@ -9,8 +10,9 @@ export interface PaystackGovernedAuthorizationEvidence {
  readonly authorizationId:string;
  readonly action:'EnablePaystackLiveBoundedTransaction';
  readonly environment:'production';
- readonly status:'ACTIVE'|'REVOKED';
+ readonly status:'ACTIVE'|'RESERVED'|'CLAIMED'|'REVOKED';
  readonly revokedAt?:string|null;
+ readonly reservationId?:string|null;
  readonly candidateSha:string;
  readonly merchantAccountId:string;
  readonly authorizationExpiresAt:string;
@@ -22,7 +24,8 @@ export interface PaystackGovernedAuthorizationEvidence {
 }
 
 export interface PaystackGovernedAuthorizationEvidenceReader {
- getActiveAuthorization():PaystackGovernedAuthorizationEvidence|undefined;
+ reserveActiveAuthorization(input:PaystackLiveAuthorizationEnvelope):PaystackGovernedAuthorizationEvidence|undefined;
+ claimReservedAuthorization(input:PaystackLiveAuthorityClaimInput):PaystackGovernedAuthorizationEvidence|undefined;
 }
 
 export interface PaystackIndependentWatchdogEvidence {
@@ -48,32 +51,60 @@ const sameTransaction=(a:PaystackApprovedLiveTransaction,b:PaystackApprovedLiveT
  a.amountMinor===b.amountMinor&&
  a.currency===b.currency;
 
+const evidenceMatchesEnvelope=(evidence:PaystackGovernedAuthorizationEvidence,input:PaystackLiveAuthorizationEnvelope)=>
+ evidence.action===input.action&&
+ evidence.environment===input.environment&&
+ evidence.candidateSha===input.candidateSha&&
+ input.runtimeSha===input.candidateSha&&
+ evidence.merchantAccountId===input.merchantAccountId&&
+ evidence.authorizationExpiresAt===input.authorizationExpiresAt&&
+ evidence.liveFundsAuthorized===true&&
+ evidence.paystackLiveModeAuthorized===true&&
+ input.liveFundsAuthorized===true&&
+ input.paystackLiveModeAuthorized===true&&
+ sameTransaction(evidence.approvedTransaction,input.approvedTransaction);
+
+const evidenceMatchesClaim=(evidence:PaystackGovernedAuthorizationEvidence,input:PaystackLiveAuthorityClaimInput)=>
+ evidence.authorizationId===input.authorizationId&&
+ evidence.reservationId===input.reservationId&&
+ evidence.candidateSha===input.candidateSha&&
+ input.runtimeSha===input.candidateSha&&
+ evidence.merchantAccountId===input.merchantAccountId&&
+ evidence.authorizationExpiresAt===input.authorizationExpiresAt&&
+ sameTransaction(evidence.approvedTransaction,input.approvedTransaction);
+
 /**
- * Verifies a live-transaction authorization against durable governed evidence supplied by an
- * independent evidence reader. The envelope itself is never treated as authority.
+ * The reader is responsible for atomic durable state transitions:
+ * ACTIVE -> RESERVED during reserveActiveAuthorization(), and RESERVED -> CLAIMED during
+ * claimReservedAuthorization(). This prevents concurrent controllers or process restarts from
+ * reusing one governed authorization for more than one live transaction.
  */
 export class GovernedPaystackLiveAuthorityVerifier implements PaystackLiveAuthorityVerifier {
  constructor(private readonly reader:PaystackGovernedAuthorizationEvidenceReader){}
 
- verify(input:PaystackLiveAuthorizationEnvelope):Readonly<{valid:true;authorizationId:string}|{valid:false}>{
-  const evidence=this.reader.getActiveAuthorization();
+ reserve(input:PaystackLiveAuthorizationEnvelope):Readonly<{valid:true;authorizationId:string;reservationId:string}|{valid:false}>{
+  const evidence=this.reader.reserveActiveAuthorization(input);
   if(!evidence) return Object.freeze({valid:false});
-  if(evidence.status!=='ACTIVE'||evidence.revokedAt) return Object.freeze({valid:false});
-  if(!nonBlank(evidence.authorizationId)||!nonBlank(evidence.authorizedBy)||!nonBlank(evidence.authorizationBasis)) return Object.freeze({valid:false});
-  if(evidence.action!==input.action||evidence.environment!==input.environment) return Object.freeze({valid:false});
-  if(evidence.candidateSha!==input.candidateSha||input.runtimeSha!==input.candidateSha) return Object.freeze({valid:false});
-  if(evidence.merchantAccountId!==input.merchantAccountId) return Object.freeze({valid:false});
-  if(evidence.authorizationExpiresAt!==input.authorizationExpiresAt) return Object.freeze({valid:false});
-  if(!evidence.liveFundsAuthorized||!evidence.paystackLiveModeAuthorized) return Object.freeze({valid:false});
-  if(!input.liveFundsAuthorized||!input.paystackLiveModeAuthorized) return Object.freeze({valid:false});
-  if(!sameTransaction(evidence.approvedTransaction,input.approvedTransaction)) return Object.freeze({valid:false});
-  return Object.freeze({valid:true,authorizationId:evidence.authorizationId});
+  if(evidence.status!=='RESERVED'||evidence.revokedAt) return Object.freeze({valid:false});
+  if(!nonBlank(evidence.authorizationId)||!nonBlank(evidence.reservationId)||!nonBlank(evidence.authorizedBy)||!nonBlank(evidence.authorizationBasis)) return Object.freeze({valid:false});
+  if(!evidenceMatchesEnvelope(evidence,input)) return Object.freeze({valid:false});
+  return Object.freeze({valid:true,authorizationId:evidence.authorizationId,reservationId:evidence.reservationId});
+ }
+
+ claim(input:PaystackLiveAuthorityClaimInput):Readonly<{valid:true}|{valid:false}>{
+  const evidence=this.reader.claimReservedAuthorization(input);
+  if(!evidence) return Object.freeze({valid:false});
+  if(evidence.status!=='CLAIMED'||evidence.revokedAt) return Object.freeze({valid:false});
+  if(!nonBlank(evidence.authorizationId)||!nonBlank(evidence.reservationId)||!nonBlank(evidence.authorizedBy)||!nonBlank(evidence.authorizationBasis)) return Object.freeze({valid:false});
+  if(!evidenceMatchesClaim(evidence,input)) return Object.freeze({valid:false});
+  return Object.freeze({valid:true});
  }
 }
 
 /**
- * Verifies that the watchdog claim is backed by independent containment evidence. Caller flags
- * such as `armed=true` or `independent=true` are insufficient without this record.
+ * Verifies that the watchdog claim is backed by current independent containment evidence.
+ * The controller invokes this both before durable authorization reservation and immediately
+ * before the bounded transaction claim/execution boundary.
  */
 export class GovernedPaystackIndependentWatchdogVerifier implements PaystackIndependentWatchdogVerifier {
  constructor(private readonly reader:PaystackIndependentWatchdogEvidenceReader){}
