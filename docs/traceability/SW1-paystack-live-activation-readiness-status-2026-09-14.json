@@ -1,0 +1,62 @@
+{
+  "evidenceId": "SW1-PAYSTACK-LIVE-ACTIVATION-READINESS-2026-09-14",
+  "status": "READINESS_ONLY_REVIEW_REMEDIATED",
+  "parentBaseline": "SW1-RC3_PLUS_PRODUCTION_APPLICATION_ACCESS_ACTIVATION",
+  "startingMainCommit": "1e9a591cdba48089cc868c05cbc51a2761162af3",
+  "productionApplicationAccessEnabled": true,
+  "paymentProvider": {
+    "provider": "PAYSTACK",
+    "currentModeAuthorized": "TEST_ONLY",
+    "testModeProviderRehearsalProven": true,
+    "liveMerchantWebhookEndpointReadinessRequiredBeforeActivation": true,
+    "liveMerchantWebhookDeliveryProofRequiredFromBoundedAuthorizedLiveTransaction": true,
+    "liveMerchantWebhookDeliveryProven": false
+  },
+  "authorization": {
+    "paystackLiveMode": false,
+    "liveFunds": false,
+    "livePaystackCredentialsAccessedOrProvisioned": false,
+    "genericContinuationAuthorizesLiveActivation": false
+  },
+  "reviewRemediations": {
+    "uncertainRollbackVerdictSeparated": true,
+    "liveWebhookDeliveryMovedToPostTransactionSuccessGate": true,
+    "independentFailSafeRequiredForEveryNonSuccessfulExit": true,
+    "ambiguousChargeOutcomeRequiresExactReferenceReconciliation": true
+  },
+  "requiredBeforeFutureActivation": [
+    "explicit live activation and live funds authorization",
+    "approved live credential provisioning path",
+    "exact production merchant/account binding",
+    "runtime test/live environment isolation proof",
+    "default-OFF live-payment switch and independently proven rollback",
+    "production webhook endpoint and raw-body signature-handler readiness",
+    "live checkout/reference binding and uniqueness proof without moving live funds",
+    "live reconciliation and incident runbook review including exact-reference timeout handling",
+    "sensitive-log hygiene verification",
+    "approved bounded minimal live transaction plan with immutable reference",
+    "independent expiry/watchdog or equivalent fail-safe armed before enablement",
+    "cleanup/containment path for assertion failure cancellation timeout infrastructure failure and runner loss",
+    "post-activation adversarial falsification",
+    "authentic live webhook delivery proof from the bounded authorized live transaction before final GO",
+    "independent containment-state proof after any non-successful exit"
+  ],
+  "ambiguousTransactionPolicy": {
+    "blindRetryAllowed": false,
+    "exactReferenceRequeryRequired": true,
+    "unresolvedState": "LIVE_TRANSACTION_OUTCOME_UNRESOLVED",
+    "replacementLiveTransactionAllowedWhileUnresolved": false
+  },
+  "failureVerdicts": {
+    "containedAndDisabled": "NO_GO_PAYSTACK_LIVE_DISABLED_OR_ROLLED_BACK",
+    "disabledButTransactionOutcomeUnresolved": "NO_GO_PAYSTACK_LIVE_DISABLED_TRANSACTION_OUTCOME_UNRESOLVED",
+    "containmentNotIndependentlyProven": "CRITICAL_PAYSTACK_LIVE_CONTAINMENT_UNPROVEN"
+  },
+  "forbiddenUntilExplicitAuthorization": [
+    "enable Paystack live mode",
+    "authorize or move live funds",
+    "create/read/provision/synchronize/use live Paystack credentials",
+    "execute any live charge refund transfer or payment-provider transaction"
+  ],
+  "currentVerdict": "CONTINUE_PAYSTACK_LIVE_READINESS_ACTIVATION_WITHHELD"
+}
