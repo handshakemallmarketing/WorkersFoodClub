@@ -10,30 +10,34 @@
   "providerContactedInLatestRun": false,
   "latestDiagnosticRun": {
     "workflow": "rc2-paystack-provider-rehearsal",
-    "runId": 34803990681,
-    "runNumber": 9,
-    "jobId": 103852110373,
-    "headSha": "f6530dc30542f82250491600e88724fcdb8b26ab",
-    "previewUrl": "https://workers-food-club-qvvvjy9vt-food-club.vercel.app",
-    "previewDeploymentId": "dpl_H68gdV3UC9bGeabfK2uiyXSLVjB3",
+    "runId": 34805656025,
+    "runNumber": 10,
+    "jobId": 103856922801,
+    "headSha": "1558eef0c45ba2c96c28aaea5a132dd7db6428e5",
+    "previewUrl": "https://workers-food-club-ctua0yrld-food-club.vercel.app",
     "vercelDeploymentProtectionPassed": true,
     "applicationEndpointReached": true,
-    "httpStatus": 401,
-    "applicationError": "TOKEN_INVALID",
-    "artifactId": 10332596769,
-    "artifactDigest": "sha256:9a65c50cf5300b2326e79cbe52ea1f63d049f3cbb28a6a8314d37c7b1cfe8495"
+    "fingerprintComparisonExecuted": true,
+    "fingerprintsMatched": false,
+    "providerContacted": false,
+    "artifactId": 10332779004,
+    "artifactDigest": "sha256:6d2f481d9060ceda7131e86e81e4d371e4d2c05b36cea2d4a169362d10e69167"
   },
   "diagnosis": {
     "deploymentProtectionTransport": "AUTHENTICATED_VERCEL_CLI",
     "applicationAuthentication": "BOUNDED_PREVIEW_OPERATOR_TOKEN",
-    "tokenTransportReachedApplication": true,
-    "failureLayer": "APPLICATION_PREVIEW_HMAC_VERIFICATION",
-    "mostLikelyCause": "PREVIEW_API_AUTH_SECRET differs between GitHub Actions and the Vercel Preview runtime",
+    "failureLayer": "PREVIEW_SHARED_SECRET_SYNCHRONIZATION",
+    "causeProven": "The GitHub Actions and Vercel Preview runtime effective PREVIEW_API_AUTH_SECRET values do not match.",
     "secretValueRecorded": false,
     "secretExposed": false
   },
+  "rotation": {
+    "status": "USER_REPLACED_SECRET_IN_GITHUB_ACTIONS_AND_VERCEL_PREVIEW",
+    "redeployRequired": true,
+    "redeployTrigger": "THIS_COMMIT"
+  },
   "requiredNextAction": {
-    "action": "Synchronize PREVIEW_API_AUTH_SECRET to one identical newly generated value in GitHub Actions and the Vercel Preview environment, create a fresh Preview deployment, then rerun the bounded test-provider rehearsal.",
+    "action": "Wait for the fresh Preview deployment from this commit, verify the exact deployment SHA, then rerun the bounded fingerprint-gated test-provider rehearsal.",
     "requiresLiveCredentials": false,
     "requiresProductionAccess": false,
     "requiresDisablingVercelProtection": false
