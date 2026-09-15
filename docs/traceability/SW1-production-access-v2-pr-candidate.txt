@@ -1,0 +1,1 @@
+Frozen for PR review. Production access runtime remains fail-closed pending proof.
