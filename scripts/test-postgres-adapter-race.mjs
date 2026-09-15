@@ -79,7 +79,7 @@ try{
 
   const claimInput={
     authorizationId:reservation.authorizationId,reservationId:reservation.reservationId,candidateSha,runtimeSha:candidateSha,
-    merchantAccountId,authorizationExpiresAt,approvedTransaction
+    merchantAccountId,authorizationExpiresAt,watchdogId:'watchdog:race:001',watchdogExpiresAt,approvedTransaction
   };
   const claims=await Promise.all(evidenceStores.map(store=>store.claimReservedAuthorization(claimInput)));
   assert.equal(claims.filter(Boolean).length,1,'five-way Paystack claim race must consume the durable authorization exactly once');
@@ -104,9 +104,26 @@ try{
   await pool.query("UPDATE paystack_live_authorization_evidence SET status='REVOKED',revoked_at=now(),updated_at=now() WHERE authorization_id='authz:revoke:001'");
   const revokedClaim=await evidenceStores[0].claimReservedAuthorization({
     authorizationId:'authz:revoke:001',reservationId:reservedForRevoke.reservationId,candidateSha,runtimeSha:candidateSha,
-    merchantAccountId,authorizationExpiresAt,approvedTransaction:revokeEnvelope.approvedTransaction
+    merchantAccountId,authorizationExpiresAt,watchdogId:'watchdog:race:001',watchdogExpiresAt,approvedTransaction:revokeEnvelope.approvedTransaction
   });
   assert.equal(revokedClaim,undefined,'revocation between reservation and claim must fail closed');
+
+  await pool.query(`INSERT INTO paystack_live_authorization_evidence
+    (authorization_id,action,environment,status,candidate_sha,merchant_account_id,authorization_expires_at,
+     live_funds_authorized,paystack_live_mode_authorized,approved_reference,approved_actor_id,approved_amount_minor,
+     approved_currency,authorized_by,authorization_basis)
+    VALUES($1,'EnablePaystackLiveBoundedTransaction','production','ACTIVE',$2,$3,$4,true,true,$5,$6,$7,'GHS',$8,$9)`,[
+      'authz:watchdog-failed:001',candidateSha,merchantAccountId,authorizationExpiresAt,'live-approved-ref-watchdog-failed-001',
+      approvedTransaction.actorId,approvedTransaction.amountMinor,'participant:test-authorizer','postgres-watchdog-atomic-proof'
+    ]);
+  const watchdogFailEnvelope={...envelope,approvedTransaction:{...approvedTransaction,reference:'live-approved-ref-watchdog-failed-001'}};
+  const reservedForWatchdogFail=await evidenceStores[0].reserveActiveAuthorization(watchdogFailEnvelope);
+  assert.equal(reservedForWatchdogFail?.status,'RESERVED');
+  await pool.query("UPDATE paystack_live_watchdog_evidence SET status='FAILED',updated_at=now() WHERE watchdog_id='watchdog:race:001'");
+  const watchdogFailedClaim=await evidenceStores[0].claimReservedAuthorization({authorizationId:'authz:watchdog-failed:001',reservationId:reservedForWatchdogFail.reservationId,candidateSha,runtimeSha:candidateSha,merchantAccountId,authorizationExpiresAt,watchdogId:'watchdog:race:001',watchdogExpiresAt,approvedTransaction:watchdogFailEnvelope.approvedTransaction});
+  assert.equal(watchdogFailedClaim,undefined,'watchdog failure between precheck and authorization claim must fail closed atomically');
+  const watchdogFailedRow=(await pool.query("SELECT status FROM paystack_live_authorization_evidence WHERE authorization_id='authz:watchdog-failed:001'")).rows[0];
+  assert.equal(watchdogFailedRow.status,'RESERVED','failed watchdog claim must not consume authorization');
 
   console.log('live PostgreSQL durability and Paystack governance evidence race proof passed');
 } finally {
