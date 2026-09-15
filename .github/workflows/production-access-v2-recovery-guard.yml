@@ -1,0 +1,65 @@
+name: Production Access v2 recovery guard
+
+on:
+  workflow_run:
+    workflows: ['Production Access v2 recovery']
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-access-v2-state-transition
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_WkMSXuSv8kDLoOlGHYtIggZ1
+  VERCEL_PROJECT_ID: prj_Ti1NOQryzFeImhMSwncMXNxs01I8
+  VERCEL_SCOPE: origin-os
+  PRODUCTION_BASE_URL: https://workers-food-club.vercel.app
+
+jobs:
+  contain-nonsuccess:
+    if: ${{ github.event.workflow_run.conclusion != 'success' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Force durable Production application access OFF after non-successful recovery
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo 'VERCEL_TOKEN missing; cancellation guard cannot prove containment.' >&2; exit 1; }
+          curl --silent --show-error --fail-with-body --request POST \
+            --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" --header 'Content-Type: application/json' \
+            --data '[{"key":"PRODUCTION_APPLICATION_ACCESS_ENABLED","value":"false","type":"plain","target":["production"],"comment":"Cancellation-independent Production Access v2 recovery guard"}]' >/dev/null
+      - name: Install pinned deployment tools after durable OFF
+        run: |
+          npm install --global vercel@59.11.7
+          npm install --global pnpm@9.15.4
+      - name: Rebuild canonical Production fail-closed and prove boundary
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null
+          for attempt in $(seq 1 30); do
+            response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
+            status="${response##*$'\n'}"; body="${response%$'\n'*}"
+            if [ "$status" = '503' ] && printf '%s' "$body" | grep -q 'PRODUCTION_APPLICATION_ACCESS_DISABLED'; then
+              echo "Cancellation-independent canonical containment proven on attempt $attempt."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'Cancellation-independent guard could not prove canonical fail-closed containment.' >&2
+          exit 1
