@@ -1,0 +1,49 @@
+name: Production Access v2 CI
+
+on:
+  pull_request:
+    paths:
+      - 'lib/production-access-policy.js'
+      - 'lib/production-oidc-auth.js'
+      - 'lib/application-principal-binding.js'
+      - 'tests/node/sw1-production-access-v2.test.mjs'
+      - '.github/workflows/production-access-v2-*.yml'
+      - 'docs/sw1/SW1-PRODUCTION-ACCESS-V2-PERSISTENT-GATE.md'
+      - 'docs/traceability/SW1-production-access-v2-*'
+  push:
+    branches:
+      - sw1-production-access-v2-persistent-gate
+
+permissions:
+  contents: read
+
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove token-independent Production access and OIDC verifier controls
+        run: node --test tests/node/sw1-production-access-v2.test.mjs
+      - name: Prove recovery workflow has no short-lived human token dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=.github/workflows/production-access-v2-recovery.yml
+          ! grep -q 'RC3_PRODUCTION_MEMBER_TOKEN' "$file"
+          ! grep -q 'RC3_PRODUCTION_OPERATOR_TOKEN' "$file"
+          ! grep -q -- '--env PRODUCTION_APPLICATION_ACCESS_ENABLED=true' "$file"
+          grep -q 'PRODUCTION_APPLICATION_ACCESS_ENABLED' "$file"
+          grep -q 'ACTIVE_BOUNDED_AUTHORIZATION' "$file"
+          echo 'Recovery is independent of short-lived human Google ID-token secrets.'
+      - name: Prove live-economic-effect authority remains absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'liveFundsWithheld' .github/workflows/production-access-v2-recovery.yml
+          grep -q 'paystackLiveWithheld' .github/workflows/production-access-v2-recovery.yml
+          grep -q 'paymentMutationWithheld' .github/workflows/production-access-v2-recovery.yml
+          ! grep -Eiq 'PAYSTACK_(LIVE_)?SECRET|PAYSTACK_SECRET_KEY|sk_live_' .github/workflows/production-access-v2-*.yml
+          echo 'No Paystack-live credential or live-funds authority is introduced.'
