@@ -1,0 +1,1 @@
+Freeze current candidate.
