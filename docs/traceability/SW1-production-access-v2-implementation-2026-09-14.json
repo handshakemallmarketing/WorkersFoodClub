@@ -1,0 +1,40 @@
+{
+  "evidenceId": "SW1-PRODUCTION-ACCESS-V2-IMPLEMENTATION-2026-09-14",
+  "status": "IMPLEMENTED_PENDING_CI_AND_RUNTIME_RECOVERY_PROOF",
+  "repository": "handshakemallmarketing/WorkersFoodClub",
+  "branch": "sw1-production-access-v2-persistent-gate",
+  "purpose": "Remove short-lived human Google ID tokens from Production deployment/recovery control while preserving request-time OIDC/JWKS authentication, application-owned authority, durable governed access state, and fail-closed containment.",
+  "controls": {
+    "requestTimeOidcJwksVerificationPreserved": true,
+    "applicationOwnedPrincipalBindingPreserved": true,
+    "humanGoogleIdTokenRequiredForDeployment": false,
+    "humanGoogleIdTokenRequiredForRecovery": false,
+    "deterministicCryptographicVerifierFixturesAdded": true,
+    "durableProductionAccessConfiguration": true,
+    "independentContainmentWorkflow": true,
+    "canonicalUnauthenticatedEnabledBoundaryExpectedHttp": 401,
+    "canonicalDisabledBoundaryExpectedHttp": 503
+  },
+  "authorization": {
+    "productionApplicationAccessStandingAuthorizationReused": true,
+    "newProductionAccessAuthorizationRequired": false,
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "livePaystackCredentialsAuthorized": false,
+    "paymentOrFulfillmentMutationAuthorityGranted": false
+  },
+  "implementation": [
+    "docs/sw1/SW1-PRODUCTION-ACCESS-V2-PERSISTENT-GATE.md",
+    "tests/node/sw1-production-access-v2.test.mjs",
+    ".github/workflows/production-access-v2-recovery.yml",
+    ".github/workflows/production-access-v2-containment.yml"
+  ],
+  "remainingProof": [
+    "pull-request constitutional/conformance CI",
+    "deterministic Production Access v2 test execution",
+    "review/falsification of implementation",
+    "governed runtime recovery proof after merge",
+    "subsequent Production deployment persistence proof"
+  ],
+  "currentProductionApplicationAccess": "OFF_FAIL_CLOSED_UNTIL_V2_RECOVERY_IS_PROVEN"
+}
