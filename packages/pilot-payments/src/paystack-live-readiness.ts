@@ -36,16 +36,18 @@ export interface PaystackLiveAuthorityClaimInput {
  readonly runtimeSha:string;
  readonly merchantAccountId:string;
  readonly authorizationExpiresAt:string;
+ readonly watchdogId:string;
+ readonly watchdogExpiresAt:string;
  readonly approvedTransaction:PaystackApprovedLiveTransaction;
 }
 
 export interface PaystackLiveAuthorityVerifier {
- reserve(input:PaystackLiveAuthorizationEnvelope):Readonly<{valid:true;authorizationId:string;reservationId:string}|{valid:false}>;
- claim(input:PaystackLiveAuthorityClaimInput):Readonly<{valid:true}|{valid:false}>;
+ reserve(input:PaystackLiveAuthorizationEnvelope):Promise<Readonly<{valid:true;authorizationId:string;reservationId:string}|{valid:false}>>;
+ claim(input:PaystackLiveAuthorityClaimInput):Promise<Readonly<{valid:true}|{valid:false}>>;
 }
 
 export interface PaystackIndependentWatchdogVerifier {
- verify(input:Readonly<{candidateSha:string;merchantAccountId:string;expiresAt:string}>):Readonly<{valid:true;watchdogId:string}|{valid:false}>;
+ verify(input:Readonly<{candidateSha:string;merchantAccountId:string;expiresAt:string}>):Promise<Readonly<{valid:true;watchdogId:string}|{valid:false}>>;
 }
 
 export interface PaystackLiveControlSnapshot {
@@ -97,9 +99,11 @@ const parseMinor=(value:string)=>{
 const sameMoney=(a:Money,b:Money)=>a.currency===b.currency&&a.minor===b.minor;
 
 /**
- * Pure readiness control. It does not configure Paystack, read credentials, or move funds.
+ * Readiness control. It does not configure Paystack, read credentials, or move funds.
  * Durable authority is atomically reserved before arming, then atomically consumed at claim.
  * Authority and independent watchdog evidence are revalidated at the claim/execution boundary.
+ * The evidence boundary is asynchronous so production PostgreSQL state is actually committed/read
+ * before the controller advances its in-process state.
  */
 export class PaystackLiveReadinessController {
  private snapshotValue:PaystackLiveControlSnapshot=Object.freeze({switchState:'OFF',incidentState:'NONE'});
@@ -125,7 +129,7 @@ export class PaystackLiveReadinessController {
   return this.snapshotValue;
  }
 
- arm(input:PaystackLiveAuthorizationEnvelope):PaystackLiveControlSnapshot{
+ async arm(input:PaystackLiveAuthorizationEnvelope):Promise<PaystackLiveControlSnapshot>{
   this.refreshExpiry();
   const nowMs=parseTime(this.clock(),'PAYSTACK_LIVE_CONTROL_TIME_INVALID');
   if(this.snapshotValue.incidentState!=='NONE') throw new Error('PAYSTACK_LIVE_INCIDENT_UNRESOLVED');
@@ -143,28 +147,22 @@ export class PaystackLiveReadinessController {
   if(!input.watchdog.armed||!input.watchdog.independent) throw new Error('PAYSTACK_LIVE_INDEPENDENT_WATCHDOG_REQUIRED');
   if(watchdogExpiry<=nowMs||watchdogExpiry>authorizationExpiry) throw new Error('PAYSTACK_LIVE_WATCHDOG_WINDOW_INVALID');
 
-  const watchdog=this.watchdogVerifier.verify({candidateSha:input.candidateSha,merchantAccountId:input.merchantAccountId,expiresAt:input.watchdog.expiresAt});
+  const watchdog=await this.watchdogVerifier.verify({candidateSha:input.candidateSha,merchantAccountId:input.merchantAccountId,expiresAt:input.watchdog.expiresAt});
   if(!watchdog.valid||!nonBlank(watchdog.watchdogId)) throw new Error('PAYSTACK_LIVE_WATCHDOG_EVIDENCE_INVALID');
 
-  const authority=this.authorityVerifier.reserve(input);
+  const authority=await this.authorityVerifier.reserve(input);
   if(!authority.valid||!nonBlank(authority.authorizationId)||!nonBlank(authority.reservationId)) throw new Error('PAYSTACK_LIVE_AUTHORIZATION_EVIDENCE_INVALID');
 
   this.snapshotValue=Object.freeze({
-   switchState:'ARMED',
-   incidentState:'NONE',
-   candidateSha:input.candidateSha,
-   merchantAccountId:input.merchantAccountId,
-   authorizationExpiresAt:input.authorizationExpiresAt,
-   watchdogExpiresAt:input.watchdog.expiresAt,
-   authorizationId:authority.authorizationId,
-   authorizationReservationId:authority.reservationId,
-   watchdogId:watchdog.watchdogId,
-   approvedTransaction:Object.freeze({...input.approvedTransaction})
+   switchState:'ARMED',incidentState:'NONE',candidateSha:input.candidateSha,merchantAccountId:input.merchantAccountId,
+   authorizationExpiresAt:input.authorizationExpiresAt,watchdogExpiresAt:input.watchdog.expiresAt,
+   authorizationId:authority.authorizationId,authorizationReservationId:authority.reservationId,
+   watchdogId:watchdog.watchdogId,approvedTransaction:Object.freeze({...input.approvedTransaction})
   });
   return this.snapshotValue;
  }
 
- claimBoundedTransaction(input:{candidateSha:string;merchantAccountId:string;reference:string;actorId:string;amountMinor:string;currency:'GHS'}):PaystackLiveControlSnapshot{
+ async claimBoundedTransaction(input:{candidateSha:string;merchantAccountId:string;reference:string;actorId:string;amountMinor:string;currency:'GHS'}):Promise<PaystackLiveControlSnapshot>{
   this.refreshExpiry();
   const current=this.snapshotValue;
   if(current.incidentState!=='NONE') throw new Error('PAYSTACK_LIVE_INCIDENT_UNRESOLVED');
@@ -176,11 +174,13 @@ export class PaystackLiveReadinessController {
   if(approved.reference!==input.reference||approved.actorId!==input.actorId||approved.amountMinor!==input.amountMinor||approved.currency!==input.currency) throw new Error('PAYSTACK_LIVE_TRANSACTION_REBOUND');
   parseMinor(input.amountMinor);
 
-  const watchdog=this.watchdogVerifier.verify({
-   candidateSha:current.candidateSha??'',
-   merchantAccountId:current.merchantAccountId??'',
-   expiresAt:current.watchdogExpiresAt??''
-  });
+  let watchdog:Readonly<{valid:true;watchdogId:string}|{valid:false}>;
+  try{
+   watchdog=await this.watchdogVerifier.verify({candidateSha:current.candidateSha??'',merchantAccountId:current.merchantAccountId??'',expiresAt:current.watchdogExpiresAt??''});
+  }catch{
+   this.snapshotValue=Object.freeze({...current,switchState:'OFF',incidentState:'CONTAINMENT_UNPROVEN'});
+   throw new Error('PAYSTACK_LIVE_WATCHDOG_REVALIDATION_FAILED');
+  }
   if(!watchdog.valid||watchdog.watchdogId!==current.watchdogId){
    this.snapshotValue=Object.freeze({...current,switchState:'OFF',incidentState:'CONTAINMENT_UNPROVEN'});
    throw new Error('PAYSTACK_LIVE_WATCHDOG_REVALIDATION_FAILED');
@@ -188,18 +188,16 @@ export class PaystackLiveReadinessController {
 
   const authorizationId=current.authorizationId;
   const reservationId=current.authorizationReservationId;
-  if(!authorizationId||!reservationId){
+  const watchdogId=current.watchdogId;
+  const watchdogExpiresAt=current.watchdogExpiresAt;
+  if(!authorizationId||!reservationId||!watchdogId||!watchdogExpiresAt){
    this.snapshotValue=Object.freeze({...current,switchState:'OFF'});
    throw new Error('PAYSTACK_LIVE_AUTHORIZATION_RESERVATION_MISSING');
   }
-  const claimed=this.authorityVerifier.claim({
-   authorizationId,
-   reservationId,
-   candidateSha:current.candidateSha??'',
-   runtimeSha:current.candidateSha??'',
-   merchantAccountId:current.merchantAccountId??'',
-   authorizationExpiresAt:current.authorizationExpiresAt??'',
-   approvedTransaction:approved
+  const claimed=await this.authorityVerifier.claim({
+   authorizationId,reservationId,candidateSha:current.candidateSha??'',runtimeSha:current.candidateSha??'',
+   merchantAccountId:current.merchantAccountId??'',authorizationExpiresAt:current.authorizationExpiresAt??'',
+   watchdogId,watchdogExpiresAt,approvedTransaction:approved
   });
   if(!claimed.valid){
    this.snapshotValue=Object.freeze({...current,switchState:'OFF'});
@@ -231,14 +229,8 @@ export class PaystackLiveReadinessController {
 
 const withTimeout=async<T>(promise:Promise<T>,timeoutMs:number):Promise<T>=>{
  let timer:ReturnType<typeof setTimeout>|undefined;
- try{
-  return await Promise.race([
-   promise,
-   new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('PAYSTACK_RECONCILIATION_ATTEMPT_TIMEOUT')),timeoutMs);})
-  ]);
- }finally{
-  if(timer!==undefined) clearTimeout(timer);
- }
+ try{return await Promise.race([promise,new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('PAYSTACK_RECONCILIATION_ATTEMPT_TIMEOUT')),timeoutMs);})]);}
+ finally{if(timer!==undefined) clearTimeout(timer);}
 };
 
 const canonicalIssue=(reference:string,verification:PaystackVerification,canonical:PaystackCanonicalPaymentEvidence|undefined):string|undefined=>{
@@ -249,52 +241,27 @@ const canonicalIssue=(reference:string,verification:PaystackVerification,canonic
  return undefined;
 };
 
-/**
- * Bounded exact-reference reconciliation for ambiguous provider outcomes.
- * Terminal provider evidence resolves the incident only when canonical application evidence
- * agrees on reference, amount and terminal state. Blind replacement charges remain forbidden.
- */
 export class PaystackExactReferenceReconciler {
- constructor(
-  private readonly adapter:Pick<PaystackPaymentAdapter,'verifyPayment'>,
-  private readonly canonicalReader:PaystackCanonicalEvidenceReader
- ){}
-
+ constructor(private readonly adapter:Pick<PaystackPaymentAdapter,'verifyPayment'>,private readonly canonicalReader:PaystackCanonicalEvidenceReader){}
  async reconcile(reference:string,maxAttempts=3,attemptTimeoutMs=5_000):Promise<PaystackReconciliationResult>{
   if(!nonBlank(reference)) throw new Error('PAYSTACK_REFERENCE_REQUIRED');
   if(!Number.isSafeInteger(maxAttempts)||maxAttempts<1||maxAttempts>10) throw new Error('PAYSTACK_RECONCILIATION_ATTEMPTS_INVALID');
   if(!Number.isSafeInteger(attemptTimeoutMs)||attemptTimeoutMs<1||attemptTimeoutMs>60_000) throw new Error('PAYSTACK_RECONCILIATION_TIMEOUT_INVALID');
-  let lastVerification:PaystackVerification|undefined;
-  let lastProviderError:string|undefined;
-  let lastCanonicalIssue:string|undefined;
+  let lastVerification:PaystackVerification|undefined;let lastProviderError:string|undefined;let lastCanonicalIssue:string|undefined;
   for(let attempt=1;attempt<=maxAttempts;attempt++){
    try{
-    const verification=await withTimeout(this.adapter.verifyPayment(reference),attemptTimeoutMs);
-    lastVerification=verification;
+    const verification=await withTimeout(this.adapter.verifyPayment(reference),attemptTimeoutMs);lastVerification=verification;
     if(verification.providerReference!==reference) throw new Error('PAYSTACK_VERIFY_REFERENCE_MISMATCH');
     if(verification.state==='CONFIRMED'||verification.state==='FAILED'||verification.state==='REVERSED'){
      let canonical:PaystackCanonicalPaymentEvidence|undefined;
      try{canonical=await withTimeout(Promise.resolve(this.canonicalReader.getByProviderReference(reference)),attemptTimeoutMs);}
      catch(error){lastCanonicalIssue=error instanceof Error?error.message:'CANONICAL_PAYMENT_EVIDENCE_READ_FAILED';continue;}
-     const issue=canonicalIssue(reference,verification,canonical);
-     if(issue){lastCanonicalIssue=issue;continue;}
+     const issue=canonicalIssue(reference,verification,canonical);if(issue){lastCanonicalIssue=issue;continue;}
      const state=verification.state==='CONFIRMED'?'RESOLVED_CONFIRMED':verification.state==='FAILED'?'RESOLVED_FAILED':'RESOLVED_REVERSED';
      return Object.freeze({state,reference,attempts:attempt,retryAllowed:false,verification});
     }
-   }catch(error){
-    const message=error instanceof Error?error.message:'PAYSTACK_PROVIDER_REQUEST_FAILED';
-    if(message==='PAYSTACK_VERIFY_REFERENCE_MISMATCH') throw error;
-    lastProviderError=message;
-   }
+   }catch(error){const message=error instanceof Error?error.message:'PAYSTACK_PROVIDER_REQUEST_FAILED';if(message==='PAYSTACK_VERIFY_REFERENCE_MISMATCH') throw error;lastProviderError=message;}
   }
-  return Object.freeze({
-   state:'LIVE_TRANSACTION_OUTCOME_UNRESOLVED',
-   reference,
-   attempts:maxAttempts,
-   retryAllowed:false,
-   ...(lastVerification?{verification:lastVerification}:{}),
-   ...(lastProviderError?{lastProviderError}:{}),
-   ...(lastCanonicalIssue?{lastCanonicalIssue}:{})
-  });
+  return Object.freeze({state:'LIVE_TRANSACTION_OUTCOME_UNRESOLVED',reference,attempts:maxAttempts,retryAllowed:false,...(lastVerification?{verification:lastVerification}:{}),...(lastProviderError?{lastProviderError}:{}),...(lastCanonicalIssue?{lastCanonicalIssue}:{})});
  }
 }

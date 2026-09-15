@@ -1,0 +1,50 @@
+{
+  "evidenceId": "SW1-PAYSTACK-PRODUCTION-EVIDENCE-STORE-WATCHDOG-PLAN-2026-09-14",
+  "status": "IMPLEMENTATION_IN_PROGRESS_ACTIVATION_WITHHELD",
+  "repository": "handshakemallmarketing/WorkersFoodClub",
+  "branch": "sw1-paystack-production-evidence-store-watchdog",
+  "productionApplicationAccess": {
+    "authorized": true,
+    "currentCanonicalObservation": "PRODUCTION_APPLICATION_ACCESS_DISABLED",
+    "recoveryRun": 34910844906,
+    "recoveryResult": "FAIL_CLOSED_BEFORE_DEPLOY",
+    "failureReason": "CONTROLLED_IDENTITY_TOKENS_EXPIRED_OR_BELOW_900_SECOND_MINIMUM",
+    "stateChangedByFailedRun": false
+  },
+  "paystack": {
+    "liveModeAuthorized": false,
+    "liveFundsAuthorized": false,
+    "liveCredentialsAuthorized": false,
+    "liveProviderTransactionAuthorized": false
+  },
+  "verifiedCurrentArchitecture": {
+    "governedAuthorizationEvidence": "packages/pilot-payments/src/paystack-live-evidence.ts",
+    "readinessController": "packages/pilot-payments/src/paystack-live-readiness.ts",
+    "postgresDurabilityFoundation": "packages/durability/src/postgres.ts",
+    "productionDatabase": "Neon project Food Club",
+    "existingProductionTablesInspected": true,
+    "paystackLiveGovernanceTablesPresent": false
+  },
+  "blockingImplementationFinding": {
+    "severity": "P1",
+    "finding": "The governed Paystack authority and watchdog reader/verifier contracts are synchronous, while a real PostgreSQL/Neon evidence store requires asynchronous atomic reservation, claim, and current-watchdog reads. A production adapter cannot truthfully satisfy the current synchronous contract without preloading or caching away the claim-boundary durability guarantee.",
+    "requiredRemediation": [
+      "Make authority reserve/claim and watchdog verification awaitable at the controller boundary.",
+      "Add PostgreSQL schema for bounded authorization evidence, reservation/claim state, and independent watchdog evidence.",
+      "Implement serializable/atomic ACTIVE->RESERVED->CLAIMED transitions bound to exact candidate, merchant, expiry and transaction.",
+      "Implement current watchdog evidence reads that cannot be supplied by the activating process itself.",
+      "Add concurrency, restart, revocation, stale-watchdog, rebound, and double-claim adversarial tests.",
+      "Do not provision or use Paystack live credentials while implementing or testing this slice."
+    ]
+  },
+  "exitCriteria": [
+    "Production evidence-store adapter is backed by durable PostgreSQL state.",
+    "Concurrent controllers cannot reserve or claim the same authorization twice.",
+    "Revocation between reservation and claim fails closed.",
+    "Independent watchdog evidence is re-read immediately before claim.",
+    "Watchdog expiry/failure forces live switch OFF and sticky containment incident state.",
+    "All tests and constitutional conformance are green.",
+    "No live Paystack credential, live mode, live fund or provider transaction is touched."
+  ],
+  "verdict": "CONTINUE_NON_LIVE_IMPLEMENTATION; PAYSTACK_LIVE_ACTIVATION_WITHHELD"
+}

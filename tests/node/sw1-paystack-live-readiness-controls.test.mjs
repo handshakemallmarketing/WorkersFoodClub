@@ -17,10 +17,10 @@ const baseEnvelope={
  watchdog:{armed:true,independent:true,expiresAt:'2026-09-15T00:20:00Z'}
 };
 const validAuthority={
- reserve:()=>Object.freeze({valid:true,authorizationId:'authz:bounded-live:001',reservationId:'reservation:001'}),
- claim:()=>Object.freeze({valid:true})
+ reserve:async()=>Object.freeze({valid:true,authorizationId:'authz:bounded-live:001',reservationId:'reservation:001'}),
+ claim:async()=>Object.freeze({valid:true})
 };
-const validWatchdog={verify:()=>Object.freeze({valid:true,watchdogId:'watchdog:external:001'})};
+const validWatchdog={verify:async()=>Object.freeze({valid:true,watchdogId:'watchdog:external:001'})};
 const clockAt=value=>()=>value;
 const makeControl=(authority=validAuthority,watchdog=validWatchdog,clock=clockAt('2026-09-14T23:00:00Z'))=>new PaystackLiveReadinessController(authority,watchdog,clock);
 
@@ -29,32 +29,32 @@ test('Paystack live readiness control defaults OFF',()=>{
  assert.deepEqual(control.snapshot(),{switchState:'OFF',incidentState:'NONE'});
 });
 
-test('Paystack live readiness control requires both live-mode and live-funds authorization',()=>{
+test('Paystack live readiness control requires both live-mode and live-funds authorization',async()=>{
  const control=makeControl();
- assert.throws(()=>control.arm({...baseEnvelope,liveFundsAuthorized:false}),/PAYSTACK_LIVE_AUTHORIZATION_INCOMPLETE/);
- assert.throws(()=>control.arm({...baseEnvelope,paystackLiveModeAuthorized:false}),/PAYSTACK_LIVE_AUTHORIZATION_INCOMPLETE/);
+ await assert.rejects(control.arm({...baseEnvelope,liveFundsAuthorized:false}),/PAYSTACK_LIVE_AUTHORIZATION_INCOMPLETE/);
+ await assert.rejects(control.arm({...baseEnvelope,paystackLiveModeAuthorized:false}),/PAYSTACK_LIVE_AUTHORIZATION_INCOMPLETE/);
  assert.deepEqual(control.snapshot(),{switchState:'OFF',incidentState:'NONE'});
 });
 
-test('Paystack live readiness control rejects caller assertions without independently reserved authority evidence',()=>{
- const invalidAuthority={reserve:()=>Object.freeze({valid:false}),claim:()=>Object.freeze({valid:false})};
+test('Paystack live readiness control rejects caller assertions without independently reserved authority evidence',async()=>{
+ const invalidAuthority={reserve:async()=>Object.freeze({valid:false}),claim:async()=>Object.freeze({valid:false})};
  const control=makeControl(invalidAuthority);
- assert.throws(()=>control.arm(baseEnvelope),/PAYSTACK_LIVE_AUTHORIZATION_EVIDENCE_INVALID/);
+ await assert.rejects(control.arm(baseEnvelope),/PAYSTACK_LIVE_AUTHORIZATION_EVIDENCE_INVALID/);
  assert.deepEqual(control.snapshot(),{switchState:'OFF',incidentState:'NONE'});
 });
 
-test('Paystack live readiness control rejects watchdog assertions without independent watchdog evidence',()=>{
- const invalidWatchdog={verify:()=>Object.freeze({valid:false})};
+test('Paystack live readiness control rejects watchdog assertions without independent watchdog evidence',async()=>{
+ const invalidWatchdog={verify:async()=>Object.freeze({valid:false})};
  const control=makeControl(validAuthority,invalidWatchdog);
- assert.throws(()=>control.arm(baseEnvelope),/PAYSTACK_LIVE_WATCHDOG_EVIDENCE_INVALID/);
+ await assert.rejects(control.arm(baseEnvelope),/PAYSTACK_LIVE_WATCHDOG_EVIDENCE_INVALID/);
  assert.deepEqual(control.snapshot(),{switchState:'OFF',incidentState:'NONE'});
 });
 
-test('Paystack live readiness control binds candidate SHA, merchant, expiry and independent watchdog',()=>{
+test('Paystack live readiness control binds candidate SHA, merchant, expiry and independent watchdog',async()=>{
  const control=makeControl();
- assert.throws(()=>control.arm({...baseEnvelope,runtimeSha:'0'.repeat(40)}),/PAYSTACK_LIVE_RUNTIME_SHA_MISMATCH/);
- assert.throws(()=>control.arm({...baseEnvelope,watchdog:{...baseEnvelope.watchdog,independent:false}}),/PAYSTACK_LIVE_INDEPENDENT_WATCHDOG_REQUIRED/);
- const armed=control.arm(baseEnvelope);
+ await assert.rejects(control.arm({...baseEnvelope,runtimeSha:'0'.repeat(40)}),/PAYSTACK_LIVE_RUNTIME_SHA_MISMATCH/);
+ await assert.rejects(control.arm({...baseEnvelope,watchdog:{...baseEnvelope.watchdog,independent:false}}),/PAYSTACK_LIVE_INDEPENDENT_WATCHDOG_REQUIRED/);
+ const armed=await control.arm(baseEnvelope);
  assert.equal(armed.switchState,'ARMED');
  assert.equal(armed.incidentState,'NONE');
  assert.equal(armed.authorizationId,'authz:bounded-live:001');
@@ -62,59 +62,59 @@ test('Paystack live readiness control binds candidate SHA, merchant, expiry and 
  assert.equal(armed.watchdogId,'watchdog:external:001');
 });
 
-test('One authorization is bound to one immutable approved transaction and can be claimed only once',()=>{
+test('One authorization is bound to one immutable approved transaction and can be claimed only once',async()=>{
  const control=makeControl();
- control.arm(baseEnvelope);
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,candidateSha:'1'.repeat(40),merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_CANDIDATE_REBOUND/);
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:'merchant:wrong'}),/PAYSTACK_LIVE_MERCHANT_REBOUND/);
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,reference:'live-ref-substituted',candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_TRANSACTION_REBOUND/);
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,actorId:'participant:other',candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_TRANSACTION_REBOUND/);
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,amountMinor:'101',candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_TRANSACTION_REBOUND/);
- const claimed=control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId});
+ await control.arm(baseEnvelope);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,candidateSha:'1'.repeat(40),merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_CANDIDATE_REBOUND/);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:'merchant:wrong'}),/PAYSTACK_LIVE_MERCHANT_REBOUND/);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,reference:'live-ref-substituted',candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_TRANSACTION_REBOUND/);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,actorId:'participant:other',candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_TRANSACTION_REBOUND/);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,amountMinor:'101',candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_TRANSACTION_REBOUND/);
+ const claimed=await control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId});
  assert.equal(claimed.switchState,'TRANSACTION_CLAIMED');
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_TRANSACTION_ALREADY_CLAIMED/);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_TRANSACTION_ALREADY_CLAIMED/);
 });
 
-test('Claim fails closed if current watchdog evidence no longer validates',()=>{
+test('Claim fails closed if current watchdog evidence no longer validates',async()=>{
  let watchdogValid=true;
- const watchdog={verify:()=>watchdogValid?Object.freeze({valid:true,watchdogId:'watchdog:external:001'}):Object.freeze({valid:false})};
+ const watchdog={verify:async()=>watchdogValid?Object.freeze({valid:true,watchdogId:'watchdog:external:001'}):Object.freeze({valid:false})};
  const control=makeControl(validAuthority,watchdog);
- control.arm(baseEnvelope);
+ await control.arm(baseEnvelope);
  watchdogValid=false;
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_WATCHDOG_REVALIDATION_FAILED/);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_WATCHDOG_REVALIDATION_FAILED/);
  const snapshot=control.snapshot();
  assert.equal(snapshot.switchState,'OFF');
  assert.equal(snapshot.incidentState,'CONTAINMENT_UNPROVEN');
 });
 
-test('Claim fails closed if durable authorization cannot be atomically consumed',()=>{
+test('Claim fails closed if durable authorization cannot be atomically consumed',async()=>{
  const authority={
-  reserve:()=>Object.freeze({valid:true,authorizationId:'authz:bounded-live:001',reservationId:'reservation:001'}),
-  claim:()=>Object.freeze({valid:false})
+  reserve:async()=>Object.freeze({valid:true,authorizationId:'authz:bounded-live:001',reservationId:'reservation:001'}),
+  claim:async()=>Object.freeze({valid:false})
  };
  const control=makeControl(authority);
- control.arm(baseEnvelope);
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_AUTHORIZATION_REVALIDATION_FAILED/);
+ await control.arm(baseEnvelope);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:baseEnvelope.merchantAccountId}),/PAYSTACK_LIVE_AUTHORIZATION_REVALIDATION_FAILED/);
  assert.equal(control.snapshot().switchState,'OFF');
 });
 
-test('State observation fails closed after watchdog expiry even if no transaction method runs',()=>{
+test('State observation fails closed after watchdog expiry even if no transaction method runs',async()=>{
  let now='2026-09-14T23:00:00Z';
  const control=makeControl(validAuthority,validWatchdog,()=>now);
- control.arm(baseEnvelope);
+ await control.arm(baseEnvelope);
  assert.equal(control.snapshot().switchState,'ARMED');
  now='2026-09-15T00:20:00Z';
  assert.equal(control.snapshot().switchState,'OFF');
 });
 
-test('Unresolved transaction and containment incidents remain sticky across disable',()=>{
+test('Unresolved transaction and containment incidents remain sticky across disable',async()=>{
  const control=makeControl();
- control.arm(baseEnvelope);
+ await control.arm(baseEnvelope);
  control.markTransactionOutcomeUnresolved();
  let snapshot=control.disable();
  assert.equal(snapshot.switchState,'OFF');
  assert.equal(snapshot.incidentState,'TRANSACTION_OUTCOME_UNRESOLVED');
- assert.throws(()=>control.arm(baseEnvelope),/PAYSTACK_LIVE_INCIDENT_UNRESOLVED/);
+ await assert.rejects(control.arm(baseEnvelope),/PAYSTACK_LIVE_INCIDENT_UNRESOLVED/);
  snapshot=control.markContainmentUnproven();
  assert.equal(snapshot.incidentState,'CONTAINMENT_UNPROVEN');
  snapshot=control.disable();
