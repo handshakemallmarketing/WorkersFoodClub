@@ -1,0 +1,1 @@
+Production Access v2 review candidate is frozen at the commit containing this marker. Do not execute Production recovery until PR review and required CI are green. Production remains fail-closed in the interim.
