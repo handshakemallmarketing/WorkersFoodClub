@@ -1,0 +1,124 @@
+name: Production Access v2 recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AUTHORIZATION_EVIDENCE_PATH: docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json
+  VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
+  VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
+  PRODUCTION_BASE_URL: https://workers-food-club-chi.vercel.app
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify standing bounded Production-access authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, sys
+          with open(os.environ['AUTHORIZATION_EVIDENCE_PATH'], encoding='utf-8') as f: evidence=json.load(f)
+          grant=evidence.get('grant') or {}; exclusions=evidence.get('explicitExclusions') or {}
+          checks={
+            'status': evidence.get('status')=='ACTIVE_BOUNDED_AUTHORIZATION',
+            'authorizedBy': evidence.get('authorizedBy')=='participant:willie-adofo',
+            'action': grant.get('action')=='EnableProductionApplicationAccess',
+            'environment': grant.get('environment')=='production',
+            'repository': grant.get('repository')=='handshakemallmarketing/WorkersFoodClub',
+            'revoked': grant.get('revoked') is False,
+            'liveFundsWithheld': exclusions.get('liveFundsAuthorized') is False,
+            'paystackLiveWithheld': exclusions.get('paystackLiveModeAuthorized') is False,
+            'liveCredentialsWithheld': exclusions.get('livePaystackCredentialsAuthorized') is False,
+            'paymentMutationWithheld': exclusions.get('paymentOrFulfillmentMutationAuthorityGranted') is False,
+          }
+          failed=[n for n,ok in checks.items() if not ok]
+          if failed: print('Governed authorization failed: '+', '.join(failed),file=sys.stderr); sys.exit(1)
+          print('Standing bounded Production application-access authorization is active and unrevoked.')
+          PY
+      - name: Run deterministic Production authentication and access-gate tests
+        run: node --test tests/node/sw1-production-access-v2.test.mjs
+      - name: Install pinned deployment tools
+        run: |
+          npm install --global vercel@59.11.7
+          npm install --global pnpm@9.15.4
+      - name: Persist and verify authorized Production access
+        id: persist
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo 'VERCEL_TOKEN missing; refusing recovery.' >&2; exit 1; }
+          curl --silent --show-error --fail-with-body --request POST \
+            --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" --header 'Content-Type: application/json' \
+            --data '[{"key":"PRODUCTION_APPLICATION_ACCESS_ENABLED","value":"true","type":"plain","target":["production"],"comment":"Standing governed Production application-access authorization"}]' >/dev/null
+          echo 'written=true' >> "$GITHUB_OUTPUT"
+          rm -rf .vercel
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club >/dev/null
+          python - <<'PY'
+          import pathlib,re,sys
+          text=pathlib.Path('.vercel/.env.production.local').read_text(encoding='utf-8')
+          m=re.search(r'^PRODUCTION_APPLICATION_ACCESS_ENABLED=(.*)$',text,re.MULTILINE)
+          if not m or m.group(1).strip().strip('"\'')!='true': sys.exit('Durable switch did not re-read as true.')
+          PY
+      - name: Build and deploy current governed candidate with inherited Production configuration
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          vercel build --prod --token="$VERCEL_TOKEN" --scope=food-club
+          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=food-club)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Prove canonical enabled boundary and candidate identity
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          expected_sha="$GITHUB_SHA"
+          immutable="$(vercel curl /api/build-info --deployment "$DEPLOY_URL" --scope=food-club)"
+          immutable_sha="$(printf '%s' "$immutable"|jq -r '.commitSha // .gitCommitSha // .sha // empty')"
+          test "$immutable_sha" = "$expected_sha"
+          for attempt in $(seq 1 30); do
+            response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
+            status="${response##*$'\n'}"
+            if [ "$status" = '401' ]; then break; fi
+            sleep 2
+          done
+          test "$status" = '401'
+          canonical="$(curl --silent --show-error "${PRODUCTION_BASE_URL}/api/build-info")"
+          canonical_sha="$(printf '%s' "$canonical"|jq -r '.commitSha // .gitCommitSha // .sha // empty')"
+          test "$canonical_sha" = "$expected_sha"
+      - name: Contain any failure after durable ON write
+        if: ${{ failure() && steps.persist.outputs.written == 'true' }}
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body --request POST \
+            --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" --header 'Content-Type: application/json' \
+            --data '[{"key":"PRODUCTION_APPLICATION_ACCESS_ENABLED","value":"false","type":"plain","target":["production"],"comment":"Automatic Production Access v2 containment"}]' >/dev/null
+          rm -rf .vercel
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club >/dev/null
+          vercel build --prod --token="$VERCEL_TOKEN" --scope=food-club
+          vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=food-club >/dev/null
+          for attempt in $(seq 1 30); do
+            response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
+            status="${response##*$'\n'}"; body="${response%$'\n'*}"
+            if [ "$status" = '503' ] && printf '%s' "$body"|grep -q 'PRODUCTION_APPLICATION_ACCESS_DISABLED'; then exit 0; fi
+            sleep 2
+          done
+          echo 'Unable to prove canonical fail-closed containment.' >&2; exit 1
