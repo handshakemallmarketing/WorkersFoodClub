@@ -1,0 +1,1 @@
+Final review scope sealed: token-independent Production access recovery, durable project-level access state, deterministic OIDC verifier falsification, and independent fail-closed containment only.
