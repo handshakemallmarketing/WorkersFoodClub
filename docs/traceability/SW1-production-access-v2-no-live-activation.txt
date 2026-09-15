@@ -1,0 +1,1 @@
+No Paystack live mode, live funds, live Paystack credentials, live provider transaction, payment mutation authority, or fulfillment mutation authority is introduced or authorized by Production Access v2.
