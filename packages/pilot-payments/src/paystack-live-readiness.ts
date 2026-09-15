@@ -40,12 +40,12 @@ export interface PaystackLiveAuthorityClaimInput {
 }
 
 export interface PaystackLiveAuthorityVerifier {
- reserve(input:PaystackLiveAuthorizationEnvelope):Readonly<{valid:true;authorizationId:string;reservationId:string}|{valid:false}>;
- claim(input:PaystackLiveAuthorityClaimInput):Readonly<{valid:true}|{valid:false}>;
+ reserve(input:PaystackLiveAuthorizationEnvelope):Promise<Readonly<{valid:true;authorizationId:string;reservationId:string}|{valid:false}>>;
+ claim(input:PaystackLiveAuthorityClaimInput):Promise<Readonly<{valid:true}|{valid:false}>>;
 }
 
 export interface PaystackIndependentWatchdogVerifier {
- verify(input:Readonly<{candidateSha:string;merchantAccountId:string;expiresAt:string}>):Readonly<{valid:true;watchdogId:string}|{valid:false}>;
+ verify(input:Readonly<{candidateSha:string;merchantAccountId:string;expiresAt:string}>):Promise<Readonly<{valid:true;watchdogId:string}|{valid:false}>>;
 }
 
 export interface PaystackLiveControlSnapshot {
@@ -97,9 +97,11 @@ const parseMinor=(value:string)=>{
 const sameMoney=(a:Money,b:Money)=>a.currency===b.currency&&a.minor===b.minor;
 
 /**
- * Pure readiness control. It does not configure Paystack, read credentials, or move funds.
+ * Readiness control. It does not configure Paystack, read credentials, or move funds.
  * Durable authority is atomically reserved before arming, then atomically consumed at claim.
  * Authority and independent watchdog evidence are revalidated at the claim/execution boundary.
+ * The evidence boundary is asynchronous so production PostgreSQL state is actually committed/read
+ * before the controller advances its in-process state.
  */
 export class PaystackLiveReadinessController {
  private snapshotValue:PaystackLiveControlSnapshot=Object.freeze({switchState:'OFF',incidentState:'NONE'});
@@ -125,7 +127,7 @@ export class PaystackLiveReadinessController {
   return this.snapshotValue;
  }
 
- arm(input:PaystackLiveAuthorizationEnvelope):PaystackLiveControlSnapshot{
+ async arm(input:PaystackLiveAuthorizationEnvelope):Promise<PaystackLiveControlSnapshot>{
   this.refreshExpiry();
   const nowMs=parseTime(this.clock(),'PAYSTACK_LIVE_CONTROL_TIME_INVALID');
   if(this.snapshotValue.incidentState!=='NONE') throw new Error('PAYSTACK_LIVE_INCIDENT_UNRESOLVED');
@@ -143,10 +145,10 @@ export class PaystackLiveReadinessController {
   if(!input.watchdog.armed||!input.watchdog.independent) throw new Error('PAYSTACK_LIVE_INDEPENDENT_WATCHDOG_REQUIRED');
   if(watchdogExpiry<=nowMs||watchdogExpiry>authorizationExpiry) throw new Error('PAYSTACK_LIVE_WATCHDOG_WINDOW_INVALID');
 
-  const watchdog=this.watchdogVerifier.verify({candidateSha:input.candidateSha,merchantAccountId:input.merchantAccountId,expiresAt:input.watchdog.expiresAt});
+  const watchdog=await this.watchdogVerifier.verify({candidateSha:input.candidateSha,merchantAccountId:input.merchantAccountId,expiresAt:input.watchdog.expiresAt});
   if(!watchdog.valid||!nonBlank(watchdog.watchdogId)) throw new Error('PAYSTACK_LIVE_WATCHDOG_EVIDENCE_INVALID');
 
-  const authority=this.authorityVerifier.reserve(input);
+  const authority=await this.authorityVerifier.reserve(input);
   if(!authority.valid||!nonBlank(authority.authorizationId)||!nonBlank(authority.reservationId)) throw new Error('PAYSTACK_LIVE_AUTHORIZATION_EVIDENCE_INVALID');
 
   this.snapshotValue=Object.freeze({
@@ -164,7 +166,7 @@ export class PaystackLiveReadinessController {
   return this.snapshotValue;
  }
 
- claimBoundedTransaction(input:{candidateSha:string;merchantAccountId:string;reference:string;actorId:string;amountMinor:string;currency:'GHS'}):PaystackLiveControlSnapshot{
+ async claimBoundedTransaction(input:{candidateSha:string;merchantAccountId:string;reference:string;actorId:string;amountMinor:string;currency:'GHS'}):Promise<PaystackLiveControlSnapshot>{
   this.refreshExpiry();
   const current=this.snapshotValue;
   if(current.incidentState!=='NONE') throw new Error('PAYSTACK_LIVE_INCIDENT_UNRESOLVED');
@@ -176,7 +178,7 @@ export class PaystackLiveReadinessController {
   if(approved.reference!==input.reference||approved.actorId!==input.actorId||approved.amountMinor!==input.amountMinor||approved.currency!==input.currency) throw new Error('PAYSTACK_LIVE_TRANSACTION_REBOUND');
   parseMinor(input.amountMinor);
 
-  const watchdog=this.watchdogVerifier.verify({
+  const watchdog=await this.watchdogVerifier.verify({
    candidateSha:current.candidateSha??'',
    merchantAccountId:current.merchantAccountId??'',
    expiresAt:current.watchdogExpiresAt??''
@@ -192,7 +194,7 @@ export class PaystackLiveReadinessController {
    this.snapshotValue=Object.freeze({...current,switchState:'OFF'});
    throw new Error('PAYSTACK_LIVE_AUTHORIZATION_RESERVATION_MISSING');
   }
-  const claimed=this.authorityVerifier.claim({
+  const claimed=await this.authorityVerifier.claim({
    authorizationId,
    reservationId,
    candidateSha:current.candidateSha??'',
