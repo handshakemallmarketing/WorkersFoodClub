@@ -1,7 +1,11 @@
 import {randomUUID} from 'node:crypto';
-import type {PgPool,PgClient,PgQueryResult} from '../../durability/src/postgres.js';
+import type {PgPool,PgClient} from '../../durability/src/postgres.js';
 import type {PaystackLiveAuthorizationEnvelope,PaystackLiveAuthorityClaimInput} from './paystack-live-readiness.js';
-import type {PaystackGovernedAuthorizationEvidence,PaystackIndependentWatchdogEvidence} from './paystack-live-evidence.js';
+import type {
+ PaystackGovernedAuthorizationEvidence,
+ PaystackIndependentWatchdogEvidence,
+ PaystackWatchdogEvidenceLookup
+} from './paystack-live-evidence.js';
 
 type AuthorizationRow={
  authorization_id:string;
@@ -74,21 +78,11 @@ const mapWatchdog=(row:WatchdogRow):PaystackIndependentWatchdogEvidence=>Object.
  evidenceSource:row.evidence_source
 });
 
-export interface PaystackWatchdogEvidenceLookup {
- readonly candidateSha:string;
- readonly merchantAccountId:string;
- readonly expiresAt:string;
-}
-
 /**
  * Production-grade PostgreSQL evidence-store foundation for the bounded Paystack live gate.
  * Every authorization transition is executed inside a SERIALIZABLE transaction and is
  * conditional on exact immutable authorization/transaction binding. No Paystack credential
  * is read or required by this adapter.
- *
- * This adapter is intentionally async. The controller/verifier contract must await these
- * methods before this adapter can be wired into the live gate; caching the result would defeat
- * the required claim-boundary durability guarantee.
  */
 export class PostgresPaystackLiveGovernanceEvidenceStore {
  constructor(private readonly pool:PgPool){}
