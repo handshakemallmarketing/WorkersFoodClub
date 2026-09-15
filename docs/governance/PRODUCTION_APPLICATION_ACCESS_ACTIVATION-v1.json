@@ -5,19 +5,20 @@
   "governanceActor": "Willie Adofo — Founder / Governance Authority",
   "authorizationBasis": {
     "type": "explicit_interactive_authorization",
-    "instruction": "Enable Production application access",
-    "recordedDate": "2026-09-14"
+    "instruction": "Authorized",
+    "recordedDate": "2026-09-15",
+    "context": "Supersede the prior Production-application-access candidate authorization with a new bounded authorization for the eventual PR #61 candidate after integration with current main."
   },
   "grant": {
-    "grantId": "grant:willie-adofo:production-application-access:v1",
+    "grantId": "grant:willie-adofo:production-application-access:v2",
     "actorId": "participant:willie-adofo",
     "action": "EnableProductionApplicationAccess",
     "repository": "handshakemallmarketing/WorkersFoodClub",
     "environment": "production",
-    "candidateSha": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
-    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+    "candidateSha": "d6d4b0ca40878f125fa8a97b3138d26e22ebc4ac",
+    "canonicalAlias": "https://workers-food-club.vercel.app",
     "scope": "Production application access only",
-    "validFrom": "2026-09-14",
+    "validFrom": "2026-09-15",
     "revoked": false
   },
   "explicitExclusions": {
@@ -33,6 +34,7 @@
     "Production sandbox and consequential mutation routes must remain disabled",
     "any unexpected result requires immediate fail-closed rollback"
   ],
+  "supersedes": "grant:willie-adofo:production-application-access:v1",
   "supersedesTransferPolicyAuthorityForThisAction": false,
   "notes": "This is a separate, one-purpose Production application-access authorization. It does not widen the TRANSFER_POLICY_GOVERNANCE-v1 grant and confers no live-funds or Paystack-live authority."
 }
