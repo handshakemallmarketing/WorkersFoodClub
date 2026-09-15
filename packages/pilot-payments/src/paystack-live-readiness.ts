@@ -36,6 +36,8 @@ export interface PaystackLiveAuthorityClaimInput {
  readonly runtimeSha:string;
  readonly merchantAccountId:string;
  readonly authorizationExpiresAt:string;
+ readonly watchdogId:string;
+ readonly watchdogExpiresAt:string;
  readonly approvedTransaction:PaystackApprovedLiveTransaction;
 }
 
@@ -152,16 +154,10 @@ export class PaystackLiveReadinessController {
   if(!authority.valid||!nonBlank(authority.authorizationId)||!nonBlank(authority.reservationId)) throw new Error('PAYSTACK_LIVE_AUTHORIZATION_EVIDENCE_INVALID');
 
   this.snapshotValue=Object.freeze({
-   switchState:'ARMED',
-   incidentState:'NONE',
-   candidateSha:input.candidateSha,
-   merchantAccountId:input.merchantAccountId,
-   authorizationExpiresAt:input.authorizationExpiresAt,
-   watchdogExpiresAt:input.watchdog.expiresAt,
-   authorizationId:authority.authorizationId,
-   authorizationReservationId:authority.reservationId,
-   watchdogId:watchdog.watchdogId,
-   approvedTransaction:Object.freeze({...input.approvedTransaction})
+   switchState:'ARMED',incidentState:'NONE',candidateSha:input.candidateSha,merchantAccountId:input.merchantAccountId,
+   authorizationExpiresAt:input.authorizationExpiresAt,watchdogExpiresAt:input.watchdog.expiresAt,
+   authorizationId:authority.authorizationId,authorizationReservationId:authority.reservationId,
+   watchdogId:watchdog.watchdogId,approvedTransaction:Object.freeze({...input.approvedTransaction})
   });
   return this.snapshotValue;
  }
@@ -178,11 +174,13 @@ export class PaystackLiveReadinessController {
   if(approved.reference!==input.reference||approved.actorId!==input.actorId||approved.amountMinor!==input.amountMinor||approved.currency!==input.currency) throw new Error('PAYSTACK_LIVE_TRANSACTION_REBOUND');
   parseMinor(input.amountMinor);
 
-  const watchdog=await this.watchdogVerifier.verify({
-   candidateSha:current.candidateSha??'',
-   merchantAccountId:current.merchantAccountId??'',
-   expiresAt:current.watchdogExpiresAt??''
-  });
+  let watchdog:Readonly<{valid:true;watchdogId:string}|{valid:false}>;
+  try{
+   watchdog=await this.watchdogVerifier.verify({candidateSha:current.candidateSha??'',merchantAccountId:current.merchantAccountId??'',expiresAt:current.watchdogExpiresAt??''});
+  }catch{
+   this.snapshotValue=Object.freeze({...current,switchState:'OFF',incidentState:'CONTAINMENT_UNPROVEN'});
+   throw new Error('PAYSTACK_LIVE_WATCHDOG_REVALIDATION_FAILED');
+  }
   if(!watchdog.valid||watchdog.watchdogId!==current.watchdogId){
    this.snapshotValue=Object.freeze({...current,switchState:'OFF',incidentState:'CONTAINMENT_UNPROVEN'});
    throw new Error('PAYSTACK_LIVE_WATCHDOG_REVALIDATION_FAILED');
@@ -190,18 +188,16 @@ export class PaystackLiveReadinessController {
 
   const authorizationId=current.authorizationId;
   const reservationId=current.authorizationReservationId;
-  if(!authorizationId||!reservationId){
+  const watchdogId=current.watchdogId;
+  const watchdogExpiresAt=current.watchdogExpiresAt;
+  if(!authorizationId||!reservationId||!watchdogId||!watchdogExpiresAt){
    this.snapshotValue=Object.freeze({...current,switchState:'OFF'});
    throw new Error('PAYSTACK_LIVE_AUTHORIZATION_RESERVATION_MISSING');
   }
   const claimed=await this.authorityVerifier.claim({
-   authorizationId,
-   reservationId,
-   candidateSha:current.candidateSha??'',
-   runtimeSha:current.candidateSha??'',
-   merchantAccountId:current.merchantAccountId??'',
-   authorizationExpiresAt:current.authorizationExpiresAt??'',
-   approvedTransaction:approved
+   authorizationId,reservationId,candidateSha:current.candidateSha??'',runtimeSha:current.candidateSha??'',
+   merchantAccountId:current.merchantAccountId??'',authorizationExpiresAt:current.authorizationExpiresAt??'',
+   watchdogId,watchdogExpiresAt,approvedTransaction:approved
   });
   if(!claimed.valid){
    this.snapshotValue=Object.freeze({...current,switchState:'OFF'});
@@ -233,14 +229,8 @@ export class PaystackLiveReadinessController {
 
 const withTimeout=async<T>(promise:Promise<T>,timeoutMs:number):Promise<T>=>{
  let timer:ReturnType<typeof setTimeout>|undefined;
- try{
-  return await Promise.race([
-   promise,
-   new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('PAYSTACK_RECONCILIATION_ATTEMPT_TIMEOUT')),timeoutMs);})
-  ]);
- }finally{
-  if(timer!==undefined) clearTimeout(timer);
- }
+ try{return await Promise.race([promise,new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error('PAYSTACK_RECONCILIATION_ATTEMPT_TIMEOUT')),timeoutMs);})]);}
+ finally{if(timer!==undefined) clearTimeout(timer);}
 };
 
 const canonicalIssue=(reference:string,verification:PaystackVerification,canonical:PaystackCanonicalPaymentEvidence|undefined):string|undefined=>{
@@ -251,52 +241,27 @@ const canonicalIssue=(reference:string,verification:PaystackVerification,canonic
  return undefined;
 };
 
-/**
- * Bounded exact-reference reconciliation for ambiguous provider outcomes.
- * Terminal provider evidence resolves the incident only when canonical application evidence
- * agrees on reference, amount and terminal state. Blind replacement charges remain forbidden.
- */
 export class PaystackExactReferenceReconciler {
- constructor(
-  private readonly adapter:Pick<PaystackPaymentAdapter,'verifyPayment'>,
-  private readonly canonicalReader:PaystackCanonicalEvidenceReader
- ){}
-
+ constructor(private readonly adapter:Pick<PaystackPaymentAdapter,'verifyPayment'>,private readonly canonicalReader:PaystackCanonicalEvidenceReader){}
  async reconcile(reference:string,maxAttempts=3,attemptTimeoutMs=5_000):Promise<PaystackReconciliationResult>{
   if(!nonBlank(reference)) throw new Error('PAYSTACK_REFERENCE_REQUIRED');
   if(!Number.isSafeInteger(maxAttempts)||maxAttempts<1||maxAttempts>10) throw new Error('PAYSTACK_RECONCILIATION_ATTEMPTS_INVALID');
   if(!Number.isSafeInteger(attemptTimeoutMs)||attemptTimeoutMs<1||attemptTimeoutMs>60_000) throw new Error('PAYSTACK_RECONCILIATION_TIMEOUT_INVALID');
-  let lastVerification:PaystackVerification|undefined;
-  let lastProviderError:string|undefined;
-  let lastCanonicalIssue:string|undefined;
+  let lastVerification:PaystackVerification|undefined;let lastProviderError:string|undefined;let lastCanonicalIssue:string|undefined;
   for(let attempt=1;attempt<=maxAttempts;attempt++){
    try{
-    const verification=await withTimeout(this.adapter.verifyPayment(reference),attemptTimeoutMs);
-    lastVerification=verification;
+    const verification=await withTimeout(this.adapter.verifyPayment(reference),attemptTimeoutMs);lastVerification=verification;
     if(verification.providerReference!==reference) throw new Error('PAYSTACK_VERIFY_REFERENCE_MISMATCH');
     if(verification.state==='CONFIRMED'||verification.state==='FAILED'||verification.state==='REVERSED'){
      let canonical:PaystackCanonicalPaymentEvidence|undefined;
      try{canonical=await withTimeout(Promise.resolve(this.canonicalReader.getByProviderReference(reference)),attemptTimeoutMs);}
      catch(error){lastCanonicalIssue=error instanceof Error?error.message:'CANONICAL_PAYMENT_EVIDENCE_READ_FAILED';continue;}
-     const issue=canonicalIssue(reference,verification,canonical);
-     if(issue){lastCanonicalIssue=issue;continue;}
+     const issue=canonicalIssue(reference,verification,canonical);if(issue){lastCanonicalIssue=issue;continue;}
      const state=verification.state==='CONFIRMED'?'RESOLVED_CONFIRMED':verification.state==='FAILED'?'RESOLVED_FAILED':'RESOLVED_REVERSED';
      return Object.freeze({state,reference,attempts:attempt,retryAllowed:false,verification});
     }
-   }catch(error){
-    const message=error instanceof Error?error.message:'PAYSTACK_PROVIDER_REQUEST_FAILED';
-    if(message==='PAYSTACK_VERIFY_REFERENCE_MISMATCH') throw error;
-    lastProviderError=message;
-   }
+   }catch(error){const message=error instanceof Error?error.message:'PAYSTACK_PROVIDER_REQUEST_FAILED';if(message==='PAYSTACK_VERIFY_REFERENCE_MISMATCH') throw error;lastProviderError=message;}
   }
-  return Object.freeze({
-   state:'LIVE_TRANSACTION_OUTCOME_UNRESOLVED',
-   reference,
-   attempts:maxAttempts,
-   retryAllowed:false,
-   ...(lastVerification?{verification:lastVerification}:{}),
-   ...(lastProviderError?{lastProviderError}:{}),
-   ...(lastCanonicalIssue?{lastCanonicalIssue}:{})
-  });
+  return Object.freeze({state:'LIVE_TRANSACTION_OUTCOME_UNRESOLVED',reference,attempts:maxAttempts,retryAllowed:false,...(lastVerification?{verification:lastVerification}:{}),...(lastProviderError?{lastProviderError}:{}),...(lastCanonicalIssue?{lastCanonicalIssue}:{})});
  }
 }
