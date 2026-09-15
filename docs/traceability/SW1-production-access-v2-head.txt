@@ -1,0 +1,1 @@
+Sealed implementation head marker. Review and CI should evaluate this exact branch state before any merge or Production recovery.
