@@ -23,21 +23,25 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Verify standing bounded Production-access authorization
+        id: authorization
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, sys
+          import json, os, re, sys
           with open(os.environ['AUTHORIZATION_EVIDENCE_PATH'], encoding='utf-8') as f: evidence=json.load(f)
           grant=evidence.get('grant') or {}; exclusions=evidence.get('explicitExclusions') or {}
+          candidate=grant.get('candidateSha') or ''
           checks={
             'status': evidence.get('status')=='ACTIVE_BOUNDED_AUTHORIZATION',
             'authorizedBy': evidence.get('authorizedBy')=='participant:willie-adofo',
             'action': grant.get('action')=='EnableProductionApplicationAccess',
             'environment': grant.get('environment')=='production',
             'repository': grant.get('repository')=='handshakemallmarketing/WorkersFoodClub',
-            'candidateSha': grant.get('candidateSha')==os.environ.get('GITHUB_SHA'),
+            'candidateShaFormat': re.fullmatch(r'[0-9a-f]{40}', candidate) is not None,
             'revoked': grant.get('revoked') is False,
             'liveFundsWithheld': exclusions.get('liveFundsAuthorized') is False,
             'paystackLiveWithheld': exclusions.get('paystackLiveModeAuthorized') is False,
@@ -46,8 +50,22 @@ jobs:
           }
           failed=[n for n,ok in checks.items() if not ok]
           if failed: print('Governed authorization failed: '+', '.join(failed),file=sys.stderr); sys.exit(1)
-          print('Exact-candidate bounded Production application-access authorization is active and unrevoked.')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as out: out.write('candidate_sha='+candidate+'\n')
+          print('Bounded Production application-access authorization is active and names an immutable candidate SHA.')
           PY
+      - name: Prove authorization anchor and checkout exact candidate
+        env:
+          CANDIDATE_SHA: ${{ steps.authorization.outputs.candidate_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          # The authorization record is deliberately external to the candidate: it may
+          # authorize only a commit already contained in the canonical main history.
+          git merge-base --is-ancestor "$CANDIDATE_SHA" "$GITHUB_SHA"
+          test "$CANDIDATE_SHA" != "$GITHUB_SHA"
+          git checkout --detach "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
       - name: Run deterministic Production authentication and access-gate tests
         run: node --test tests/node/sw1-production-access-v2.test.mjs
       - name: Install pinned deployment tools
@@ -62,7 +80,6 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${VERCEL_TOKEN:-}" || { echo 'VERCEL_TOKEN missing; refusing recovery.' >&2; exit 1; }
-          # Record intent before the remote mutation. Any later failure is ambiguous and must contain.
           echo 'attempted=true' >> "$GITHUB_OUTPUT"
           curl --silent --show-error --fail-with-body --request POST \
             --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true" \
@@ -76,7 +93,7 @@ jobs:
           m=re.search(r'^PRODUCTION_APPLICATION_ACCESS_ENABLED=(.*)$',text,re.MULTILINE)
           if not m or m.group(1).strip().strip('"\'')!='true': sys.exit('Durable switch did not re-read as true.')
           PY
-      - name: Build and deploy current governed candidate with inherited Production configuration
+      - name: Build and deploy exact governed candidate with inherited Production configuration
         id: deploy
         shell: bash
         env:
@@ -91,12 +108,12 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          EXPECTED_SHA: ${{ steps.authorization.outputs.candidate_sha }}
         run: |
           set -euo pipefail
-          expected_sha="$GITHUB_SHA"
           immutable="$(vercel curl /api/build-info --deployment "$DEPLOY_URL" --scope="$VERCEL_SCOPE")"
           immutable_sha="$(printf '%s' "$immutable"|jq -r '.commitSha // .gitCommitSha // .sha // empty')"
-          test "$immutable_sha" = "$expected_sha"
+          test "$immutable_sha" = "$EXPECTED_SHA"
           for attempt in $(seq 1 30); do
             response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
             status="${response##*$'\n'}"
@@ -106,7 +123,7 @@ jobs:
           test "$status" = '401'
           canonical="$(curl --silent --show-error "${PRODUCTION_BASE_URL}/api/build-info")"
           canonical_sha="$(printf '%s' "$canonical"|jq -r '.commitSha // .gitCommitSha // .sha // empty')"
-          test "$canonical_sha" = "$expected_sha"
+          test "$canonical_sha" = "$EXPECTED_SHA"
       - name: Contain any failed or ambiguous durable ON attempt
         if: ${{ failure() && steps.persist.outputs.attempted == 'true' }}
         shell: bash
