@@ -53,6 +53,11 @@ export interface PaystackIndependentWatchdogEvidenceReader {
 }
 
 const nonBlank=(value:string|undefined|null):value is string=>typeof value==='string'&&value.trim().length>0;
+const sameInstant=(a:string,b:string)=>{
+ const aMs=Date.parse(a);
+ const bMs=Date.parse(b);
+ return Number.isFinite(aMs)&&Number.isFinite(bMs)&&aMs===bMs;
+};
 const sameTransaction=(a:PaystackApprovedLiveTransaction,b:PaystackApprovedLiveTransaction)=>
  a.reference===b.reference&&
  a.actorId===b.actorId&&
@@ -65,7 +70,7 @@ const evidenceMatchesEnvelope=(evidence:PaystackGovernedAuthorizationEvidence,in
  evidence.candidateSha===input.candidateSha&&
  input.runtimeSha===input.candidateSha&&
  evidence.merchantAccountId===input.merchantAccountId&&
- evidence.authorizationExpiresAt===input.authorizationExpiresAt&&
+ sameInstant(evidence.authorizationExpiresAt,input.authorizationExpiresAt)&&
  evidence.liveFundsAuthorized===true&&
  evidence.paystackLiveModeAuthorized===true&&
  input.liveFundsAuthorized===true&&
@@ -78,7 +83,7 @@ const evidenceMatchesClaim=(evidence:PaystackGovernedAuthorizationEvidence,input
  evidence.candidateSha===input.candidateSha&&
  input.runtimeSha===input.candidateSha&&
  evidence.merchantAccountId===input.merchantAccountId&&
- evidence.authorizationExpiresAt===input.authorizationExpiresAt&&
+ sameInstant(evidence.authorizationExpiresAt,input.authorizationExpiresAt)&&
  sameTransaction(evidence.approvedTransaction,input.approvedTransaction);
 
 /**
@@ -124,7 +129,7 @@ export class GovernedPaystackIndependentWatchdogVerifier implements PaystackInde
   if(evidence.status!=='ARMED') return Object.freeze({valid:false});
   if(!nonBlank(evidence.watchdogId)||!nonBlank(evidence.evidenceSource)) return Object.freeze({valid:false});
   if(evidence.executorClass!=='INDEPENDENT_WATCHDOG'||evidence.containmentAction!=='DISABLE_PAYSTACK_LIVE'||evidence.activatingRunnerIndependent!==true) return Object.freeze({valid:false});
-  if(evidence.candidateSha!==input.candidateSha||evidence.merchantAccountId!==input.merchantAccountId||evidence.expiresAt!==input.expiresAt) return Object.freeze({valid:false});
+  if(evidence.candidateSha!==input.candidateSha||evidence.merchantAccountId!==input.merchantAccountId||!sameInstant(evidence.expiresAt,input.expiresAt)) return Object.freeze({valid:false});
   return Object.freeze({valid:true,watchdogId:evidence.watchdogId});
  }
 }
