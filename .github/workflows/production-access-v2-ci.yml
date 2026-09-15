@@ -41,7 +41,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'liveFundsWithheld' .github/workflows/production-access-v2-recovery.yml
-          grep -q 'paystackLiveWithheld' .github/workflows/production-access-v2-recovery.yml
-          grep -q 'paymentMutationWithheld' .github/workflows/production-access-v2-recovery.yml
-          ! grep -Eiq 'PAYSTACK_(LIVE_)?SECRET|PAYSTACK_SECRET_KEY|sk_live_' .github/workflows/production-access-v2-*.yml
+          recovery=.github/workflows/production-access-v2-recovery.yml
+          grep -q 'liveFundsWithheld' "$recovery"
+          grep -q 'paystackLiveWithheld' "$recovery"
+          grep -q 'paymentMutationWithheld' "$recovery"
+          # Inspect executable v2 workflows, excluding this CI file so the detector does not match its own forbidden-pattern literal.
+          files=(.github/workflows/production-access-v2-recovery.yml .github/workflows/production-access-v2-containment.yml)
+          ! grep -Eiq 'PAYSTACK_(LIVE_)?SECRET|PAYSTACK_SECRET_KEY|sk_live_' "${files[@]}"
