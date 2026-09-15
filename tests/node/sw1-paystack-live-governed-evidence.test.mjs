@@ -55,14 +55,14 @@ const makeAuthorizationStore=(initial=authorizationEvidence)=>{
  let reservations=0;
  return {
   reader:{
-   reserveActiveAuthorization(input){
+   async reserveActiveAuthorization(input){
     if(!record||record.status!=='ACTIVE'||record.revokedAt) return undefined;
     if(record.candidateSha!==input.candidateSha||record.merchantAccountId!==input.merchantAccountId||record.authorizationExpiresAt!==input.authorizationExpiresAt||!sameTransaction(record.approvedTransaction,input.approvedTransaction)) return undefined;
     reservations++;
     record={...record,status:'RESERVED',reservationId:`reservation:${reservations}`};
     return {...record,approvedTransaction:{...record.approvedTransaction}};
    },
-   claimReservedAuthorization(input){
+   async claimReservedAuthorization(input){
     if(!record||record.status!=='RESERVED'||record.revokedAt) return undefined;
     if(record.authorizationId!==input.authorizationId||record.reservationId!==input.reservationId||record.candidateSha!==input.candidateSha||record.merchantAccountId!==input.merchantAccountId||record.authorizationExpiresAt!==input.authorizationExpiresAt||!sameTransaction(record.approvedTransaction,input.approvedTransaction)) return undefined;
     record={...record,status:'CLAIMED'};
@@ -77,7 +77,11 @@ const makeAuthorizationStore=(initial=authorizationEvidence)=>{
 const makeWatchdogStore=(initial=watchdogEvidence)=>{
  let record=initial?{...initial}:undefined;
  return {
-  reader:{getWatchdogEvidence:()=>record?{...record}:undefined},
+  reader:{async getWatchdogEvidence(input){
+   if(!record) return undefined;
+   if(record.candidateSha!==input.candidateSha||record.merchantAccountId!==input.merchantAccountId||record.expiresAt!==input.expiresAt) return undefined;
+   return {...record};
+  }},
   setStatus(status){if(record) record={...record,status};},
   get(){return record?{...record}:undefined;}
  };
@@ -93,80 +97,80 @@ const claimInput=(reservation)=>({
  approvedTransaction
 });
 
-test('governed authority verifier atomically reserves exact durable authorization evidence',()=>{
+test('governed authority verifier atomically reserves exact durable authorization evidence',async()=>{
  const store=makeAuthorizationStore();
  const verifier=new GovernedPaystackLiveAuthorityVerifier(store.reader);
- const reserved=verifier.reserve(envelope);
+ const reserved=await verifier.reserve(envelope);
  assert.equal(reserved.valid,true);
  assert.equal(reserved.authorizationId,'authz:paystack-live:bounded:001');
  assert.equal(store.get().status,'RESERVED');
 });
 
-test('governed authority reservation rejects missing, revoked, rebound, or incomplete evidence',()=>{
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore(null).reader).reserve(envelope),{valid:false});
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,status:'REVOKED',revokedAt:'2026-09-14T23:10:00Z'}).reader).reserve(envelope),{valid:false});
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,candidateSha:'0'.repeat(40)}).reader).reserve(envelope),{valid:false});
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,merchantAccountId:'merchant:other'}).reader).reserve(envelope),{valid:false});
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,authorizationExpiresAt:'2026-09-15T01:01:00Z'}).reader).reserve(envelope),{valid:false});
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,approvedTransaction:{...approvedTransaction,amountMinor:'101'}}).reader).reserve(envelope),{valid:false});
+test('governed authority reservation rejects missing, revoked, rebound, or incomplete evidence',async()=>{
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore(null).reader).reserve(envelope),{valid:false});
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,status:'REVOKED',revokedAt:'2026-09-14T23:10:00Z'}).reader).reserve(envelope),{valid:false});
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,candidateSha:'0'.repeat(40)}).reader).reserve(envelope),{valid:false});
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,merchantAccountId:'merchant:other'}).reader).reserve(envelope),{valid:false});
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,authorizationExpiresAt:'2026-09-15T01:01:00Z'}).reader).reserve(envelope),{valid:false});
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore({...authorizationEvidence,approvedTransaction:{...approvedTransaction,amountMinor:'101'}}).reader).reserve(envelope),{valid:false});
  const incomplete=makeAuthorizationStore({...authorizationEvidence,authorizedBy:''});
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(incomplete.reader).reserve(envelope),{valid:false});
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(incomplete.reader).reserve(envelope),{valid:false});
 });
 
-test('caller envelope substitution is rejected even against otherwise valid governed evidence',()=>{
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore().reader).reserve({...envelope,runtimeSha:'1'.repeat(40)}),{valid:false});
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore().reader).reserve({...envelope,approvedTransaction:{...approvedTransaction,reference:'replacement-ref'}}),{valid:false});
- assert.deepEqual(new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore().reader).reserve({...envelope,liveFundsAuthorized:false}),{valid:false});
+test('caller envelope substitution is rejected even against otherwise valid governed evidence',async()=>{
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore().reader).reserve({...envelope,runtimeSha:'1'.repeat(40)}),{valid:false});
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore().reader).reserve({...envelope,approvedTransaction:{...approvedTransaction,reference:'replacement-ref'}}),{valid:false});
+ assert.deepEqual(await new GovernedPaystackLiveAuthorityVerifier(makeAuthorizationStore().reader).reserve({...envelope,liveFundsAuthorized:false}),{valid:false});
 });
 
-test('one durable authorization can be reserved only once across controller instances',()=>{
+test('one durable authorization can be reserved only once across controller instances',async()=>{
  const store=makeAuthorizationStore();
- const first=new GovernedPaystackLiveAuthorityVerifier(store.reader).reserve(envelope);
- const second=new GovernedPaystackLiveAuthorityVerifier(store.reader).reserve(envelope);
+ const first=await new GovernedPaystackLiveAuthorityVerifier(store.reader).reserve(envelope);
+ const second=await new GovernedPaystackLiveAuthorityVerifier(store.reader).reserve(envelope);
  assert.equal(first.valid,true);
  assert.deepEqual(second,{valid:false});
  assert.equal(store.get().status,'RESERVED');
 });
 
-test('reserved authorization is atomically consumed exactly once at claim',()=>{
+test('reserved authorization is atomically consumed exactly once at claim',async()=>{
  const store=makeAuthorizationStore();
  const verifier=new GovernedPaystackLiveAuthorityVerifier(store.reader);
- const reserved=verifier.reserve(envelope);
+ const reserved=await verifier.reserve(envelope);
  assert.equal(reserved.valid,true);
- const first=verifier.claim(claimInput(reserved));
- const second=verifier.claim(claimInput(reserved));
+ const first=await verifier.claim(claimInput(reserved));
+ const second=await verifier.claim(claimInput(reserved));
  assert.deepEqual(first,{valid:true});
  assert.deepEqual(second,{valid:false});
  assert.equal(store.get().status,'CLAIMED');
 });
 
-test('revocation after reserve but before claim fails closed',()=>{
+test('revocation after reserve but before claim fails closed',async()=>{
  const store=makeAuthorizationStore();
  const verifier=new GovernedPaystackLiveAuthorityVerifier(store.reader);
- const reserved=verifier.reserve(envelope);
+ const reserved=await verifier.reserve(envelope);
  assert.equal(reserved.valid,true);
  store.revoke();
- assert.deepEqual(verifier.claim(claimInput(reserved)),{valid:false});
+ assert.deepEqual(await verifier.claim(claimInput(reserved)),{valid:false});
  assert.equal(store.get().status,'REVOKED');
 });
 
-test('independent watchdog verifier accepts exact independently enforced containment evidence',()=>{
+test('independent watchdog verifier accepts exact independently enforced containment evidence',async()=>{
  const store=makeWatchdogStore();
  const verifier=new GovernedPaystackIndependentWatchdogVerifier(store.reader);
- assert.deepEqual(verifier.verify({candidateSha:sha,merchantAccountId:envelope.merchantAccountId,expiresAt:envelope.watchdog.expiresAt}),{valid:true,watchdogId:'watchdog:paystack-live:001'});
+ assert.deepEqual(await verifier.verify({candidateSha:sha,merchantAccountId:envelope.merchantAccountId,expiresAt:envelope.watchdog.expiresAt}),{valid:true,watchdogId:'watchdog:paystack-live:001'});
 });
 
-test('independent watchdog verifier rejects missing, inactive, non-independent, rebound, or malformed evidence',()=>{
+test('independent watchdog verifier rejects missing, inactive, non-independent, rebound, or malformed evidence',async()=>{
  const input={candidateSha:sha,merchantAccountId:envelope.merchantAccountId,expiresAt:envelope.watchdog.expiresAt};
- assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore(null).reader).verify(input),{valid:false});
- assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,status:'EXPIRED'}).reader).verify(input),{valid:false});
- assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,activatingRunnerIndependent:false}).reader).verify(input),{valid:false});
- assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,candidateSha:'f'.repeat(40)}).reader).verify(input),{valid:false});
- assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,merchantAccountId:'merchant:wrong'}).reader).verify(input),{valid:false});
- assert.deepEqual(new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,evidenceSource:''}).reader).verify(input),{valid:false});
+ assert.deepEqual(await new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore(null).reader).verify(input),{valid:false});
+ assert.deepEqual(await new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,status:'EXPIRED'}).reader).verify(input),{valid:false});
+ assert.deepEqual(await new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,activatingRunnerIndependent:false}).reader).verify(input),{valid:false});
+ assert.deepEqual(await new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,candidateSha:'f'.repeat(40)}).reader).verify(input),{valid:false});
+ assert.deepEqual(await new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,merchantAccountId:'merchant:wrong'}).reader).verify(input),{valid:false});
+ assert.deepEqual(await new GovernedPaystackIndependentWatchdogVerifier(makeWatchdogStore({...watchdogEvidence,evidenceSource:''}).reader).verify(input),{valid:false});
 });
 
-test('controller revalidates both durable authority and watchdog immediately before claim',()=>{
+test('controller revalidates both durable authority and watchdog immediately before claim',async()=>{
  const authorityStore=makeAuthorizationStore();
  const watchdogStore=makeWatchdogStore();
  const control=new PaystackLiveReadinessController(
@@ -174,14 +178,14 @@ test('controller revalidates both durable authority and watchdog immediately bef
   new GovernedPaystackIndependentWatchdogVerifier(watchdogStore.reader),
   ()=>'2026-09-14T23:00:00Z'
  );
- control.arm(envelope);
+ await control.arm(envelope);
  watchdogStore.setStatus('FAILED');
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:envelope.merchantAccountId}),/PAYSTACK_LIVE_WATCHDOG_REVALIDATION_FAILED/);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:envelope.merchantAccountId}),/PAYSTACK_LIVE_WATCHDOG_REVALIDATION_FAILED/);
  assert.equal(control.snapshot().switchState,'OFF');
  assert.equal(control.snapshot().incidentState,'CONTAINMENT_UNPROVEN');
 });
 
-test('controller blocks claim when durable authorization is revoked after arming',()=>{
+test('controller blocks claim when durable authorization is revoked after arming',async()=>{
  const authorityStore=makeAuthorizationStore();
  const watchdogStore=makeWatchdogStore();
  const control=new PaystackLiveReadinessController(
@@ -189,8 +193,8 @@ test('controller blocks claim when durable authorization is revoked after arming
   new GovernedPaystackIndependentWatchdogVerifier(watchdogStore.reader),
   ()=>'2026-09-14T23:00:00Z'
  );
- control.arm(envelope);
+ await control.arm(envelope);
  authorityStore.revoke();
- assert.throws(()=>control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:envelope.merchantAccountId}),/PAYSTACK_LIVE_AUTHORIZATION_REVALIDATION_FAILED/);
+ await assert.rejects(control.claimBoundedTransaction({...approvedTransaction,candidateSha:sha,merchantAccountId:envelope.merchantAccountId}),/PAYSTACK_LIVE_AUTHORIZATION_REVALIDATION_FAILED/);
  assert.equal(control.snapshot().switchState,'OFF');
 });
