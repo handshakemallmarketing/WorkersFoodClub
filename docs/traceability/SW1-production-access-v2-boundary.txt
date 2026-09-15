@@ -1,0 +1,1 @@
+Standing authorization covers Production application access recovery only. Any Paystack live activation, live-funds authorization, bound Production operator replacement, or Production mutation-authority expansion remains outside this change and requires a separate explicit decision.
