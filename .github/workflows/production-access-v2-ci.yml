@@ -1,0 +1,68 @@
+name: Production Access v2 CI
+
+on:
+  pull_request:
+    paths:
+      - 'lib/production-access-policy.js'
+      - 'lib/production-oidc-auth.js'
+      - 'lib/application-principal-binding.js'
+      - 'tests/node/sw1-production-access-v2.test.mjs'
+      - '.github/workflows/production-access-v2-*.yml'
+      - 'docs/sw1/SW1-PRODUCTION-ACCESS-V2-PERSISTENT-GATE.md'
+      - 'docs/traceability/SW1-production-access-v2-*'
+  push:
+    branches:
+      - sw1-production-access-v2-clean
+
+permissions:
+  contents: read
+
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove token-independent Production access and OIDC verifier controls
+        run: node --test tests/node/sw1-production-access-v2.test.mjs
+      - name: Prove recovery authorization and containment invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          recovery=.github/workflows/production-access-v2-recovery.yml
+          containment=.github/workflows/production-access-v2-containment.yml
+          guard=.github/workflows/production-access-v2-recovery-guard.yml
+          ! grep -q 'RC3_PRODUCTION_MEMBER_TOKEN' "$recovery"
+          ! grep -q 'RC3_PRODUCTION_OPERATOR_TOKEN' "$recovery"
+          ! grep -q -- '--env PRODUCTION_APPLICATION_ACCESS_ENABLED=true' "$recovery"
+          grep -q 'ACTIVE_BOUNDED_AUTHORIZATION' "$recovery"
+          grep -q "candidateSha.*GITHUB_SHA" "$recovery"
+          grep -q 'attempted=true' "$recovery"
+          test "$(grep -n "attempted=true" "$recovery" | head -1 | cut -d: -f1)" -lt "$(grep -n 'request POST' "$recovery" | head -1 | cut -d: -f1)"
+          grep -q 'production-access-v2-state-transition' "$recovery"
+          grep -q 'production-access-v2-state-transition' "$containment"
+          grep -q 'production-access-v2-state-transition' "$guard"
+          grep -q "workflows: \['Production Access v2 recovery'\]" "$guard"
+          grep -q "conclusion != 'success'" "$guard"
+          grep -q 'PRODUCTION_APPLICATION_ACCESS_ENABLED.*false' "$guard"
+      - name: Prove canonical Vercel binding is consistent
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in .github/workflows/production-access-v2-recovery.yml .github/workflows/production-access-v2-containment.yml .github/workflows/production-access-v2-recovery-guard.yml; do
+            grep -q 'team_WkMSXuSv8kDLoOlGHYtIggZ1' "$file"
+            grep -q 'prj_Ti1NOQryzFeImhMSwncMXNxs01I8' "$file"
+            grep -q 'workers-food-club.vercel.app' "$file"
+          done
+      - name: Prove live-economic-effect authority remains absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          recovery=.github/workflows/production-access-v2-recovery.yml
+          grep -q 'liveFundsWithheld' "$recovery"
+          grep -q 'paystackLiveWithheld' "$recovery"
+          grep -q 'paymentMutationWithheld' "$recovery"
+          files=(.github/workflows/production-access-v2-recovery.yml .github/workflows/production-access-v2-containment.yml .github/workflows/production-access-v2-recovery-guard.yml)
+          ! grep -Eiq 'PAYSTACK_(LIVE_)?SECRET|PAYSTACK_SECRET_KEY|sk_live_' "${files[@]}"
