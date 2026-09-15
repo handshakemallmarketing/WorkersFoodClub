@@ -1,0 +1,1 @@
+Review focus: prove removal of short-lived end-user token dependency does not weaken OIDC/JWKS verification, application-owned authorization, durable access-state semantics, or fail-closed containment.
