@@ -1,0 +1,1 @@
+Ready for pull-request review. Production remains OFF/fail-closed until review, CI, merge, and governed v2 recovery proof succeed.
