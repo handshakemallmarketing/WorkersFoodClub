@@ -1,0 +1,1 @@
+Implementation is review-ready. Production remains fail-closed until the v2 gate is reviewed, CI-proven, merged, and the governed recovery workflow is executed successfully.
