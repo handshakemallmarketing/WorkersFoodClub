@@ -59,21 +59,20 @@ test('A2 beneficiary activation enforces configured active-slot ceiling',()=>{
   assert.throws(()=>store.invite({id:'beneficiary:a2-2',sponsorParticipantId:sponsor,tokenDigest:'digest:2',invitedAt:'2026-09-16T14:00:00Z',expiresAt:'2026-09-17T14:00:00Z'},policy),/BENEFICIARY_SLOT_LIMIT/);
 });
 
-test('A2 billing settlement replay is idempotent and partial settlement cannot restore past-due standing',()=>{
+test('A2 annual membership fee requires one exact full non-refundable settlement',()=>{
   const participantId=participant('participant:billing');
   const billing=new InMemoryMembershipBillingStore();
-  billing.issue({id:'invoice:a2',participantId,amountMinor:10000,issuedAt:'2026-09-01T00:00:00Z',dueAt:'2026-09-10T00:00:00Z'});
+  const invoice=billing.issue({id:'invoice:a2',participantId,amountMinor:10000,issuedAt:'2026-09-01T00:00:00Z',dueAt:'2026-09-10T00:00:00Z'});
+  assert.equal(invoice.nonRefundable,true);
   billing.markDue('invoice:a2');
   billing.markPastDue('invoice:a2','2026-09-11T00:00:00Z');
   assert.equal(billing.standing(participantId,true).state,'RESTRICTED');
-  const first=billing.recordAuthoritativeSettlement('invoice:a2',{amountMinor:4000,reference:'settlement:a2-1'});
-  const replay=billing.recordAuthoritativeSettlement('invoice:a2',{amountMinor:4000,reference:'settlement:a2-1'});
-  assert.equal(first.settledMinor,4000);
-  assert.equal(first.state,'PAST_DUE');
-  assert.equal(replay.settledMinor,4000);
-  assert.equal(replay.settlementReferences.length,1);
+  assert.throws(()=>billing.recordAuthoritativeSettlement('invoice:a2',{amountMinor:4000,reference:'settlement:a2-partial'}),/ANNUAL_MEMBERSHIP_FEE_FULL_PAYMENT_REQUIRED/);
+  assert.throws(()=>billing.recordAuthoritativeSettlement('invoice:a2',{amountMinor:11000,reference:'settlement:a2-over'}),/ANNUAL_MEMBERSHIP_FEE_FULL_PAYMENT_REQUIRED/);
   assert.equal(billing.standing(participantId,true).state,'RESTRICTED');
-  const settled=billing.recordAuthoritativeSettlement('invoice:a2',{amountMinor:6000,reference:'settlement:a2-2'});
+  const settled=billing.recordAuthoritativeSettlement('invoice:a2',{amountMinor:10000,reference:'settlement:a2-full'});
   assert.equal(settled.state,'SETTLED');
+  assert.equal(settled.settledMinor,10000);
+  assert.equal(settled.nonRefundable,true);
   assert.equal(billing.standing(participantId,true).state,'CURRENT');
 });
