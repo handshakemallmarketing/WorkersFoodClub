@@ -38,7 +38,7 @@ export class InMemoryMembershipBillingStore {
   let shoppingCreditLotId:string|undefined;
   if(excess>0){
    if(!this.shoppingCredits)throw new Error('SHOPPING_CREDIT_STORE_REQUIRED_FOR_OVERPAYMENT');
-   const lot=this.shoppingCredits.issue({id:`credit:membership-overpayment:${input.reference}`,participantId:i.participantId,source:'MEMBERSHIP_OVERPAYMENT_CREDIT',amountMinor:excess,issuedAt:input.recordedAt??new Date().toISOString(),sourceReference:`membership-overpayment:${input.reference}`});
+   const lot=this.shoppingCredits.issue({id:`credit:membership-overpayment:${input.reference}`,participantId:i.participantId,source:'MEMBERSHIP_OVERPAYMENT_CREDIT',funding:'MEMBER_FUNDED',amountMinor:excess,issuedAt:input.recordedAt??new Date().toISOString(),sourceReference:`membership-overpayment:${input.reference}`});
    shoppingCreditLotId=lot.id;
   }
   const invoice=this.replace({...i,settledMinor:i.amountMinor,state:'SETTLED',settlementReferences:[...i.settlementReferences,input.reference]});
