@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS member_application (
 
 CREATE TABLE IF NOT EXISTS beneficiary_invitation (
   invitation_id text PRIMARY KEY,
-  sponsor_participant_id text NOT NULL REFERENCES participant(participant_id),
-  beneficiary_participant_id text REFERENCES participant(participant_id),
+  sponsor_participant_id text NOT NULL REFERENCES application_participant(participant_id),
+  beneficiary_participant_id text REFERENCES application_participant(participant_id),
   token_digest text NOT NULL CHECK (btrim(token_digest) <> ''),
   state text NOT NULL CHECK (state IN ('INVITED','ACCEPTED','ACTIVATED','REVOKED','EXPIRED')),
   invited_at timestamptz NOT NULL,
@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS beneficiary_invitation_sponsor_state_idx ON beneficia
 
 CREATE TABLE IF NOT EXISTS membership_invoice (
   invoice_id text PRIMARY KEY,
-  participant_id text NOT NULL REFERENCES participant(participant_id),
+  participant_id text NOT NULL REFERENCES application_participant(participant_id),
   amount_minor bigint NOT NULL CHECK (amount_minor > 0),
   settled_minor bigint NOT NULL DEFAULT 0 CHECK (settled_minor >= 0 AND settled_minor <= amount_minor),
   state text NOT NULL CHECK (state IN ('ISSUED','DUE','PARTIALLY_SETTLED','SETTLED','PAST_DUE','VOID')),
