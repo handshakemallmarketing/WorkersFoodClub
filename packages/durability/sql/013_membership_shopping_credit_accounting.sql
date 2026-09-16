@@ -3,8 +3,9 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS membership_shopping_credit_lot (
   id text PRIMARY KEY,
   participant_id text NOT NULL,
-  source text NOT NULL CHECK (source IN ('MEMBERSHIP_FEE_SPENDING_CREDIT','PROMOTIONAL_CREDIT','MEMBERSHIP_OVERPAYMENT_CREDIT')),
+  source text NOT NULL CHECK (source IN ('MEMBERSHIP_FEE_SPENDING_CREDIT','PROMOTIONAL_CREDIT','SHIPPING_CREDIT')),
   funding text NOT NULL CHECK (funding IN ('MEMBER_FUNDED','CLUB_FUNDED')),
+  applicability text NOT NULL CHECK (applicability IN ('MERCHANDISE','SHIPPING')),
   issued_minor bigint NOT NULL CHECK (issued_minor > 0),
   available_minor bigint NOT NULL CHECK (available_minor >= 0 AND available_minor <= issued_minor),
   issued_at timestamptz NOT NULL,
@@ -14,8 +15,10 @@ CREATE TABLE IF NOT EXISTS membership_shopping_credit_lot (
   state text NOT NULL CHECK (state IN ('AVAILABLE','RESERVED','REDEEMED','EXPIRED')),
   CHECK (expires_at IS NULL OR expires_at > issued_at),
   CHECK (source <> 'PROMOTIONAL_CREDIT' OR campaign_reference IS NOT NULL),
-  CHECK (source <> 'MEMBERSHIP_OVERPAYMENT_CREDIT' OR funding = 'MEMBER_FUNDED'),
-  CHECK (source = 'MEMBERSHIP_OVERPAYMENT_CREDIT' OR funding = 'CLUB_FUNDED')
+  CHECK (source <> 'SHIPPING_CREDIT' OR (funding = 'MEMBER_FUNDED' AND applicability = 'SHIPPING')),
+  CHECK (source = 'SHIPPING_CREDIT' OR (funding = 'CLUB_FUNDED' AND applicability = 'MERCHANDISE')),
+  CHECK (source <> 'MEMBERSHIP_FEE_SPENDING_CREDIT' OR expires_at IS NOT NULL),
+  CHECK (source <> 'PROMOTIONAL_CREDIT' OR expires_at IS NOT NULL)
 );
 
 CREATE TABLE IF NOT EXISTS membership_shopping_credit_entry (
@@ -32,6 +35,8 @@ CREATE TABLE IF NOT EXISTS membership_shopping_credit_entry (
 
 CREATE INDEX IF NOT EXISTS membership_shopping_credit_lot_participant_idx
   ON membership_shopping_credit_lot(participant_id, state, source);
+CREATE INDEX IF NOT EXISTS membership_shopping_credit_lot_applicability_idx
+  ON membership_shopping_credit_lot(participant_id, state, applicability);
 CREATE INDEX IF NOT EXISTS membership_shopping_credit_entry_lot_idx
   ON membership_shopping_credit_entry(lot_id, occurred_at);
 CREATE INDEX IF NOT EXISTS membership_shopping_credit_entry_participant_idx
