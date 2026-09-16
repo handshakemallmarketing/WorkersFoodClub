@@ -14,11 +14,16 @@ export interface MembershipInvoice {
  readonly settlementReferences:readonly string[];
  readonly nonRefundable:true;
 }
+export interface VerifiedMembershipPaymentEvidence {
+ readonly evidenceId:string; readonly providerReference:string; readonly participantId:ParticipantId; readonly obligationId:string;
+ readonly amountMinor:number; readonly verified:true; readonly persisted:true; readonly verifiedAt:string;
+}
 export interface MembershipSettlementResult {readonly invoice:MembershipInvoice;readonly overpaymentShippingCreditMinor:number;readonly shippingCreditLotId?:string;}
 export interface MembershipStanding {readonly participantId:ParticipantId;readonly state:MembershipStandingState;readonly basisInvoiceIds:readonly string[];}
 
 export class InMemoryMembershipBillingStore {
  private readonly invoices=new Map<string,MembershipInvoice>();
+ private readonly consumedEvidenceIds=new Set<string>();
  constructor(private readonly shoppingCredits?:InMemoryShoppingCreditStore){}
  issue(input:{id:string;participantId:ParticipantId;amountMinor:number;issuedAt:string;dueAt:string}):MembershipInvoice{
   if(this.invoices.has(input.id)) throw new Error('MEMBERSHIP_INVOICE_ID_DUPLICATE');
@@ -27,29 +32,25 @@ export class InMemoryMembershipBillingStore {
   const invoice=this.freeze({...input,settledMinor:0,state:'ISSUED' as const,settlementReferences:[],nonRefundable:true as const});this.invoices.set(invoice.id,invoice);return invoice;
  }
  markDue(id:string):MembershipInvoice{const i=this.require(id);if(i.state!=='ISSUED')throw new Error('MEMBERSHIP_INVOICE_NOT_ISSUED');return this.replace({...i,state:'DUE'});}
- recordAuthoritativeSettlement(id:string,input:{amountMinor:number;reference:string;recordedAt?:string}):MembershipSettlementResult{
+ recordAuthoritativeSettlement(id:string,evidence:VerifiedMembershipPaymentEvidence):MembershipSettlementResult{
   const i=this.require(id);if(i.state==='VOID')throw new Error('MEMBERSHIP_INVOICE_NOT_SETTLEABLE');
-  if(!input.reference.trim())throw new Error('SETTLEMENT_REFERENCE_REQUIRED');
-  if(i.settlementReferences.includes(input.reference))return Object.freeze({invoice:i,overpaymentShippingCreditMinor:0});
+  if(evidence?.verified!==true||evidence?.persisted!==true)throw new Error('VERIFIED_PERSISTED_PAYMENT_EVIDENCE_REQUIRED');
+  if(!evidence.evidenceId?.trim()||!evidence.providerReference?.trim())throw new Error('PAYMENT_EVIDENCE_IDENTITY_REQUIRED');
+  if(evidence.participantId!==i.participantId)throw new Error('PAYMENT_EVIDENCE_PARTICIPANT_MISMATCH');
+  if(evidence.obligationId!==i.id)throw new Error('PAYMENT_EVIDENCE_OBLIGATION_MISMATCH');
+  if(this.consumedEvidenceIds.has(evidence.evidenceId)||i.settlementReferences.includes(evidence.providerReference))return Object.freeze({invoice:i,overpaymentShippingCreditMinor:0});
   if(i.state==='SETTLED')throw new Error('MEMBERSHIP_INVOICE_NOT_SETTLEABLE');
-  if(!Number.isSafeInteger(input.amountMinor)||input.amountMinor<=0)throw new Error('SETTLEMENT_AMOUNT_INVALID');
-  if(input.amountMinor<i.amountMinor)throw new Error('ANNUAL_MEMBERSHIP_FEE_FULL_PAYMENT_REQUIRED');
-  const excess=input.amountMinor-i.amountMinor;
-  let shippingCreditLotId:string|undefined;
-  if(excess>0){
-   if(!this.shoppingCredits)throw new Error('SHOPPING_CREDIT_STORE_REQUIRED_FOR_OVERPAYMENT');
-   const lot=this.shoppingCredits.issueShippingCredit({id:`credit:membership-overpayment:${input.reference}`,participantId:i.participantId,amountMinor:excess,issuedAt:input.recordedAt??new Date().toISOString(),sourceReference:`membership-overpayment:${input.reference}`});
-   shippingCreditLotId=lot.id;
-  }
-  const invoice=this.replace({...i,settledMinor:i.amountMinor,state:'SETTLED',settlementReferences:[...i.settlementReferences,input.reference]});
+  if(!Number.isSafeInteger(evidence.amountMinor)||evidence.amountMinor<=0)throw new Error('SETTLEMENT_AMOUNT_INVALID');
+  if(evidence.amountMinor<i.amountMinor)throw new Error('ANNUAL_MEMBERSHIP_FEE_FULL_PAYMENT_REQUIRED');
+  const excess=evidence.amountMinor-i.amountMinor; let shippingCreditLotId:string|undefined;
+  if(excess>0){if(!this.shoppingCredits)throw new Error('SHOPPING_CREDIT_STORE_REQUIRED_FOR_OVERPAYMENT');const lot=this.shoppingCredits.issueShippingCredit({id:`credit:membership-overpayment:${evidence.evidenceId}`,participantId:i.participantId,amountMinor:excess,issuedAt:evidence.verifiedAt,sourceReference:`membership-overpayment:${evidence.providerReference}`});shippingCreditLotId=lot.id;}
+  this.consumedEvidenceIds.add(evidence.evidenceId);
+  const invoice=this.replace({...i,settledMinor:i.amountMinor,state:'SETTLED',settlementReferences:[...i.settlementReferences,evidence.providerReference]});
   return Object.freeze(shippingCreditLotId===undefined?{invoice,overpaymentShippingCreditMinor:excess}:{invoice,overpaymentShippingCreditMinor:excess,shippingCreditLotId});
  }
  markPastDue(id:string,at:string):MembershipInvoice{const i=this.require(id);if(i.state==='SETTLED'||i.state==='VOID')return i;if(Date.parse(at)<=Date.parse(i.dueAt))throw new Error('MEMBERSHIP_INVOICE_NOT_PAST_DUE');return this.replace({...i,state:'PAST_DUE'});}
  void(id:string):MembershipInvoice{const i=this.require(id);if(i.settledMinor>0)throw new Error('SETTLED_MEMBERSHIP_INVOICE_CANNOT_VOID');return this.replace({...i,state:'VOID'});}
- standing(participantId:ParticipantId,restricted:boolean):MembershipStanding{
-  const pastDue=[...this.invoices.values()].filter(x=>x.participantId===participantId&&x.state==='PAST_DUE').map(x=>x.id);
-  return Object.freeze({participantId,state:restricted&&pastDue.length?'RESTRICTED':pastDue.length?'PAST_DUE':'CURRENT',basisInvoiceIds:Object.freeze(pastDue)});
- }
+ standing(participantId:ParticipantId,restricted:boolean):MembershipStanding{const pastDue=[...this.invoices.values()].filter(x=>x.participantId===participantId&&x.state==='PAST_DUE').map(x=>x.id);return Object.freeze({participantId,state:restricted&&pastDue.length?'RESTRICTED':pastDue.length?'PAST_DUE':'CURRENT',basisInvoiceIds:Object.freeze(pastDue)});}
  get(id:string){return this.invoices.get(id);}
  private require(id:string){const i=this.invoices.get(id);if(!i)throw new Error('MEMBERSHIP_INVOICE_NOT_FOUND');return i;}
  private replace(value:MembershipInvoice){const frozen=this.freeze(value);this.invoices.set(value.id,frozen);return frozen;}
