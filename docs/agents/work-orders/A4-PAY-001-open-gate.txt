@@ -1,0 +1,1 @@
+Integration gate remains open pending exact-head pull-request checks.
