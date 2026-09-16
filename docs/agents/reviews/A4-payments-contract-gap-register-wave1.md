@@ -1,6 +1,6 @@
 # A4 Payments — Wave 1 Contract and Gap Register
 
-Status: REVIEW EVIDENCE — NO LIVE PROVIDER AUTHORITY
+Status: REVIEW EVIDENCE — REMEDIATION GAPS RECORDED — NO LIVE PROVIDER AUTHORITY
 Baseline: integrated Wave 1 control plane after A11
 
 ## Governing invariants
@@ -13,23 +13,40 @@ Baseline: integrated Wave 1 control plane after A11
 7. A payroll/CAGD deduction mandate, request, schedule, acknowledgement, or file submission is not settlement.
 8. Item-level credit creates a receivable; it must not masquerade as settled cash or reduce outstanding principal without authoritative repayment evidence.
 9. Provider callbacks, imports, retries and reconciliation are idempotent by stable external reference plus governed event identity.
-10. Refunds, where a refundable transaction class exists, require lineage to the original settled transaction and cannot exceed refundable settled value.
+10. Refunds require lineage to the original authoritative settled transaction and cannot exceed refundable settled value.
+11. A minimum-commitment threshold is governed policy. A commitment does not qualify merely because some payment exists; qualification requires authoritative settlement meeting the configured threshold.
 
 ## Contract / gap register
 
 | Area | Required contract | Current evidence | Gap / disposition |
 |---|---|---|---|
 | Membership obligation | invoice/obligation has amount, due date, participant and state | A2 billing implementation/tests | Implemented for membership domain; preserve full-annual-payment rule. |
-| Settlement | authoritative evidence distinct from intent/initiation | A2 `recordAuthoritativeSettlement`; existing payment durability boundaries | Implemented boundary; provider adapters must map only verified settlement into it. |
-| Membership fee refund | annual fee is non-refundable | governing business rule | No membership-fee refund path may be introduced. Refund contract applies only to separately refundable commerce transactions. |
+| Membership settlement evidence | authoritative evidence distinct from intent/initiation, persisted with verification/status-mapping lineage | A2 `recordAuthoritativeSettlement`; separate commerce provider verification | **OPEN P1.** `recordAuthoritativeSettlement` accepts caller-supplied amount/reference and can mark the invoice settled without itself requiring persisted verified-provider evidence. Membership settlement must be bound to verified evidence before this boundary is considered authoritative. |
+| Membership fee refund | annual fee is non-refundable | governing business rule | No membership-fee refund path may be introduced. |
 | Founding cohort credit | club-funded merchandise credit separately ledgered | A2 credit implementation/tests | Implemented accounting separation; campaign eligibility remains governed policy. |
 | Promotional credit expiry | fixed one-year expiry | A2 credit implementation + A11 expiry falsification | Implemented and cross-agent falsified. |
 | Fee overpayment | excess becomes SHIPPING credit | A2 billing/credit implementation + A11 applicability falsification | Implemented and cross-agent falsified. |
+| UC-08 minimum commitment payment | qualification requires authoritative settled value meeting a governed minimum threshold | existing commitment/payment journey; A3 is not authorized to choose the default percentage | **OPEN POLICY/CONTRACT GAP.** The default minimum-payment percentage and commitment-qualification behavior are not yet governed. No percentage is inferred by this review. Until explicitly decided and implemented, the integration gate must not claim UC-08 complete. |
 | CAGD/payroll deduction | mandate/request != settlement; stable mandate and remittance lineage | not yet implemented | BOUNDED FUTURE CONTRACT. Requires agency/provider interface, mandate lifecycle, remittance file/API reconciliation, reversals and exception queue before implementation. |
 | Item-level credit | purchase creates receivable with principal, terms, status and repayment lineage | not yet implemented | BOUNDED FUTURE CONTRACT. Requires explicit product eligibility/limit policy and receivables ledger before implementation. |
 | Payment idempotency | duplicate provider evidence cannot duplicate settlement/credit | existing durable payment/replay tests plus A2 source-reference uniqueness | Boundary exists; future adapters must share canonical idempotency key policy. |
-| Reconciliation | internal settlement must reconcile to provider/remittance evidence | existing payment durability/reconciliation posture | Extend reconciliation to CAGD and receivables before those features are authorized. |
-| Refund lineage | refund references original refundable settlement and is capped | not implemented for new commerce flows | Define only when refundable commerce transaction types are introduced; membership fee remains excluded. |
+| Reconciliation | internal settlement must reconcile to provider/remittance evidence | existing payment durability/reconciliation posture | Membership evidence binding is still open; extend reconciliation to CAGD and receivables before those features are authorized. |
+| Existing shortfall refund lineage (UC-26 / SW1-07) | refund references original authoritative settlement and aggregate refunds cannot exceed refundable settled value | `api/authorize-refund.js` shortfall remedy | **OPEN P1.** Existing shortfall refund authorization is commitment/fulfillment-exception based and is not yet proven to link the remedy to the original authoritative settlement or cap aggregate refund value against settled value. This is a current remediation gap, not a future-only contract. |
+
+## Required membership settlement remediation contract
+`Verified provider/remittance evidence -> persisted evidence identity/status mapping -> reconciliation -> authoritative settlement allocation -> membership standing transition`.
+
+The settlement mutation must consume or reference durable verified evidence. Caller assertions, payment intent, provider acknowledgement, or an arbitrary reference are insufficient. Replays must resolve to the same evidence identity and must not duplicate settlement or downstream credit issuance.
+
+## UC-08 minimum-commitment contract
+`Commitment obligation -> governed minimum-payment policy -> authoritative settlement evidence -> settled amount comparison -> qualification or fail-closed non-qualification`.
+
+The default minimum-payment percentage is deliberately unresolved. A3/commerce code must not invent it. The policy must define percentage/amount semantics, rounding, currency, timing, partial-settlement accumulation, reversals, and what happens when a previously qualified commitment falls below threshold after a reversal.
+
+## Existing shortfall-refund remediation contract
+`Original authoritative settlement -> fulfillment shortfall/exception -> refundable-value calculation -> authorized refund -> provider refund execution/evidence -> aggregate refund reconciliation`.
+
+Refund authorization must carry lineage to the original settlement, enforce `aggregate_refunded_minor + proposed_refund_minor <= refundable_settled_minor`, remain idempotent under retries, and preserve immutable evidence for authorization, execution, failure and reconciliation. Membership fees remain non-refundable and outside this flow.
 
 ## Required future CAGD contract
 `Mandate -> Submission -> Agency acceptance/rejection -> Payroll cycle -> Remittance evidence -> Reconciliation -> Authoritative settlement allocation`.
@@ -43,24 +60,26 @@ Minimum fields: receivable ID, participant ID, order/line ID, SKU/offer version,
 
 ## Authority and separation of duties
 - Member may initiate payment or deduction consent but cannot attest settlement.
-- Payment adapter may ingest provider evidence but cannot redefine membership policy.
+- Payment adapter may ingest provider evidence but cannot redefine membership or minimum-commitment policy.
 - Reconciliation process may match evidence but cannot fabricate provider evidence.
 - Operator roles require explicit payment/refund permissions; warehouse/delivery roles receive no payment mutation authority.
-- System owner feature control is not a universal bypass of settlement invariants.
+- System owner feature control is not a universal bypass of settlement or refund-lineage invariants.
 
 ## Replay / race / recovery requirements
 - Stable external references are unique within provider/rail namespace.
 - Duplicate callbacks/import rows are no-ops after the first authoritative application.
-- Concurrent settlement attempts serialize or conflict safely; total applied settlement cannot exceed evidence received.
+- Concurrent settlement attempts serialize or conflict safely; total applied settlement cannot exceed verified evidence received.
 - Credit issuance caused by settlement is atomic with, or recoverably linked to, the settlement event.
+- Refund retries cannot duplicate authorized/executed refund value; aggregate refunds remain capped by refundable settled value.
 - Reconciliation can identify missing, duplicated, unmatched and reversed evidence without silently changing truth.
-- Restore/backup proof must preserve obligation, settlement, credit and receivable lineage.
+- Restore/backup proof must preserve obligation, settlement, credit, refund and receivable lineage.
 
 ## Consequential decisions still requiring explicit authority
-1. CAGD integration mechanism and agency contract/API/file specification.
-2. Item-level credit eligibility, limits, term length, fees/interest (if any), delinquency and write-off policy.
-3. Which commerce transaction classes, if any, are refundable and under what approval thresholds.
-4. Canonical provider-agnostic idempotency namespace when additional payment rails are introduced.
+1. UC-08 default minimum-commitment payment percentage/amount and qualification/reversal policy.
+2. CAGD integration mechanism and agency contract/API/file specification.
+3. Item-level credit eligibility, limits, term length, fees/interest (if any), delinquency and write-off policy.
+4. Refundability policy and approval thresholds for commerce classes beyond the already-existing shortfall remedy.
+5. Canonical provider-agnostic idempotency namespace when additional payment rails are introduced.
 
 ## Gate conclusion
-A4 finds no basis to authorize live Paystack, live credentials, live funds, CAGD deductions, item-level credit, Production payment mutation expansion or fulfillment mutation expansion. Existing A2 accounting rules are compatible with the required separation-of-truth model. CAGD, item credit and new refund flows remain design contracts until their policy decisions, persistence, adapters, reconciliation and adversarial tests are implemented.
+A4 does not authorize live Paystack, live credentials, live funds, CAGD deductions, item-level credit, Production payment mutation expansion or fulfillment mutation expansion. Three material Wave 1 gaps are now explicit: membership settlement is not yet bound to persisted verified evidence; UC-08 minimum-commitment policy/qualification is unresolved; and the existing shortfall-refund flow lacks proven settlement lineage/capping. These must be remediated or explicitly gated before A4 can be marked complete.
