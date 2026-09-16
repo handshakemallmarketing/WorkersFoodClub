@@ -14,7 +14,7 @@ export interface MembershipInvoice {
  readonly settlementReferences:readonly string[];
  readonly nonRefundable:true;
 }
-export interface MembershipSettlementResult {readonly invoice:MembershipInvoice;readonly overpaymentCreditMinor:number;readonly shoppingCreditLotId?:string;}
+export interface MembershipSettlementResult {readonly invoice:MembershipInvoice;readonly overpaymentShippingCreditMinor:number;readonly shippingCreditLotId?:string;}
 export interface MembershipStanding {readonly participantId:ParticipantId;readonly state:MembershipStandingState;readonly basisInvoiceIds:readonly string[];}
 
 export class InMemoryMembershipBillingStore {
@@ -30,19 +30,19 @@ export class InMemoryMembershipBillingStore {
  recordAuthoritativeSettlement(id:string,input:{amountMinor:number;reference:string;recordedAt?:string}):MembershipSettlementResult{
   const i=this.require(id);if(i.state==='VOID')throw new Error('MEMBERSHIP_INVOICE_NOT_SETTLEABLE');
   if(!input.reference.trim())throw new Error('SETTLEMENT_REFERENCE_REQUIRED');
-  if(i.settlementReferences.includes(input.reference))return Object.freeze({invoice:i,overpaymentCreditMinor:0});
+  if(i.settlementReferences.includes(input.reference))return Object.freeze({invoice:i,overpaymentShippingCreditMinor:0});
   if(i.state==='SETTLED')throw new Error('MEMBERSHIP_INVOICE_NOT_SETTLEABLE');
   if(!Number.isSafeInteger(input.amountMinor)||input.amountMinor<=0)throw new Error('SETTLEMENT_AMOUNT_INVALID');
   if(input.amountMinor<i.amountMinor)throw new Error('ANNUAL_MEMBERSHIP_FEE_FULL_PAYMENT_REQUIRED');
   const excess=input.amountMinor-i.amountMinor;
-  let shoppingCreditLotId:string|undefined;
+  let shippingCreditLotId:string|undefined;
   if(excess>0){
    if(!this.shoppingCredits)throw new Error('SHOPPING_CREDIT_STORE_REQUIRED_FOR_OVERPAYMENT');
-   const lot=this.shoppingCredits.issue({id:`credit:membership-overpayment:${input.reference}`,participantId:i.participantId,source:'MEMBERSHIP_OVERPAYMENT_CREDIT',funding:'MEMBER_FUNDED',amountMinor:excess,issuedAt:input.recordedAt??new Date().toISOString(),sourceReference:`membership-overpayment:${input.reference}`});
-   shoppingCreditLotId=lot.id;
+   const lot=this.shoppingCredits.issueShippingCredit({id:`credit:membership-overpayment:${input.reference}`,participantId:i.participantId,amountMinor:excess,issuedAt:input.recordedAt??new Date().toISOString(),sourceReference:`membership-overpayment:${input.reference}`});
+   shippingCreditLotId=lot.id;
   }
   const invoice=this.replace({...i,settledMinor:i.amountMinor,state:'SETTLED',settlementReferences:[...i.settlementReferences,input.reference]});
-  return Object.freeze(shoppingCreditLotId===undefined?{invoice,overpaymentCreditMinor:excess}:{invoice,overpaymentCreditMinor:excess,shoppingCreditLotId});
+  return Object.freeze(shippingCreditLotId===undefined?{invoice,overpaymentShippingCreditMinor:excess}:{invoice,overpaymentShippingCreditMinor:excess,shippingCreditLotId});
  }
  markPastDue(id:string,at:string):MembershipInvoice{const i=this.require(id);if(i.state==='SETTLED'||i.state==='VOID')return i;if(Date.parse(at)<=Date.parse(i.dueAt))throw new Error('MEMBERSHIP_INVOICE_NOT_PAST_DUE');return this.replace({...i,state:'PAST_DUE'});}
  void(id:string):MembershipInvoice{const i=this.require(id);if(i.settledMinor>0)throw new Error('SETTLED_MEMBERSHIP_INVOICE_CANNOT_VOID');return this.replace({...i,state:'VOID'});}
