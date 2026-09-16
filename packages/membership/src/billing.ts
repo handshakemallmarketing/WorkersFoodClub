@@ -1,6 +1,6 @@
 import type {ParticipantId} from '../../kernel/src/index.js';
 
-export type MembershipInvoiceState='ISSUED'|'DUE'|'PARTIALLY_SETTLED'|'SETTLED'|'PAST_DUE'|'VOID';
+export type MembershipInvoiceState='ISSUED'|'DUE'|'SETTLED'|'PAST_DUE'|'VOID';
 export type MembershipStandingState='CURRENT'|'PAST_DUE'|'RESTRICTED';
 export interface MembershipInvoice {
  readonly id:string;
@@ -11,6 +11,7 @@ export interface MembershipInvoice {
  readonly issuedAt:string;
  readonly dueAt:string;
  readonly settlementReferences:readonly string[];
+ readonly nonRefundable:true;
 }
 export interface MembershipStanding {readonly participantId:ParticipantId;readonly state:MembershipStandingState;readonly basisInvoiceIds:readonly string[];}
 
@@ -20,7 +21,7 @@ export class InMemoryMembershipBillingStore {
   if(this.invoices.has(input.id)) throw new Error('MEMBERSHIP_INVOICE_ID_DUPLICATE');
   if(!Number.isSafeInteger(input.amountMinor)||input.amountMinor<=0) throw new Error('MEMBERSHIP_INVOICE_AMOUNT_INVALID');
   if(Date.parse(input.dueAt)<Date.parse(input.issuedAt)) throw new Error('MEMBERSHIP_INVOICE_DUE_INVALID');
-  const invoice=this.freeze({...input,settledMinor:0,state:'ISSUED' as const,settlementReferences:[]});this.invoices.set(invoice.id,invoice);return invoice;
+  const invoice=this.freeze({...input,settledMinor:0,state:'ISSUED' as const,settlementReferences:[],nonRefundable:true as const});this.invoices.set(invoice.id,invoice);return invoice;
  }
  markDue(id:string):MembershipInvoice{const i=this.require(id);if(i.state!=='ISSUED')throw new Error('MEMBERSHIP_INVOICE_NOT_ISSUED');return this.replace({...i,state:'DUE'});}
  recordAuthoritativeSettlement(id:string,input:{amountMinor:number;reference:string}):MembershipInvoice{
@@ -28,9 +29,8 @@ export class InMemoryMembershipBillingStore {
   if(!input.reference.trim())throw new Error('SETTLEMENT_REFERENCE_REQUIRED');
   if(i.settlementReferences.includes(input.reference))return i;
   if(!Number.isSafeInteger(input.amountMinor)||input.amountMinor<=0)throw new Error('SETTLEMENT_AMOUNT_INVALID');
-  const settled=Math.min(i.amountMinor,i.settledMinor+input.amountMinor);
-  const state:MembershipInvoiceState=settled===i.amountMinor?'SETTLED':i.state==='PAST_DUE'?'PAST_DUE':'PARTIALLY_SETTLED';
-  return this.replace({...i,settledMinor:settled,state,settlementReferences:[...i.settlementReferences,input.reference]});
+  if(input.amountMinor!==i.amountMinor)throw new Error('ANNUAL_MEMBERSHIP_FEE_FULL_PAYMENT_REQUIRED');
+  return this.replace({...i,settledMinor:i.amountMinor,state:'SETTLED',settlementReferences:[...i.settlementReferences,input.reference]});
  }
  markPastDue(id:string,at:string):MembershipInvoice{const i=this.require(id);if(i.state==='SETTLED'||i.state==='VOID')return i;if(Date.parse(at)<=Date.parse(i.dueAt))throw new Error('MEMBERSHIP_INVOICE_NOT_PAST_DUE');return this.replace({...i,state:'PAST_DUE'});}
  void(id:string):MembershipInvoice{const i=this.require(id);if(i.settledMinor>0)throw new Error('SETTLED_MEMBERSHIP_INVOICE_CANNOT_VOID');return this.replace({...i,state:'VOID'});}
