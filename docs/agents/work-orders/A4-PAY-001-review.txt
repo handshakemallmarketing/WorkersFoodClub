@@ -1,0 +1,1 @@
+Review scope locked to A4-PAY-001 evidence boundary and regressions. Gate remains open.
