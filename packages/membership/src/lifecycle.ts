@@ -49,7 +49,7 @@ export class InMemoryMemberApplicationStore {
  get(id:string){return this.applications.get(id);}
  private require(id:string){const a=this.applications.get(id);if(!a)throw new Error('MEMBER_APPLICATION_NOT_FOUND');return a;}
  private replace(value:MemberApplication){const frozen=this.freeze(value);this.applications.set(value.id,frozen);return frozen;}
- private freeze<T extends MemberApplication>(value:T):MemberApplication{return Object.freeze({...value,eligibilityEvidenceIds:Object.freeze([...value.eligibilityEvidenceIds])});}
+ private freeze(value:MemberApplication):MemberApplication{return Object.freeze({...value,eligibilityEvidenceIds:Object.freeze([...value.eligibilityEvidenceIds])});}
 }
 
 export type BeneficiaryInvitationState='INVITED'|'ACCEPTED'|'ACTIVATED'|'REVOKED'|'EXPIRED';
