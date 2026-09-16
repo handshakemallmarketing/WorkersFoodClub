@@ -14,35 +14,31 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/008_identity_binding_referential_integrity.sql
 "${PSQL[@]}" -f packages/durability/sql/009_preview_runtime_schema.sql
 "${PSQL[@]}" -f packages/durability/sql/011_preview_runtime_timestamp_defaults.sql
+"${PSQL[@]}" -f packages/durability/sql/012_membership_business_logic_v2.sql
+"${PSQL[@]}" -f packages/durability/sql/013_membership_shopping_credit_accounting.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
-
+a2_membership_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('member_application','beneficiary_invitation','membership_invoice','membership_invoice_settlement')")
+[[ "$a2_membership_tables" == "4" ]] || { echo "A2 membership schema is not reproducible from migrations" >&2; exit 1; }
+a2_credit_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('membership_shopping_credit_lot','membership_shopping_credit_entry')")
+[[ "$a2_credit_tables" == "2" ]] || { echo "A2 shopping-credit schema is not reproducible from migrations" >&2; exit 1; }
 accepted_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_member_commitment' AND column_name='accepted_at'")
 [[ "$accepted_at_contract" == NO:* && "$accepted_at_contract" != "NO:" ]] || { echo "preview_member_commitment.accepted_at must remain NOT NULL with a database default" >&2; exit 1; }
-
 recorded_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_sandbox_payment' AND column_name='recorded_at'")
 [[ "$recorded_at_contract" == NO:* && "$recorded_at_contract" != "NO:" ]] || { echo "preview_sandbox_payment.recorded_at must remain NOT NULL with a database default" >&2; exit 1; }
 refund_unique_constraints=$("${PSQL[@]}" -Atc "SELECT count(*) FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='preview_refund_remedy' AND con.contype='u' AND con.conname IN ('preview_refund_remedy_source_exception_id_key','preview_refund_remedy_authorize_request_id_key','preview_refund_remedy_authorize_command_id_key','preview_refund_remedy_authorize_event_id_key','preview_refund_remedy_complete_request_id_key','preview_refund_remedy_complete_command_id_key','preview_refund_remedy_completion_event_id_key','preview_refund_remedy_provider_reference_key')")
 [[ "$refund_unique_constraints" == "8" ]] || { echo "preview refund idempotency constraints are incomplete" >&2; exit 1; }
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+TRUNCATE membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
 SQL
 
 # RC3-BIND-001: durable participant, membership and operator authority are independent governed records.
 "${PSQL[@]}" <<'SQL'
-INSERT INTO application_participant(participant_id,kind,state)
-VALUES
- ('participant:member','PERSON','ACTIVE'),
- ('participant:operator','PERSON','ACTIVE'),
- ('participant:system','SYSTEM','ACTIVE');
-
-INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids)
-VALUES('membership:live','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:1']);
-
-INSERT INTO application_authority_grant(grant_id,grantor_id,actor_id,actions,valid_from)
-VALUES('grant:operator:orders','participant:system','participant:operator',ARRAY['operator:orders.read'],now()-interval '1 minute');
+INSERT INTO application_participant(participant_id,kind,state) VALUES ('participant:member','PERSON','ACTIVE'),('participant:operator','PERSON','ACTIVE'),('participant:system','SYSTEM','ACTIVE');
+INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:live','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:1']);
+INSERT INTO application_authority_grant(grant_id,grantor_id,actor_id,actions,valid_from) VALUES('grant:operator:orders','participant:system','participant:operator',ARRAY['operator:orders.read'],now()-interval '1 minute');
 SQL
 participant=$("${PSQL[@]}" -Atc "SELECT participant_id||':'||state FROM application_participant WHERE participant_id='participant:member'")
 [[ "$participant" == "participant:member:ACTIVE" ]] || { echo "application participant did not survive connection boundary" >&2; exit 1; }
@@ -50,42 +46,42 @@ membership=$("${PSQL[@]}" -Atc "SELECT membership_id||':'||state FROM applicatio
 [[ "$membership" == "membership:live:ACTIVE" ]] || { echo "active membership did not survive connection boundary" >&2; exit 1; }
 authority=$("${PSQL[@]}" -Atc "SELECT grant_id FROM application_authority_grant WHERE actor_id='participant:operator' AND 'operator:orders.read'=ANY(actions) AND valid_from<=now() AND (valid_until IS NULL OR valid_until>=now()) AND (revoked_at IS NULL OR revoked_at>now())")
 [[ "$authority" == "grant:operator:orders" ]] || { echo "operator authority did not survive connection boundary" >&2; exit 1; }
-if "${PSQL[@]}" -c "INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:duplicate','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:2'])" >/dev/null 2>&1; then
-  echo "second ACTIVE membership unexpectedly succeeded" >&2; exit 1
-fi
+if "${PSQL[@]}" -c "INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:duplicate','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:2'])" >/dev/null 2>&1; then echo "second ACTIVE membership unexpectedly succeeded" >&2; exit 1; fi
+
+# A2 durable membership and shopping-credit falsification.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_application(application_id,legal_name,primary_contact,eligibility_class,eligibility_evidence_ids,communication_consent,state,created_at) VALUES('application:a2','A2 Member','member@example.test','PUBLIC_SECTOR','["evidence:a2"]'::jsonb,true,'DRAFT',now());
+INSERT INTO beneficiary_invitation(invitation_id,sponsor_participant_id,token_digest,state,invited_at,expires_at) VALUES('beneficiary:a2-1','participant:member','digest:a2-1','INVITED',now(),now()+interval '1 day');
+INSERT INTO membership_invoice(invoice_id,participant_id,amount_minor,state,issued_at,due_at) VALUES('invoice:a2','participant:member',10000,'PAST_DUE',now()-interval '20 days',now()-interval '10 days');
+INSERT INTO membership_invoice_settlement(settlement_reference,invoice_id,amount_minor) VALUES('settlement:a2-1','invoice:a2',4000);
+INSERT INTO membership_shopping_credit_lot(id,participant_id,source,funding,applicability,issued_minor,available_minor,issued_at,source_reference,state) VALUES('credit:a2-over','participant:member','SHIPPING_CREDIT','MEMBER_FUNDED','SHIPPING',1000,1000,now(),'membership-overpayment:settlement:a2-over','AVAILABLE');
+SQL
+if "${PSQL[@]}" -c "INSERT INTO membership_invoice_settlement(settlement_reference,invoice_id,amount_minor) VALUES('settlement:a2-1','invoice:a2',4000)" >/dev/null 2>&1; then echo "A2 settlement replay unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO beneficiary_invitation(invitation_id,sponsor_participant_id,token_digest,state,invited_at,expires_at) VALUES('beneficiary:a2-bad','participant:missing','digest:a2-bad','INVITED',now(),now()+interval '1 day')" >/dev/null 2>&1; then echo "A2 beneficiary sponsor FK bypass unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO membership_shopping_credit_lot(id,participant_id,source,funding,applicability,issued_minor,available_minor,issued_at,source_reference,state) VALUES('credit:a2-bad','participant:member','SHIPPING_CREDIT','CLUB_FUNDED','SHIPPING',1000,1000,now(),'bad:a2','AVAILABLE')" >/dev/null 2>&1; then echo "A2 member-funded overpayment invariant bypass unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO membership_shopping_credit_lot(id,participant_id,source,funding,applicability,issued_minor,available_minor,issued_at,source_reference,state) VALUES('credit:a2-replay','participant:member','SHIPPING_CREDIT','MEMBER_FUNDED','SHIPPING',1000,1000,now(),'membership-overpayment:settlement:a2-over','AVAILABLE')" >/dev/null 2>&1; then echo "A2 shopping-credit source replay unexpectedly succeeded" >&2; exit 1; fi
 
 # RC3-BIND-001: external identity resolves to one durable canonical participant and governed scopes.
 "${PSQL[@]}" <<'SQL'
-INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id)
-VALUES('binding:live','https://issuer.example/','subject:1','participant:member',ARRAY['member:orders.read'],'ACTIVE','evidence:identity:1',now(),'participant:operator','grant:operator:orders');
+INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:live','https://issuer.example/','subject:1','participant:member',ARRAY['member:orders.read'],'ACTIVE','evidence:identity:1',now(),'participant:operator','grant:operator:orders');
 SQL
 binding=$("${PSQL[@]}" -Atc "SELECT participant_id||':'||state FROM application_identity_binding WHERE issuer='https://issuer.example/' AND subject='subject:1'")
 [[ "$binding" == "participant:member:ACTIVE" ]] || { echo "application identity binding did not survive connection boundary" >&2; exit 1; }
-if "${PSQL[@]}" -c "INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:rebind','https://issuer.example/','subject:1','participant:operator',ARRAY['operator:orders.read'],'ACTIVE','evidence:identity:2',now(),'participant:operator','grant:operator:orders')" >/dev/null 2>&1; then
-  echo "external identity was silently rebound" >&2; exit 1
-fi
+if "${PSQL[@]}" -c "INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:rebind','https://issuer.example/','subject:1','participant:operator',ARRAY['operator:orders.read'],'ACTIVE','evidence:identity:2',now(),'participant:operator','grant:operator:orders')" >/dev/null 2>&1; then echo "external identity was silently rebound" >&2; exit 1; fi
 
 # INV-027: durable result survives a fresh connection.
 "${PSQL[@]}" <<'SQL'
-INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,created_at,updated_at)
-VALUES('idem:live','cmd:live','IN_FLIGHT','worker:a',now()+interval '1 minute',1,now(),now());
-UPDATE durable_command_execution
-SET state='COMMITTED',result_json='{"status":"ACCEPTED","eventIds":["event:live"],"replayed":false}'::jsonb,updated_at=now()
-WHERE idempotency_key='idem:live' AND command_id='cmd:live' AND owner_token='worker:a' AND fence_generation=1;
+INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,created_at,updated_at) VALUES('idem:live','cmd:live','IN_FLIGHT','worker:a',now()+interval '1 minute',1,now(),now());
+UPDATE durable_command_execution SET state='COMMITTED',result_json='{"status":"ACCEPTED","eventIds":["event:live"],"replayed":false}'::jsonb,updated_at=now() WHERE idempotency_key='idem:live' AND command_id='cmd:live' AND owner_token='worker:a' AND fence_generation=1;
 SQL
 result=$("${PSQL[@]}" -Atc "SELECT result_json->>'status' FROM durable_command_execution WHERE idempotency_key='idem:live'")
 [[ "$result" == "ACCEPTED" ]] || { echo "committed command result did not survive connection boundary" >&2; exit 1; }
-if "${PSQL[@]}" -c "INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,created_at,updated_at) VALUES('idem:live','cmd:other','IN_FLIGHT','worker:b',now()+interval '1 minute',now(),now())" >/dev/null 2>&1; then
-  echo "duplicate idempotency key unexpectedly succeeded" >&2; exit 1
-fi
+if "${PSQL[@]}" -c "INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,created_at,updated_at) VALUES('idem:live','cmd:other','IN_FLIGHT','worker:b',now()+interval '1 minute',now(),now())" >/dev/null 2>&1; then echo "duplicate idempotency key unexpectedly succeeded" >&2; exit 1; fi
 
 # RC1-B02: every takeover advances a monotonic fence. A stale owner/fence cannot commit.
 "${PSQL[@]}" <<'SQL'
-INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,created_at,updated_at)
-VALUES('idem:fence','cmd:fence','IN_FLIGHT','worker:a',now()-interval '1 second',1,now()-interval '1 minute',now()-interval '1 minute');
-UPDATE durable_command_execution
-SET owner_token='worker:b', fence_generation=fence_generation+1, lease_until=now()+interval '1 minute', updated_at=now()
-WHERE idempotency_key='idem:fence' AND state='IN_FLIGHT' AND lease_until<=now();
+INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,created_at,updated_at) VALUES('idem:fence','cmd:fence','IN_FLIGHT','worker:a',now()-interval '1 second',1,now()-interval '1 minute',now()-interval '1 minute');
+UPDATE durable_command_execution SET owner_token='worker:b', fence_generation=fence_generation+1, lease_until=now()+interval '1 minute', updated_at=now() WHERE idempotency_key='idem:fence' AND state='IN_FLIGHT' AND lease_until<=now();
 SQL
 fence=$("${PSQL[@]}" -Atc "SELECT fence_generation FROM durable_command_execution WHERE idempotency_key='idem:fence'")
 [[ "$fence" == "2" ]] || { echo "takeover did not advance fence" >&2; exit 1; }
@@ -100,27 +96,21 @@ same_owner_stale=$("${PSQL[@]}" -Atc "WITH u AS (UPDATE durable_command_executio
 INSERT INTO aggregate_version(aggregate_id,version) VALUES('order:1',0);
 BEGIN ISOLATION LEVEL SERIALIZABLE;
 SELECT version FROM aggregate_version WHERE aggregate_id='order:1' FOR UPDATE;
-INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at)
-VALUES('event:1','order:1',1,'ORDER_ACCEPTED','{}'::jsonb,now());
+INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at) VALUES('event:1','order:1',1,'ORDER_ACCEPTED','{}'::jsonb,now());
 UPDATE aggregate_version SET version=1 WHERE aggregate_id='order:1' AND version=0;
 COMMIT;
 SQL
 version=$("${PSQL[@]}" -Atc "SELECT version FROM aggregate_version WHERE aggregate_id='order:1'")
 [[ "$version" == "1" ]] || { echo "aggregate version did not advance" >&2; exit 1; }
-if "${PSQL[@]}" -c "INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at) VALUES('event:stale','order:1',1,'STALE_WRITE','{}'::jsonb,now())" >/dev/null 2>&1; then
-  echo "stale aggregate version unexpectedly succeeded" >&2; exit 1
-fi
+if "${PSQL[@]}" -c "INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at) VALUES('event:stale','order:1',1,'STALE_WRITE','{}'::jsonb,now())" >/dev/null 2>&1; then echo "stale aggregate version unexpectedly succeeded" >&2; exit 1; fi
 if "${PSQL[@]}" <<'SQL' >/dev/null 2>&1
 BEGIN;
-INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at)
-VALUES('event:rollback','order:1',2,'SHOULD_ROLLBACK','{}'::jsonb,now());
+INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at) VALUES('event:rollback','order:1',2,'SHOULD_ROLLBACK','{}'::jsonb,now());
 UPDATE aggregate_version SET version=2 WHERE aggregate_id='order:1' AND version=1;
 SELECT 1/0;
 COMMIT;
 SQL
-then
-  echo "intentional transaction failure unexpectedly committed" >&2; exit 1
-fi
+then echo "intentional transaction failure unexpectedly committed" >&2; exit 1; fi
 count=$("${PSQL[@]}" -Atc "SELECT count(*) FROM canonical_event WHERE event_id='event:rollback'")
 version=$("${PSQL[@]}" -Atc "SELECT version FROM aggregate_version WHERE aggregate_id='order:1'")
 [[ "$count" == "0" && "$version" == "1" ]] || { echo "rollback left partial canonical state" >&2; exit 1; }
@@ -128,11 +118,7 @@ version=$("${PSQL[@]}" -Atc "SELECT version FROM aggregate_version WHERE aggrega
 # INV-007/008 / RC1-B05: durable exact multi-input/multi-output lineage.
 "${PSQL[@]}" <<'SQL'
 INSERT INTO lineage_lot(lot_id,quantity,unit) VALUES('lot:a',40,'kg'),('lot:b',60,'kg');
-SELECT record_lineage_transform(
- 'transform:blend','PROCESS','kg',3,'2026-09-08T02:10:00Z','["evidence:blend"]'::jsonb,
- '[{"lotId":"lot:a","quantity":40},{"lotId":"lot:b","quantity":60}]'::jsonb,
- '[{"lotId":"lot:c","quantity":70},{"lotId":"lot:d","quantity":27}]'::jsonb
-);
+SELECT record_lineage_transform('transform:blend','PROCESS','kg',3,'2026-09-08T02:10:00Z','["evidence:blend"]'::jsonb,'[{"lotId":"lot:a","quantity":40},{"lotId":"lot:b","quantity":60}]'::jsonb,'[{"lotId":"lot:c","quantity":70},{"lotId":"lot:d","quantity":27}]'::jsonb);
 SQL
 c=$("${PSQL[@]}" -Atc "SELECT quantity FROM lineage_lot WHERE lot_id='lot:c'")
 d=$("${PSQL[@]}" -Atc "SELECT quantity FROM lineage_lot WHERE lot_id='lot:d'")
@@ -142,10 +128,7 @@ b_used=$("${PSQL[@]}" -Atc "SELECT consumed_quantity FROM lineage_lot WHERE lot_
 inputs=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform_input WHERE transform_id='transform:blend'")
 outputs=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform_output WHERE transform_id='transform:blend'")
 [[ "$inputs" == "2" && "$outputs" == "2" ]] || { echo "durable lineage ancestry ports missing" >&2; exit 1; }
-
-if "${PSQL[@]}" -c "SELECT record_lineage_transform('transform:bad','REPACK','kg',0,'2026-09-08T02:11:00Z','[\"evidence:bad\"]'::jsonb,'[{\"lotId\":\"lot:c\",\"quantity\":71}]'::jsonb,'[{\"lotId\":\"lot:e\",\"quantity\":71}]'::jsonb)" >/dev/null 2>&1; then
-  echo "lineage overconsumption unexpectedly succeeded" >&2; exit 1
-fi
+if "${PSQL[@]}" -c "SELECT record_lineage_transform('transform:bad','REPACK','kg',0,'2026-09-08T02:11:00Z','[\"evidence:bad\"]'::jsonb,'[{\"lotId\":\"lot:c\",\"quantity\":71}]'::jsonb,'[{\"lotId\":\"lot:e\",\"quantity\":71}]'::jsonb)" >/dev/null 2>&1; then echo "lineage overconsumption unexpectedly succeeded" >&2; exit 1; fi
 bad_transform=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform WHERE transform_id='transform:bad'")
 bad_output=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_lot WHERE lot_id='lot:e'")
 c_used=$("${PSQL[@]}" -Atc "SELECT consumed_quantity FROM lineage_lot WHERE lot_id='lot:c'")
@@ -153,19 +136,14 @@ c_used=$("${PSQL[@]}" -Atc "SELECT consumed_quantity FROM lineage_lot WHERE lot_
 
 # RC2-COMMS: preferences/consent survive connection boundaries and the outbox dedupe key is durable.
 "${PSQL[@]}" <<'SQL'
-INSERT INTO member_communication_consent_event(member_id,consent_version,promotional_opt_in,transactional_channels,promotional_channels,suppressed_channels,occurred_at)
-VALUES('member:live',1,false,ARRAY['IN_APP','EMAIL'],ARRAY['EMAIL'],ARRAY[]::text[],now());
-INSERT INTO member_communication_preferences(member_id,transactional_channels,promotional_opt_in,promotional_channels,suppressed_channels,consent_version,consent_updated_at)
-VALUES('member:live',ARRAY['IN_APP','EMAIL'],false,ARRAY['EMAIL'],ARRAY[]::text[],1,now());
-INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count)
-VALUES('communication:live','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','Payment confirmed','GHS 1.00 confirmed','QUEUED',now(),now(),0);
+INSERT INTO member_communication_consent_event(member_id,consent_version,promotional_opt_in,transactional_channels,promotional_channels,suppressed_channels,occurred_at) VALUES('member:live',1,false,ARRAY['IN_APP','EMAIL'],ARRAY['EMAIL'],ARRAY[]::text[],now());
+INSERT INTO member_communication_preferences(member_id,transactional_channels,promotional_opt_in,promotional_channels,suppressed_channels,consent_version,consent_updated_at) VALUES('member:live',ARRAY['IN_APP','EMAIL'],false,ARRAY['EMAIL'],ARRAY[]::text[],1,now());
+INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count) VALUES('communication:live','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','Payment confirmed','GHS 1.00 confirmed','QUEUED',now(),now(),0);
 SQL
 consent=$("${PSQL[@]}" -Atc "SELECT consent_version||':'||promotional_opt_in FROM member_communication_preferences WHERE member_id='member:live'")
 [[ "$consent" == "1:false" ]] || { echo "communication preferences did not survive connection boundary" >&2; exit 1; }
-if "${PSQL[@]}" -c "INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count) VALUES('communication:duplicate','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','dup','dup','QUEUED',now(),now(),0)" >/dev/null 2>&1; then
-  echo "communication durable dedupe unexpectedly allowed duplicate" >&2; exit 1
-fi
+if "${PSQL[@]}" -c "INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count) VALUES('communication:duplicate','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','dup','dup','QUEUED',now(),now(),0)" >/dev/null 2>&1; then echo "communication durable dedupe unexpectedly allowed duplicate" >&2; exit 1; fi
 claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
 [[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
 
-echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema and communications proof passed"
+echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications and A2 membership/credit proof passed"
