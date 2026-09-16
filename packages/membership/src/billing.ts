@@ -29,7 +29,7 @@ export class InMemoryMembershipBillingStore {
   if(i.settlementReferences.includes(input.reference))return i;
   if(!Number.isSafeInteger(input.amountMinor)||input.amountMinor<=0)throw new Error('SETTLEMENT_AMOUNT_INVALID');
   const settled=Math.min(i.amountMinor,i.settledMinor+input.amountMinor);
-  const state:MembershipInvoiceState=settled===i.amountMinor?'SETTLED':'PARTIALLY_SETTLED';
+  const state:MembershipInvoiceState=settled===i.amountMinor?'SETTLED':i.state==='PAST_DUE'?'PAST_DUE':'PARTIALLY_SETTLED';
   return this.replace({...i,settledMinor:settled,state,settlementReferences:[...i.settlementReferences,input.reference]});
  }
  markPastDue(id:string,at:string):MembershipInvoice{const i=this.require(id);if(i.state==='SETTLED'||i.state==='VOID')return i;if(Date.parse(at)<=Date.parse(i.dueAt))throw new Error('MEMBERSHIP_INVOICE_NOT_PAST_DUE');return this.replace({...i,state:'PAST_DUE'});}
