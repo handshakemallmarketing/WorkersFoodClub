@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
 const PARTICIPANT_ID='preview:member:001';
 const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const OBLIGATION_ID_RE=/^preview:obligation:[0-9a-f-]{36}$/i;
+const OBLIGATION_ID_RE=/^(?:preview:obligation:|wfc:obligation:)[0-9a-f-]{36}$/i;
 
 export default async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
