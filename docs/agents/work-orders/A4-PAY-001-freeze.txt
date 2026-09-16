@@ -1,0 +1,1 @@
+Candidate state frozen pending PR checks.
