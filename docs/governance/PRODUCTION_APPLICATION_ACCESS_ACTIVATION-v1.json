@@ -6,19 +6,19 @@
   "authorizationBasis": {
     "type": "explicit_interactive_authorization",
     "instruction": "Authorized",
-    "recordedDate": "2026-09-15",
-    "context": "Supersede the prior Production-application-access candidate authorization with a new bounded authorization for the eventual PR #61 candidate after integration with current main."
+    "recordedDate": "2026-09-17",
+    "context": "Supersede the prior Production-application-access candidate authorization (81ca013c, activated and later rolled back to fail-closed for SW1-RC3 finalization) with a new bounded authorization for main head de78497e00b58f5157d0622af54cf62f337c27b7, the candidate produced by merging business-logic-v2/wave-02-control-plane (A2/A4/A8/A9/A10/A11) plus the title/risk quantity and fulfillment-ready race-safety fixes into main via PR #90."
   },
   "grant": {
-    "grantId": "grant:willie-adofo:production-application-access:v2",
+    "grantId": "grant:willie-adofo:production-application-access:v3",
     "actorId": "participant:willie-adofo",
     "action": "EnableProductionApplicationAccess",
     "repository": "handshakemallmarketing/WorkersFoodClub",
     "environment": "production",
-    "candidateSha": "d6d4b0ca40878f125fa8a97b3138d26e22ebc4ac",
-    "canonicalAlias": "https://workers-food-club.vercel.app",
+    "candidateSha": "de78497e00b58f5157d0622af54cf62f337c27b7",
+    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
     "scope": "Production application access only",
-    "validFrom": "2026-09-15",
+    "validFrom": "2026-09-17",
     "revoked": false
   },
   "explicitExclusions": {
@@ -34,7 +34,7 @@
     "Production sandbox and consequential mutation routes must remain disabled",
     "any unexpected result requires immediate fail-closed rollback"
   ],
-  "supersedes": "grant:willie-adofo:production-application-access:v1",
+  "supersedes": "grant:willie-adofo:production-application-access:v2",
   "supersedesTransferPolicyAuthorityForThisAction": false,
   "notes": "This is a separate, one-purpose Production application-access authorization. It does not widen the TRANSFER_POLICY_GOVERNANCE-v1 grant and confers no live-funds or Paystack-live authority."
 }
