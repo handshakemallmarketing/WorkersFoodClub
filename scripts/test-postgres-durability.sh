@@ -16,6 +16,7 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/011_preview_runtime_timestamp_defaults.sql
 "${PSQL[@]}" -f packages/durability/sql/012_membership_business_logic_v2.sql
 "${PSQL[@]}" -f packages/durability/sql/013_membership_shopping_credit_accounting.sql
+"${PSQL[@]}" -f packages/durability/sql/014_wave2_support_case.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -23,6 +24,8 @@ a2_membership_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schem
 [[ "$a2_membership_tables" == "4" ]] || { echo "A2 membership schema is not reproducible from migrations" >&2; exit 1; }
 a2_credit_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('membership_shopping_credit_lot','membership_shopping_credit_entry')")
 [[ "$a2_credit_tables" == "2" ]] || { echo "A2 shopping-credit schema is not reproducible from migrations" >&2; exit 1; }
+a10_support_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('support_case','support_case_transition')")
+[[ "$a10_support_tables" == "2" ]] || { echo "A10 support schema is not reproducible from migrations" >&2; exit 1; }
 accepted_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_member_commitment' AND column_name='accepted_at'")
 [[ "$accepted_at_contract" == NO:* && "$accepted_at_contract" != "NO:" ]] || { echo "preview_member_commitment.accepted_at must remain NOT NULL with a database default" >&2; exit 1; }
 recorded_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_sandbox_payment' AND column_name='recorded_at'")
@@ -31,7 +34,7 @@ refund_unique_constraints=$("${PSQL[@]}" -Atc "SELECT count(*) FROM pg_constrain
 [[ "$refund_unique_constraints" == "8" ]] || { echo "preview refund idempotency constraints are incomplete" >&2; exit 1; }
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+TRUNCATE support_case_transition,support_case,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
 SQL
 
 # RC3-BIND-001: durable participant, membership and operator authority are independent governed records.
@@ -47,6 +50,20 @@ membership=$("${PSQL[@]}" -Atc "SELECT membership_id||':'||state FROM applicatio
 authority=$("${PSQL[@]}" -Atc "SELECT grant_id FROM application_authority_grant WHERE actor_id='participant:operator' AND 'operator:orders.read'=ANY(actions) AND valid_from<=now() AND (valid_until IS NULL OR valid_until>=now()) AND (revoked_at IS NULL OR revoked_at>now())")
 [[ "$authority" == "grant:operator:orders" ]] || { echo "operator authority did not survive connection boundary" >&2; exit 1; }
 if "${PSQL[@]}" -c "INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:duplicate','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:2'])" >/dev/null 2>&1; then echo "second ACTIVE membership unexpectedly succeeded" >&2; exit 1; fi
+
+# A10 durable support lifecycle falsification.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO support_case(case_id,participant_id,subject_type,subject_id,category,reason_code,created_by_actor_id,created_by_authn_subject_ref,updated_by_actor_id,updated_by_authn_subject_ref,command_idempotency_key)
+VALUES('case:a10','participant:member','ORDER','order:a10','DELIVERY','LATE','participant:operator','preview-auth:harness','participant:operator','preview-auth:harness','11111111-1111-4111-8111-111111111111');
+INSERT INTO support_case_transition(transition_id,case_id,from_state,to_state,state_version,actor_id,authn_subject_ref,command_idempotency_key)
+VALUES('transition:a10-1','case:a10','OPEN','IN_REVIEW',2,'participant:operator','preview-auth:harness','22222222-2222-4222-8222-222222222222');
+UPDATE support_case SET state='IN_REVIEW',state_version=2,updated_by_actor_id='participant:operator',updated_by_authn_subject_ref='preview-auth:harness' WHERE case_id='case:a10' AND state_version=1;
+SQL
+a10_state=$("${PSQL[@]}" -Atc "SELECT state||':'||state_version FROM support_case WHERE case_id='case:a10'")
+[[ "$a10_state" == "IN_REVIEW:2" ]] || { echo "A10 support state did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO support_case_transition(transition_id,case_id,from_state,to_state,state_version,actor_id,authn_subject_ref,command_idempotency_key) VALUES('transition:a10-same','case:a10','IN_REVIEW','IN_REVIEW',3,'participant:operator','preview-auth:harness','33333333-3333-4333-8333-333333333333')" >/dev/null 2>&1; then echo "A10 same-state transition unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO support_case_transition(transition_id,case_id,from_state,to_state,state_version,actor_id,authn_subject_ref,command_idempotency_key) VALUES('transition:a10-illegal','case:a10','CLOSED','WAITING',3,'participant:operator','preview-auth:harness','44444444-4444-4444-8444-444444444444')" >/dev/null 2>&1; then echo "A10 illegal CLOSED to WAITING transition unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO support_case(case_id,participant_id,subject_type,subject_id,category,reason_code,created_by_actor_id,created_by_authn_subject_ref,updated_by_actor_id,updated_by_authn_subject_ref,command_idempotency_key) VALUES('case:a10-bad','participant:missing','ORDER','order:bad','DELIVERY','LATE','participant:operator','preview-auth:harness','participant:operator','preview-auth:harness','55555555-5555-4555-8555-555555555555')" >/dev/null 2>&1; then echo "A10 participant lineage FK bypass unexpectedly succeeded" >&2; exit 1; fi
 
 # A2 durable membership and shopping-credit falsification.
 "${PSQL[@]}" <<'SQL'
@@ -146,4 +163,4 @@ if "${PSQL[@]}" -c "INSERT INTO communication_outbox(id,dedupe_key,event_id,memb
 claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
 [[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
 
-echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications and A2 membership/credit proof passed"
+echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications, A2 membership/credit and A10 support lifecycle proof passed"

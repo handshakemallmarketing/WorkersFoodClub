@@ -33,13 +33,9 @@ CREATE TABLE IF NOT EXISTS membership_shopping_credit_entry (
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
-CREATE INDEX IF NOT EXISTS membership_shopping_credit_lot_participant_idx
-  ON membership_shopping_credit_lot(participant_id, state, source);
-CREATE INDEX IF NOT EXISTS membership_shopping_credit_lot_applicability_idx
-  ON membership_shopping_credit_lot(participant_id, state, applicability);
-CREATE INDEX IF NOT EXISTS membership_shopping_credit_entry_lot_idx
-  ON membership_shopping_credit_entry(lot_id, occurred_at);
-CREATE INDEX IF NOT EXISTS membership_shopping_credit_entry_participant_idx
-  ON membership_shopping_credit_entry(participant_id, occurred_at);
+CREATE INDEX IF NOT EXISTS membership_shopping_credit_lot_participant_idx ON membership_shopping_credit_lot(participant_id, state, source);
+CREATE INDEX IF NOT EXISTS membership_shopping_credit_lot_applicability_idx ON membership_shopping_credit_lot(participant_id, state, applicability);
+CREATE INDEX IF NOT EXISTS membership_shopping_credit_entry_lot_idx ON membership_shopping_credit_entry(lot_id, occurred_at);
+CREATE INDEX IF NOT EXISTS membership_shopping_credit_entry_participant_idx ON membership_shopping_credit_entry(participant_id, occurred_at);
 
 COMMIT;
