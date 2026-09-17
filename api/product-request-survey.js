@@ -9,7 +9,7 @@ const MAX_PREFERENCE_JSON_LENGTH=2000;
 function canonicalJson(value){if(Array.isArray(value))return `[${value.map(canonicalJson).join(',')}]`;if(value&&typeof value==='object')return `{${Object.keys(value).sort().map(k=>`${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;return JSON.stringify(value);}
 function sameCommand(row,subject,preference){return String(row.subject)===subject&&canonicalJson(row.preference_json??{})===canonicalJson(preference);}
 function serialize(row,idempotent=false){return{surveyResponseId:String(row.survey_response_id),participantId:String(row.participant_id),subject:String(row.subject),preference:row.preference_json??{},economicClassification:String(row.economic_classification),submittedAt:String(row.submitted_at),idempotent};}
-function validPreference(value){
+export function validPreference(value){
  const keys=Object.keys(value);
  if(keys.length>MAX_PREFERENCE_KEYS)return false;
  for(const key of keys){const v=value[key];if(typeof v!=='string'&&typeof v!=='number'&&typeof v!=='boolean')return false;}
