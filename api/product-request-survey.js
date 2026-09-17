@@ -4,9 +4,17 @@ import { durableId } from '../lib/durable-runtime-semantics.js';
 const PREVIEW_PARTICIPANT_ID='preview:member:001';
 const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SUBJECT_RE=/^[A-Za-z0-9][A-Za-z0-9 _.:/-]{0,119}$/;
+const MAX_PREFERENCE_KEYS=20;
+const MAX_PREFERENCE_JSON_LENGTH=2000;
 function canonicalJson(value){if(Array.isArray(value))return `[${value.map(canonicalJson).join(',')}]`;if(value&&typeof value==='object')return `{${Object.keys(value).sort().map(k=>`${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;return JSON.stringify(value);}
 function sameCommand(row,subject,preference){return String(row.subject)===subject&&canonicalJson(row.preference_json??{})===canonicalJson(preference);}
 function serialize(row,idempotent=false){return{surveyResponseId:String(row.survey_response_id),participantId:String(row.participant_id),subject:String(row.subject),preference:row.preference_json??{},economicClassification:String(row.economic_classification),submittedAt:String(row.submitted_at),idempotent};}
+function validPreference(value){
+ const keys=Object.keys(value);
+ if(keys.length>MAX_PREFERENCE_KEYS)return false;
+ for(const key of keys){const v=value[key];if(typeof v!=='string'&&typeof v!=='number'&&typeof v!=='boolean')return false;}
+ return JSON.stringify(value).length<=MAX_PREFERENCE_JSON_LENGTH;
+}
 
 export default async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
@@ -17,6 +25,7 @@ export default async function handler(req,res){
  const preference=req.body?.preference&&typeof req.body.preference==='object'&&!Array.isArray(req.body.preference)?req.body.preference:{};
  if(!REQUEST_ID_RE.test(requestId))return res.status(400).json({ok:false,error:'REQUEST_ID_INVALID'});
  if(!SUBJECT_RE.test(subject))return res.status(400).json({ok:false,error:'SUBJECT_INVALID'});
+ if(!validPreference(preference))return res.status(400).json({ok:false,error:'PREFERENCE_INVALID'});
  const connectionString=process.env.DATABASE_URL;if(!connectionString)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
  try{
   const {neon}=await import('@neondatabase/serverless');const sql=neon(connectionString,{fetchOptions:{signal:AbortSignal.timeout(5000)}});
