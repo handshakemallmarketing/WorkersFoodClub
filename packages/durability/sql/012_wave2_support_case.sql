@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS support_case (
   case_id text PRIMARY KEY,
-  participant_id text,
+  participant_id text REFERENCES application_participant(participant_id),
   subject_type text NOT NULL,
   subject_id text NOT NULL,
   category text NOT NULL,
