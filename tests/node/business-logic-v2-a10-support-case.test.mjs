@@ -9,17 +9,17 @@ const durability=await readFile(new URL('../../scripts/test-postgres-durability.
 test('UC-28 support command is Preview-only and pinned to canonical operator',()=>{
  assert.match(api,/operator:support\.manage/);assert.match(api,/PREVIEW_OPERATOR_ID='preview:operator:001'/);assert.match(api,/VERCEL_ENV!=='preview'/);assert.match(transition,/VERCEL_ENV!=='preview'/);assert.doesNotMatch(api,/req\.body\?\.actorId/);assert.doesNotMatch(transition,/req\.body\?\.actorId/);
 });
-test('UC-28 authentication provenance is not mislabeled as authority grant lineage',()=>{
- assert.match(sql,/created_by_authn_subject_ref text NOT NULL/);assert.match(sql,/authn_subject_ref text NOT NULL/);assert.doesNotMatch(sql,/created_by_authority_ref/);assert.match(sql,/This is not an authority-grant identifier/);
+test('UC-28 authentication provenance is stored under accurate current names while legacy names exist only in upgrade logic',()=>{
+ assert.match(sql,/created_by_authn_subject_ref text NOT NULL/);assert.match(sql,/authn_subject_ref text NOT NULL/);assert.match(sql,/RENAME COLUMN created_by_authority_ref TO created_by_authn_subject_ref/);assert.match(sql,/RENAME COLUMN authority_ref TO authn_subject_ref/);assert.match(sql,/not an authority-grant identifier/);
 });
 test('UC-28 support state cannot write canonical economic or physical truth',()=>{
  for(const x of ['preview_member_payment','preview_member_commitment','preview_member_credit','preview_member_refund','preview_fulfillment','canonical_event']){assert.equal(api.includes(x),false,x);assert.equal(transition.includes(x),false,x);}
 });
 test('UC-28 case lifecycle is versioned and actor-bound',()=>{
- assert.match(sql,/state_version bigint NOT NULL DEFAULT 1/);assert.match(sql,/created_by_actor_id text NOT NULL/);assert.match(sql,/UNIQUE \(case_id, state_version\)/);assert.match(sql,/UNIQUE \(actor_id, command_idempotency_key\)/);
+ assert.match(sql,/state_version bigint NOT NULL DEFAULT 1/);assert.match(sql,/created_by_actor_id text NOT NULL/);assert.match(sql,/UNIQUE \(case_id\s*,\s*state_version\)/);assert.match(sql,/UNIQUE \(actor_id\s*,\s*command_idempotency_key\)/);
 });
-test('UC-28 transition graph rejects same-state movement and governs reopen',()=>{
- assert.match(sql,/CHECK \(from_state <> to_state\)/);assert.match(sql,/from_state='CLOSED' AND to_state='OPEN'/);assert.match(transition,/SUPPORT_CASE_TRANSITION_NOT_ALLOWED/);assert.match(transition,/WHEN \$\{toState\}='OPEN' THEN NULL/);
+test('UC-28 transition graph rejects new same-state movement, preserves legacy opening rows and governs reopen',()=>{
+ assert.match(sql,/CHECK \(from_state IS NULL OR from_state <> to_state\)/);assert.match(sql,/from_state='CLOSED' AND to_state='OPEN'/);assert.match(transition,/SUPPORT_CASE_TRANSITION_NOT_ALLOWED/);assert.match(transition,/WHEN \$\{toState\}='OPEN' THEN NULL/);
 });
 test('UC-28 create replay is actor-bound and changed payload fails closed',()=>{
  assert.match(sql,/UNIQUE \(created_by_actor_id, command_idempotency_key\)/);assert.match(api,/sameCommand\(prior\[0\],command\)/);assert.match(api,/SUPPORT_CASE_REQUEST_REBOUND/);assert.match(api,/error\?\.code==='23505'&&sql/);
