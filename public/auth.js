@@ -19,12 +19,20 @@
     '/api/complete-refund',
   ]);
   const OPERATOR_TIER_ROLES = new Set(['fulfillment', 'finance', 'admin']);
+  const PREVIEW_ROLES = ['member', 'fulfillment', 'finance', 'admin'];
   const PREVIEW_ROLE_LABELS = {
     none: 'Guest',
     member: 'Member',
     fulfillment: 'Operator · Fulfillment',
     finance: 'Operator · Finance',
     admin: 'SuperUser · Admin',
+  };
+  const PREVIEW_ROLE_ICONS = { member: 'M', fulfillment: 'F', finance: '$', admin: 'A' };
+  const PREVIEW_ROLE_DESCRIPTIONS = {
+    member: 'Browse offers, track orders, and view notifications as a pilot member.',
+    fulfillment: 'Mark member orders ready for pickup and manage the fulfillment queue.',
+    finance: 'Authorize and complete member refunds.',
+    admin: 'Full operator authority across fulfillment and finance, plus Release Controls.',
   };
 
   let token = null;
@@ -35,6 +43,7 @@
   let previewMemberToken = null;
   let previewOperatorTokensByTier = { fulfillment: null, finance: null, admin: null };
   let previewRole = 'none';
+  let chipStatusOverride = null;
 
   function requestPath(input) {
     try {
@@ -73,18 +82,38 @@
     return originalFetch(input, init);
   };
 
-  function panel() {
-    return document.getElementById('auth-panel');
+  function modal() { return document.getElementById('auth-modal'); }
+  function modalBody() { return document.getElementById('auth-modal-body'); }
+  function modalTitle() { return document.getElementById('auth-modal-title'); }
+  function modalSubtitle() { return document.getElementById('auth-modal-subtitle'); }
+  function chip() { return document.getElementById('auth-chip'); }
+  function chipLabel() { return document.getElementById('auth-chip-label'); }
+
+  function onModalKeydown(event) {
+    if (event.key === 'Escape') closeModal();
   }
 
-  function setPanel(message, className = 'badge neutral') {
-    const root = panel();
+  function openModal() {
+    const root = modal();
     if (!root) return;
-    root.innerHTML = '';
-    const span = document.createElement('span');
-    span.className = className;
-    span.textContent = message;
-    root.appendChild(span);
+    root.hidden = false;
+    renderModalContent();
+    document.addEventListener('keydown', onModalKeydown);
+  }
+
+  function closeModal() {
+    const root = modal();
+    if (!root) return;
+    root.hidden = true;
+    document.removeEventListener('keydown', onModalKeydown);
+  }
+
+  function bindAuthChipAndModal() {
+    chip()?.addEventListener('click', openModal);
+    document.getElementById('auth-modal-close')?.addEventListener('click', closeModal);
+    modal()?.addEventListener('click', (event) => {
+      if (event.target === modal()) closeModal();
+    });
   }
 
   function productionMemberAccessAvailable() {
@@ -96,7 +125,7 @@
 
   /**
    * Four nav-visible access levels, unified across Preview (role picked via the
-   * demo panel) and Production (role resolved from the verified identity binding):
+   * sign-in modal) and Production (role resolved from the verified identity binding):
    * none < member < operator < superUser, each a superset of the one before it.
    */
   function computeAccessLevels() {
@@ -105,6 +134,15 @@
     const operatorLevelAccess = production ? operatorAccess : OPERATOR_TIER_ROLES.has(previewRole);
     const superUserLevelAccess = production ? superUserAccess : previewRole === 'admin';
     return { production, memberAccess, operatorLevelAccess, superUserLevelAccess };
+  }
+
+  function currentRoleLabel() {
+    const { production, memberAccess, operatorLevelAccess, superUserLevelAccess } = computeAccessLevels();
+    if (!production) return PREVIEW_ROLE_LABELS[previewRole];
+    if (!memberAccess) return null;
+    if (superUserLevelAccess) return 'SuperUser · Admin';
+    if (operatorLevelAccess) return 'Operator';
+    return 'Member';
   }
 
   function setHidden(selector, hidden) {
@@ -166,8 +204,52 @@
     document.body.dataset.superUserAccess = superUserLevelAccess ? 'enabled' : 'disabled';
   }
 
+  function updateChip() {
+    const button = chip();
+    const label = chipLabel();
+    if (!button || !label) return;
+
+    if (chipStatusOverride) {
+      label.textContent = chipStatusOverride.message;
+      button.className = `auth-chip ${chipStatusOverride.tone === 'neutral' ? '' : 'needs-attention'}`.trim();
+      return;
+    }
+
+    if (!config) {
+      label.textContent = 'Checking identity…';
+      button.className = 'auth-chip';
+      return;
+    }
+
+    if (config.environment !== 'production') {
+      label.textContent = previewRole === 'none' ? 'Sign in' : currentRoleLabel();
+      button.className = `auth-chip ${previewRole === 'none' ? '' : 'signed-in'}`.trim();
+      return;
+    }
+
+    if (config.provider !== 'google' || config.configured !== true || !config.clientId) {
+      label.textContent = 'Sign-in unavailable';
+      button.className = 'auth-chip needs-attention';
+      return;
+    }
+    if (!verifiedIdentity || !token) {
+      label.textContent = 'Sign in';
+      button.className = 'auth-chip';
+      return;
+    }
+    const { memberAccess } = computeAccessLevels();
+    if (!memberAccess) {
+      label.textContent = 'Signed in · access pending';
+      button.className = 'auth-chip needs-attention';
+      return;
+    }
+    label.textContent = currentRoleLabel();
+    button.className = 'auth-chip signed-in';
+  }
+
   function emitAuthState() {
     applyAccessUi();
+    updateChip();
     const { memberAccess, operatorLevelAccess, superUserLevelAccess } = computeAccessLevels();
     window.dispatchEvent(new CustomEvent('foodclub:auth-state', {
       detail: {
@@ -211,32 +293,158 @@
     }
   }
 
-  function renderPreviewPanel() {
-    const root = panel();
-    if (!root) return;
-    root.innerHTML = '';
-
-    const status = document.createElement('span');
-    status.className = 'badge neutral';
-    status.textContent = `Preview · ${PREVIEW_ROLE_LABELS[previewRole]}`;
-    root.appendChild(status);
-
-    Object.entries(PREVIEW_ROLE_LABELS).forEach(([role, label]) => {
-      if (role === previewRole) return;
-      const button = document.createElement('button');
-      button.className = 'secondary small';
-      button.type = 'button';
-      button.textContent = role === 'none' ? 'Sign out' : `Sign in as ${label}`;
-      button.addEventListener('click', () => setPreviewRole(role));
-      root.appendChild(button);
-    });
-  }
-
   function setPreviewRole(role) {
     previewRole = OPERATOR_TIER_ROLES.has(role) || role === 'member' ? role : 'none';
-    renderPreviewPanel();
     emitAuthState();
     refreshProtectedViews();
+  }
+
+  function identitySummaryNode({ iconText, name, meta }) {
+    const row = document.createElement('div');
+    row.className = 'identity-summary';
+    const icon = document.createElement('div');
+    icon.className = 'role-icon';
+    icon.textContent = iconText;
+    const copy = document.createElement('div');
+    copy.className = 'role-copy';
+    const strong = document.createElement('strong');
+    strong.textContent = name;
+    copy.appendChild(strong);
+    if (meta) {
+      const metaEl = document.createElement('code');
+      metaEl.textContent = meta;
+      copy.appendChild(metaEl);
+    }
+    row.append(icon, copy);
+    return row;
+  }
+
+  function renderPreviewModal(body, title, subtitle) {
+    title.textContent = previewRole === 'none' ? 'Sign in' : 'Switch identity';
+    subtitle.textContent = 'This is a sandboxed preview — nothing here touches live funds. Pick a role to explore its access.';
+    subtitle.style.color = '';
+
+    if (previewRole !== 'none') {
+      body.appendChild(identitySummaryNode({
+        iconText: PREVIEW_ROLE_ICONS[previewRole],
+        name: `Signed in as ${PREVIEW_ROLE_LABELS[previewRole]}`,
+        meta: PREVIEW_ROLE_DESCRIPTIONS[previewRole],
+      }));
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'role-grid';
+    PREVIEW_ROLES.forEach((role) => {
+      if (role === previewRole) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'role-card';
+      const icon = document.createElement('span');
+      icon.className = 'role-icon';
+      icon.textContent = PREVIEW_ROLE_ICONS[role];
+      const copy = document.createElement('span');
+      copy.className = 'role-copy';
+      const strong = document.createElement('strong');
+      strong.textContent = `Sign in as ${PREVIEW_ROLE_LABELS[role]}`;
+      const span = document.createElement('span');
+      span.textContent = PREVIEW_ROLE_DESCRIPTIONS[role];
+      copy.append(strong, span);
+      button.append(icon, copy);
+      button.addEventListener('click', () => { setPreviewRole(role); closeModal(); });
+      grid.appendChild(button);
+    });
+    body.appendChild(grid);
+
+    if (previewRole !== 'none') {
+      const hr = document.createElement('hr');
+      hr.className = 'modal-divider';
+      body.appendChild(hr);
+      const footnote = document.createElement('p');
+      footnote.className = 'modal-footnote';
+      const guestButton = document.createElement('button');
+      guestButton.type = 'button';
+      guestButton.textContent = 'Continue as Guest';
+      guestButton.addEventListener('click', () => { setPreviewRole('none'); closeModal(); });
+      footnote.appendChild(guestButton);
+      body.appendChild(footnote);
+    }
+  }
+
+  async function renderProductionModal(body, title, subtitle) {
+    subtitle.style.color = '';
+
+    if (config.provider !== 'google' || config.configured !== true || !config.clientId) {
+      title.textContent = 'Sign-in unavailable';
+      subtitle.textContent = 'Production sign-in is not configured yet.';
+      return;
+    }
+
+    if (verifiedIdentity && token) {
+      title.textContent = 'Signed in';
+      subtitle.textContent = config.productionApplicationAccessEnabled === true
+        ? 'Your Google identity is verified against the governed application binding.'
+        : 'Your Google identity is verified, but member access is not yet activated.';
+      const label = currentRoleLabel() || 'Member';
+      body.appendChild(identitySummaryNode({
+        iconText: label.charAt(0),
+        name: label,
+        meta: verifiedIdentity.subject,
+      }));
+      const signOutButton = document.createElement('button');
+      signOutButton.type = 'button';
+      signOutButton.className = 'secondary';
+      signOutButton.textContent = 'Sign out';
+      signOutButton.addEventListener('click', () => { signOut(); closeModal(); });
+      body.appendChild(signOutButton);
+      return;
+    }
+
+    title.textContent = 'Sign in';
+    subtitle.textContent = config.productionApplicationAccessEnabled === true
+      ? 'Verify your Google identity to access your governed member or operator scopes.'
+      : 'Verify your Google identity. Member access remains disabled until explicitly activated.';
+
+    const target = document.createElement('div');
+    body.appendChild(target);
+    try {
+      await loadGoogleScript();
+      window.google.accounts.id.initialize({
+        client_id: config.clientId,
+        callback: (response) => authenticated(response?.credential),
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      window.google.accounts.id.renderButton(target, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        width: 300,
+      });
+    } catch {
+      subtitle.textContent = 'Google sign-in failed to load.';
+      subtitle.style.color = 'var(--red)';
+    }
+  }
+
+  function renderModalContent() {
+    const body = modalBody();
+    const title = modalTitle();
+    const subtitle = modalSubtitle();
+    if (!body || !title || !subtitle) return;
+    body.innerHTML = '';
+
+    if (!config) {
+      title.textContent = 'Sign in';
+      subtitle.textContent = 'Loading identity configuration…';
+      return;
+    }
+
+    if (config.environment !== 'production') {
+      renderPreviewModal(body, title, subtitle);
+      return;
+    }
+    renderProductionModal(body, title, subtitle);
   }
 
   async function discoverOperatorAccess(credential) {
@@ -263,7 +471,6 @@
     operatorAccess = false;
     superUserAccess = false;
     if (window.google?.accounts?.id) window.google.accounts.id.disableAutoSelect();
-    renderGoogleButton();
     emitAuthState();
   }
 
@@ -288,12 +495,13 @@
   }
 
   async function authenticated(credential) {
+    const subtitle = modalSubtitle();
     if (typeof credential !== 'string' || credential.split('.').length !== 3) {
-      setPanel('Identity response invalid', 'badge danger');
+      if (subtitle) { subtitle.textContent = 'Identity response invalid.'; subtitle.style.color = 'var(--red)'; }
       return;
     }
 
-    setPanel('Verifying Google identity…');
+    if (subtitle) { subtitle.textContent = 'Verifying Google identity…'; subtitle.style.color = ''; }
     try {
       const identity = await discoverIdentity(credential);
       token = credential;
@@ -306,34 +514,15 @@
         operatorAccess = false;
         superUserAccess = false;
       }
-      const root = panel();
-      if (root) {
-        root.innerHTML = '';
-        const status = document.createElement('span');
-        status.className = config?.productionApplicationAccessEnabled === true
-          ? 'badge neutral'
-          : 'badge warning';
-        status.textContent = config?.productionApplicationAccessEnabled === true
-          ? 'Google identity verified'
-          : 'Google identity verified · member access not activated';
-        const subject = document.createElement('code');
-        subject.textContent = identity.subject;
-        subject.title = 'Verified Google subject';
-        const button = document.createElement('button');
-        button.className = 'secondary small';
-        button.type = 'button';
-        button.textContent = 'Sign out';
-        button.addEventListener('click', signOut);
-        root.append(status, subject, button);
-      }
       emitAuthState();
       refreshProtectedViews();
+      closeModal();
     } catch {
       token = null;
       verifiedIdentity = null;
       operatorAccess = false;
       superUserAccess = false;
-      setPanel('Google identity verification failed', 'badge danger');
+      if (subtitle) { subtitle.textContent = 'Google identity verification failed.'; subtitle.style.color = 'var(--red)'; }
       emitAuthState();
     }
   }
@@ -358,29 +547,11 @@
     });
   }
 
-  function renderGoogleButton() {
-    const root = panel();
-    if (!root || !config?.clientId || !window.google?.accounts?.id) return;
-    root.innerHTML = '';
-    const target = document.createElement('div');
-    root.appendChild(target);
-    window.google.accounts.id.initialize({
-      client_id: config.clientId,
-      callback: (response) => authenticated(response?.credential),
-      auto_select: false,
-      cancel_on_tap_outside: true,
-    });
-    window.google.accounts.id.renderButton(target, {
-      type: 'standard',
-      theme: 'outline',
-      size: 'medium',
-      text: 'signin_with',
-    });
-  }
-
   async function initialize() {
     bindCatalogUi();
+    bindAuthChipAndModal();
     applyAccessUi();
+    updateChip();
     try {
       const response = await originalFetch('/api/auth-client-config', {
         headers: { Accept: 'application/json' },
@@ -394,26 +565,12 @@
       if (body.environment !== 'production') {
         previewRole = 'none';
         await loadPreviewSession();
-        renderPreviewPanel();
         emitAuthState();
         refreshProtectedViews();
-        return;
       }
-      if (body.provider !== 'google' || body.configured !== true || !body.clientId) {
-        setPanel('Production sign-in not configured', 'badge warning');
-        return;
-      }
-      if (body.productionApplicationAccessEnabled !== true) {
-        setPanel('Production identity configured · member access disabled', 'badge warning');
-      } else {
-        setPanel('Loading Google sign-in…');
-      }
-      await loadGoogleScript();
-      renderGoogleButton();
-      emitAuthState();
     } catch {
-      setPanel('Identity configuration unavailable', 'badge danger');
-      emitAuthState();
+      chipStatusOverride = { message: 'Identity unavailable', tone: 'danger' };
+      updateChip();
     }
   }
 
