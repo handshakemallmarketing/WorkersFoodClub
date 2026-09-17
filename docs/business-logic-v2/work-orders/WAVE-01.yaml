@@ -1,0 +1,45 @@
+wave: 1
+status: authorized_for_design_and_bounded_implementation
+baseline_branch: business-logic-v2/multi-agent-control-plane
+protected_boundaries:
+  live_paystack: unauthorized
+  live_credentials: unauthorized
+  live_funds: unauthorized
+  production_payment_mutation_expansion: unauthorized
+  production_fulfillment_mutation_expansion: unauthorized
+work_orders:
+  - id: BLV2-WO-A2-001
+    agent: A2
+    scope: [UC-01, UC-02, UC-03, UC-04]
+    objective: design and implement canonical membership, household beneficiary, membership invoicing and good-standing contracts
+    must_prove: [identity_lineage, duplicate_application_handling, beneficiary_slot_limits, invitation_expiry, invoice_state_machine, restriction_and_restoration]
+    cannot_decide: [membership_fee_amount, grace_period_length, number_of_beneficiary_slots]
+  - id: BLV2-WO-A3-001
+    agent: A3
+    scope: [UC-05, UC-06, UC-07, UC-09]
+    objective: implement product/SKU/offer/basket/commitment contracts with bounded quantity rules
+    must_prove: [sku_identity, offer_versioning, basket_not_commitment, min_max_quantity_enforcement, concurrent_offer_change_behavior]
+    cannot_decide: [default_minimum_payment_percent, product_specific_credit_policy]
+  - id: BLV2-WO-A9-001
+    agent: A9
+    scope: [UC-16, UC-17]
+    objective: implement bounded operator RBAC and owner/backup-owner governance without a universal bypass
+    must_prove: [least_privilege, separation_of_duties, grant_revocation, execution_time_authority_check, audit_lineage, last_owner_protection]
+    cannot_decide: [named_human_owner_assignments]
+  - id: BLV2-WO-A4-001
+    agent: A4
+    scope: [UC-08, UC-11, UC-12, UC-26]
+    objective: define payment/credit/payroll/refund integration contracts while preserving existing sandbox and settlement boundaries
+    implementation_limit: no_live_provider_activation
+    must_prove: [obligation_intent_settlement_separation, idempotency, receivable_lineage, mandate_not_settlement, refund_lineage]
+  - id: BLV2-WO-A1-001
+    agent: A1
+    scope: [wave_1]
+    objective: independently review all shared contracts and implementations for C0-C10 conformance
+  - id: BLV2-WO-A11-001
+    agent: A11
+    scope: [wave_1]
+    objective: independently falsify happy paths, negative authority paths, replay/race behavior, recovery and cross-domain truth claims
+integration_gate:
+  required: [builder_tests_green, A1_conformance_pass, CI_green, A11_falsification_pass, preview_evidence, decision_register_current]
+  merge_authority: A0

@@ -32,6 +32,13 @@ test('quantity transfer fails closed on missing quantity, wrong units, duplicate
  assert.throws(()=>e.evaluateQuantities({...base,events:[event('acceptance:1','ACCEPTANCE','2026-09-11T15:03:00Z',8),event('acceptance:2','ACCEPTANCE','2026-09-11T15:04:00Z',3)]}),/TRANSFER_QUANTITY_EXCEEDS_TOTAL/);
 });
 
+test('floating-point summation noise neither rejects nor masks an exact total transfer',()=>{
+ const parts=Array.from({length:9},(_,i)=>event(`acceptance:${i}`,'ACCEPTANCE',`2026-09-11T15:${String(3+i).padStart(2,'0')}:00Z`,1/9));
+ const result=evaluator().evaluateQuantities({transactionId:'order:partial:1',transactionType:'GH_PILOT_MEMBER_FOOD_ORDER',policyId:'GH-PILOT-TITLE-RISK',policyVersion:1,totalQuantity:quantity(1,'kg'),events:parts});
+ assert.equal(result.titleTransferredQuantity.amount,1);assert.equal(result.riskTransferredQuantity.amount,1);
+ assert.equal(result.titleComplete,true);assert.equal(result.riskComplete,true);
+});
+
 test('legacy transaction-level evaluation remains backward compatible',()=>{
  const result=evaluator().evaluate({transactionId:'order:partial:1',transactionType:'GH_PILOT_MEMBER_FOOD_ORDER',policyId:'GH-PILOT-TITLE-RISK',policyVersion:1,events:[event('acceptance:1','ACCEPTANCE','2026-09-11T15:03:00Z',8)]});
  assert.equal(result.titleTransferred,true);assert.equal(result.riskTransferred,true);assert.equal(result.titleEventId,'acceptance:1');

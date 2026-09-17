@@ -1,0 +1,19 @@
+version: 0.1
+status: draft
+event_contract:
+  required_fields: [event_id, event_type, occurred_at, actor_id, authority_context, subject_id, correlation_id]
+  rules:
+    - events_are_immutable_facts_not_commands
+    - event_emission_does_not_create_authority
+    - economic_and_physical_events_require_source_evidence
+    - retries_must_not_duplicate_authoritative_effects
+events:
+  membership: [member_application_submitted, member_application_approved, membership_activated, membership_suspended, membership_restored, beneficiary_invited, beneficiary_activated, membership_invoice_issued, membership_fee_settled]
+  commerce: [product_created, sku_created, offer_published, basket_updated, commitment_qualified, commitment_cancelled]
+  payments: [economic_obligation_created, payment_intent_created, settlement_evidence_accepted, receivable_created, payroll_mandate_authorized, refund_authorized, refund_completed]
+  demand: [demand_signal_recorded, demand_pool_threshold_reached, product_request_recorded]
+  supply: [rfq_issued, supplier_quote_received, purchase_order_authorized, farm_plan_recorded, grower_contract_recorded, goods_received]
+  physical: [inventory_lot_created, inventory_reserved, inventory_allocated, fulfillment_ready, release_authority_issued, goods_released, fulfillment_accepted, shortfall_recorded]
+  engagement: [notification_requested, notification_delivered, survey_response_recorded, referral_qualified, reward_authorized]
+  governance: [operator_created, role_granted, role_revoked, authority_granted, authority_revoked, feature_control_changed, approval_recorded]
+  operations: [support_case_opened, exception_case_opened, savings_evidence_recorded, reconciliation_exception_detected, reconciliation_exception_resolved]
