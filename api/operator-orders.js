@@ -1,5 +1,5 @@
 import { requireApplicationAuth } from '../lib/application-auth.js';
-import { ORDERS_READ_CAPABLE_OPERATORS } from '../lib/operator-tiers.js';
+import { ORDERS_READ_CAPABLE_OPERATORS, isAdminOperator } from '../lib/operator-tiers.js';
 
 const PREVIEW_PICKUP_PLACE = 'preview:pickup:001';
 
@@ -85,6 +85,7 @@ export default async function handler(req, res) {
       ok: true,
       source: 'neon-server',
       operatorActorId: principal.actorId,
+      isSuperUser: isAdminOperator(principal.scopes),
       orders,
     });
   } catch (error) {

@@ -18,13 +18,23 @@
     '/api/authorize-refund',
     '/api/complete-refund',
   ]);
+  const OPERATOR_TIER_ROLES = new Set(['fulfillment', 'finance', 'admin']);
+  const PREVIEW_ROLE_LABELS = {
+    none: 'Guest',
+    member: 'Member',
+    fulfillment: 'Operator · Fulfillment',
+    finance: 'Operator · Finance',
+    admin: 'SuperUser · Admin',
+  };
 
   let token = null;
   let config = null;
   let verifiedIdentity = null;
   let operatorAccess = false;
+  let superUserAccess = false;
   let previewMemberToken = null;
-  let previewOperatorToken = null;
+  let previewOperatorTokensByTier = { fulfillment: null, finance: null, admin: null };
+  let previewRole = 'none';
 
   function requestPath(input) {
     try {
@@ -46,8 +56,11 @@
     if (config?.environment === 'production') {
       return token && protectedReadPaths.has(path) ? token : null;
     }
+    if (previewRole === 'none') return null;
     if (previewMemberPaths.has(path)) return previewMemberToken;
-    if (previewOperatorPaths.has(path)) return previewOperatorToken;
+    if (previewOperatorPaths.has(path)) {
+      return OPERATOR_TIER_ROLES.has(previewRole) ? previewOperatorTokensByTier[previewRole] : null;
+    }
     return null;
   }
 
@@ -81,6 +94,19 @@
       && Boolean(token);
   }
 
+  /**
+   * Four nav-visible access levels, unified across Preview (role picked via the
+   * demo panel) and Production (role resolved from the verified identity binding):
+   * none < member < operator < superUser, each a superset of the one before it.
+   */
+  function computeAccessLevels() {
+    const production = config?.environment === 'production';
+    const memberAccess = production ? productionMemberAccessAvailable() : previewRole !== 'none';
+    const operatorLevelAccess = production ? operatorAccess : OPERATOR_TIER_ROLES.has(previewRole);
+    const superUserLevelAccess = production ? superUserAccess : previewRole === 'admin';
+    return { production, memberAccess, operatorLevelAccess, superUserLevelAccess };
+  }
+
   function setHidden(selector, hidden) {
     document.querySelectorAll(selector).forEach((element) => {
       element.hidden = hidden;
@@ -109,51 +135,59 @@
   }
 
   function applyAccessUi() {
-    const production = config?.environment === 'production';
-    const memberAccess = productionMemberAccessAvailable();
-    const authenticated = Boolean(verifiedIdentity && token);
+    const { production, memberAccess, operatorLevelAccess, superUserLevelAccess } = computeAccessLevels();
     const audienceLabel = document.getElementById('audience-label');
 
-    if (!production) {
-      setHidden('[data-view="orders"], [data-view="operator"], [data-view="controls"], [data-view="notifications"], [data-go="orders"]', false);
-      if (audienceLabel) audienceLabel.textContent = 'Member Preview';
-    } else {
-      setHidden('[data-view="orders"], [data-go="orders"]', !memberAccess);
-      setHidden('[data-view="operator"], [data-view="controls"]', !operatorAccess);
-      if (audienceLabel) audienceLabel.textContent = authenticated ? 'Member Preview' : 'Public Preview';
+    setHidden('[data-view="orders"], [data-view="notifications"], [data-go="orders"]', !memberAccess);
+    setHidden('[data-view="operator"]', !operatorLevelAccess);
+    setHidden('[data-view="controls"]', !superUserLevelAccess);
 
-      const activeProtectedView = document.querySelector('.view.active#orders, .view.active#operator, .view.active#controls');
-      if (activeProtectedView) {
-        const stillAllowed = activeProtectedView.id === 'orders' ? memberAccess : operatorAccess;
-        if (!stillAllowed && typeof window.activate === 'function') window.activate('dashboard');
-      }
+    if (audienceLabel) {
+      audienceLabel.textContent = superUserLevelAccess ? 'SuperUser Preview'
+        : operatorLevelAccess ? 'Operator Preview'
+        : memberAccess ? 'Member Preview'
+        : production ? 'Public Preview' : 'Guest Preview';
+    }
+
+    const activeProtectedView = document.querySelector(
+      '.view.active#orders, .view.active#notifications, .view.active#operator, .view.active#controls',
+    );
+    if (activeProtectedView) {
+      const stillAllowed = activeProtectedView.id === 'operator' ? operatorLevelAccess
+        : activeProtectedView.id === 'controls' ? superUserLevelAccess
+        : memberAccess;
+      if (!stillAllowed && typeof window.activate === 'function') window.activate('dashboard');
     }
 
     applyCatalogUi();
-    document.body.dataset.authState = verifiedIdentity ? 'verified' : 'anonymous';
+    document.body.dataset.authState = memberAccess ? 'verified' : 'anonymous';
     document.body.dataset.memberAccess = memberAccess ? 'enabled' : 'disabled';
-    document.body.dataset.operatorAccess = operatorAccess ? 'enabled' : 'disabled';
+    document.body.dataset.operatorAccess = operatorLevelAccess ? 'enabled' : 'disabled';
+    document.body.dataset.superUserAccess = superUserLevelAccess ? 'enabled' : 'disabled';
   }
 
   function emitAuthState() {
     applyAccessUi();
+    const { memberAccess, operatorLevelAccess, superUserLevelAccess } = computeAccessLevels();
     window.dispatchEvent(new CustomEvent('foodclub:auth-state', {
       detail: {
         environment: config?.environment || 'unknown',
         identityVerified: Boolean(verifiedIdentity),
         subject: verifiedIdentity?.subject || null,
         productionApplicationAccessEnabled: config?.productionApplicationAccessEnabled === true,
-        memberAccessAvailable: productionMemberAccessAvailable(),
-        operatorAccessAvailable: operatorAccess,
+        previewRole,
+        memberAccessAvailable: memberAccess,
+        operatorAccessAvailable: operatorLevelAccess,
+        superUserAccessAvailable: superUserLevelAccess,
       },
     }));
   }
 
   function refreshProtectedViews() {
-    const production = config?.environment === 'production';
-    if (production && !productionMemberAccessAvailable()) return;
+    const { memberAccess, operatorLevelAccess } = computeAccessLevels();
+    if (!memberAccess) return;
     if (typeof window.refreshOrders === 'function') window.refreshOrders();
-    if ((!production || operatorAccess) && typeof window.refreshOperatorOrders === 'function') window.refreshOperatorOrders();
+    if (operatorLevelAccess && typeof window.refreshOperatorOrders === 'function') window.refreshOperatorOrders();
     if (typeof window.refreshMemberNotifications === 'function') window.refreshMemberNotifications();
   }
 
@@ -166,11 +200,43 @@
       const body = await response.json();
       if (!response.ok || body?.ok !== true) throw new Error('PREVIEW_SESSION_UNAVAILABLE');
       previewMemberToken = body.memberToken;
-      previewOperatorToken = body.operatorToken;
+      previewOperatorTokensByTier = {
+        fulfillment: body.operatorTokens?.fulfillment || null,
+        finance: body.operatorTokens?.finance || null,
+        admin: body.operatorTokens?.admin || body.operatorToken || null,
+      };
     } catch {
       previewMemberToken = null;
-      previewOperatorToken = null;
+      previewOperatorTokensByTier = { fulfillment: null, finance: null, admin: null };
     }
+  }
+
+  function renderPreviewPanel() {
+    const root = panel();
+    if (!root) return;
+    root.innerHTML = '';
+
+    const status = document.createElement('span');
+    status.className = 'badge neutral';
+    status.textContent = `Preview · ${PREVIEW_ROLE_LABELS[previewRole]}`;
+    root.appendChild(status);
+
+    Object.entries(PREVIEW_ROLE_LABELS).forEach(([role, label]) => {
+      if (role === previewRole) return;
+      const button = document.createElement('button');
+      button.className = 'secondary small';
+      button.type = 'button';
+      button.textContent = role === 'none' ? 'Sign out' : `Sign in as ${label}`;
+      button.addEventListener('click', () => setPreviewRole(role));
+      root.appendChild(button);
+    });
+  }
+
+  function setPreviewRole(role) {
+    previewRole = OPERATOR_TIER_ROLES.has(role) || role === 'member' ? role : 'none';
+    renderPreviewPanel();
+    emitAuthState();
+    refreshProtectedViews();
   }
 
   async function discoverOperatorAccess(credential) {
@@ -183,9 +249,11 @@
         },
         cache: 'no-store',
       });
-      return response.ok;
+      if (!response.ok) return { operator: false, superUser: false };
+      const body = await response.json().catch(() => null);
+      return { operator: true, superUser: body?.isSuperUser === true };
     } catch {
-      return false;
+      return { operator: false, superUser: false };
     }
   }
 
@@ -193,6 +261,7 @@
     token = null;
     verifiedIdentity = null;
     operatorAccess = false;
+    superUserAccess = false;
     if (window.google?.accounts?.id) window.google.accounts.id.disableAutoSelect();
     renderGoogleButton();
     emitAuthState();
@@ -229,9 +298,14 @@
       const identity = await discoverIdentity(credential);
       token = credential;
       verifiedIdentity = identity;
-      operatorAccess = config?.productionApplicationAccessEnabled === true
-        ? await discoverOperatorAccess(credential)
-        : false;
+      if (config?.productionApplicationAccessEnabled === true) {
+        const access = await discoverOperatorAccess(credential);
+        operatorAccess = access.operator;
+        superUserAccess = access.superUser;
+      } else {
+        operatorAccess = false;
+        superUserAccess = false;
+      }
       const root = panel();
       if (root) {
         root.innerHTML = '';
@@ -258,6 +332,7 @@
       token = null;
       verifiedIdentity = null;
       operatorAccess = false;
+      superUserAccess = false;
       setPanel('Google identity verification failed', 'badge danger');
       emitAuthState();
     }
@@ -317,8 +392,10 @@
       emitAuthState();
 
       if (body.environment !== 'production') {
-        setPanel('Preview identity');
+        previewRole = 'none';
         await loadPreviewSession();
+        renderPreviewPanel();
+        emitAuthState();
         refreshProtectedViews();
         return;
       }
@@ -345,8 +422,10 @@
     get mode() { return config?.authenticationMode || 'UNKNOWN'; },
     get subject() { return verifiedIdentity?.subject || null; },
     get issuer() { return verifiedIdentity?.issuer || null; },
-    get memberAccessAvailable() { return productionMemberAccessAvailable(); },
-    get operatorAccessAvailable() { return operatorAccess; },
+    get previewRole() { return previewRole; },
+    get memberAccessAvailable() { return computeAccessLevels().memberAccess; },
+    get operatorAccessAvailable() { return computeAccessLevels().operatorLevelAccess; },
+    get superUserAccessAvailable() { return computeAccessLevels().superUserLevelAccess; },
     signOut,
   });
 

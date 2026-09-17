@@ -7,6 +7,7 @@ import {
   OPERATOR_FINANCE_ACTOR_ID,
   OPERATOR_FULFILLMENT_ACTOR_ID,
   OPERATOR_TIER_SCOPES,
+  isAdminOperator,
 } from '../../lib/operator-tiers.js';
 
 import fulfillmentReady from '../../api/fulfillment-ready.js';
@@ -86,6 +87,15 @@ test('admin tier can reach every operator route', async () => {
   assert.equal((await callAsTier('authorizeRefund', OPERATOR_ADMIN_ACTOR_ID)).statusCode, 503);
   assert.equal((await callAsTier('completeRefund', OPERATOR_ADMIN_ACTOR_ID)).statusCode, 503);
   assert.equal((await callAsTier('operatorOrders', OPERATOR_ADMIN_ACTOR_ID)).statusCode, 503);
+});
+
+test('isAdminOperator recognizes only a scope set that holds every admin-tier scope', () => {
+  assert.equal(isAdminOperator(OPERATOR_TIER_SCOPES[OPERATOR_ADMIN_ACTOR_ID]), true);
+  assert.equal(isAdminOperator(OPERATOR_TIER_SCOPES[OPERATOR_FULFILLMENT_ACTOR_ID]), false);
+  assert.equal(isAdminOperator(OPERATOR_TIER_SCOPES[OPERATOR_FINANCE_ACTOR_ID]), false);
+  assert.equal(isAdminOperator([...OPERATOR_TIER_SCOPES[OPERATOR_FULFILLMENT_ACTOR_ID], ...OPERATOR_TIER_SCOPES[OPERATOR_FINANCE_ACTOR_ID]]), true);
+  assert.equal(isAdminOperator([]), false);
+  assert.equal(isAdminOperator(undefined), false);
 });
 
 test('a token with the right scope but the wrong tier actor is still rejected (actor allowlist is not redundant)', async () => {
