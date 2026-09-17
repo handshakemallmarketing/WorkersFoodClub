@@ -91,7 +91,7 @@
     const audienceLabel = document.getElementById('audience-label');
 
     if (!production) {
-      setHidden('[data-view="orders"], [data-view="operator"], [data-view="controls"], [data-go="orders"]', false);
+      setHidden('[data-view="orders"], [data-view="operator"], [data-view="controls"], [data-view="notifications"], [data-go="orders"]', false);
       if (audienceLabel) audienceLabel.textContent = 'Member Preview';
     } else {
       setHidden('[data-view="orders"], [data-go="orders"]', !memberAccess);

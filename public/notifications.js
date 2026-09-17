@@ -22,7 +22,7 @@
 
   async function refresh() {
     const badge = source();
-    if (!badge || !window.FoodClubAuth?.memberAccessAvailable) return;
+    if (!badge) return;
     try {
       const response = await fetch('/api/member-notifications', { headers: { Accept: 'application/json' }, cache: 'no-store' });
       const body = await response.json();
@@ -36,16 +36,22 @@
     }
   }
 
+  function accessAvailable(detail = {}) {
+    return detail.environment !== 'production' || detail.memberAccessAvailable === true;
+  }
+
   function applyAccess(detail = {}) {
     const button = nav();
     if (!button) return;
-    button.hidden = !detail.memberAccessAvailable;
-    if (!detail.memberAccessAvailable && document.getElementById('notifications')?.classList.contains('active') && typeof window.activate === 'function') window.activate('dashboard');
+    const visible = accessAvailable(detail);
+    button.hidden = !visible;
+    if (!visible && document.getElementById('notifications')?.classList.contains('active') && typeof window.activate === 'function') window.activate('dashboard');
   }
 
   window.addEventListener('foodclub:auth-state', (event) => {
-    applyAccess(event.detail || {});
-    if (event.detail?.memberAccessAvailable) refresh();
+    const detail = event.detail || {};
+    applyAccess(detail);
+    if (accessAvailable(detail)) refresh();
   });
   nav()?.addEventListener('click', refresh);
   window.refreshMemberNotifications = refresh;
