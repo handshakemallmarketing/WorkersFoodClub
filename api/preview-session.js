@@ -15,6 +15,7 @@ const MEMBER_SCOPES = [
   'member:fulfillment.accept',
   'member:orders.read',
   'member:notifications.read',
+  'member:engagement.survey',
 ];
 
 export default async function handler(req, res) {
