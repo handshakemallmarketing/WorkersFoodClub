@@ -37,7 +37,7 @@
   }
 
   function accessAvailable(detail = {}) {
-    return detail.environment !== 'production' || detail.memberAccessAvailable === true;
+    return detail.memberAccessAvailable === true;
   }
 
   function applyAccess(detail = {}) {
