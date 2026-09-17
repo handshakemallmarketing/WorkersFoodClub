@@ -1,0 +1,51 @@
+version: 0.1
+status: draft
+baseline: 080d0f2cda4e75e65798dfee2a5d2879ec153ff9
+principles:
+  - technical_capability_does_not_create_authority
+  - interest_is_not_commitment
+  - payment_intent_is_not_settlement
+  - forecast_is_not_inventory
+  - expected_supply_is_not_received_supply
+  - promised_quantity_is_not_fulfilled_quantity
+  - every_authoritative_mutation_requires_current_authority_and_evidence
+
+domains:
+  membership:
+    owner: A2
+    entities: [Person, MemberApplication, Member, Membership, Household, BeneficiaryInvitation, MembershipInvoice]
+  commerce:
+    owner: A3
+    entities: [Product, SKU, Offer, Basket, Commitment, DemandPool]
+  payments:
+    owner: A4
+    entities: [EconomicObligation, PaymentIntent, SettlementEvidence, Receivable, CreditAccount, PayrollMandate, RefundRemedy]
+  demand:
+    owner: A5
+    entities: [DemandSignal, DemandPool, ProductRequest, Forecast]
+  supply:
+    owner: A6
+    entities: [Supplier, RFQ, SupplierQuote, ProcurementRequirement, PurchaseOrder, FarmProductionPlan, GrowerContract, Receipt]
+  physical:
+    owner: A7
+    entities: [InventoryLot, Reservation, Allocation, Transformation, Fulfillment, Pickup, Delivery, ReleaseAuthority]
+  engagement:
+    owner: A8
+    entities: [Notification, CommunicationPreference, Survey, Referral, Reward]
+  governance:
+    owner: A9
+    entities: [Operator, Role, Permission, AuthorityGrant, Approval, FeatureControl, AuditEvent]
+  operations:
+    owner: A10
+    entities: [SupportCase, ExceptionCase, SavingsEvidence, EmployerAdministration, OperationalKPI]
+shared_contracts:
+  identity:
+    rule: authentication_identity_must_not_replace_canonical_member_identity
+  money:
+    rule: obligations_intents_settlements_receivables_and_credits_are_distinct_records
+  inventory:
+    rule: only_accepted_physical_receipt_or_harvest_may_create_inventory
+  fulfillment:
+    rule: completion_uses_actual_transferred_and_accepted_quantity
+  authority:
+    rule: execution_time_authority_check_required_for_governed_mutations
