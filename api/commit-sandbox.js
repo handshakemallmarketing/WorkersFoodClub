@@ -37,6 +37,19 @@ async function readExisting(sql, requestId) {
   return rows?.[0] ?? null;
 }
 
+function replayMatches(existing, { offerId, participantId, membershipId }) {
+  return String(existing.offer_id) === offerId
+    && String(existing.participant_id) === participantId
+    && String(existing.membership_id) === membershipId;
+}
+
+function replayResponse(res, existing, identity) {
+  if (!replayMatches(existing, identity)) {
+    return res.status(409).json({ ok: false, error: 'COMMIT_REQUEST_REBOUND' });
+  }
+  return res.status(200).json({ ok: true, commitment: serialize(existing, true) });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -66,12 +79,14 @@ export default async function handler(req, res) {
   if (!OFFER_ID_RE.test(offerId)) return res.status(400).json({ ok: false, error: 'OFFER_ID_INVALID' });
   if (!REQUEST_ID_RE.test(requestId)) return res.status(400).json({ ok: false, error: 'REQUEST_ID_INVALID' });
 
+  const replayIdentity = { offerId, participantId: String(runtime.actorId), membershipId: MEMBERSHIP_ID };
+
   try {
     const { neon } = await import('@neondatabase/serverless');
     const sql = neon(connectionString, { fetchOptions: { signal: AbortSignal.timeout(5000) } });
 
     const existing = await readExisting(sql, requestId);
-    if (existing) return res.status(200).json({ ok: true, commitment: serialize(existing, true) });
+    if (existing) return replayResponse(res, existing, replayIdentity);
 
     const obligationId = durableId('obligation');
     const commandId = durableId('command');
@@ -156,7 +171,7 @@ export default async function handler(req, res) {
         const { neon } = await import('@neondatabase/serverless');
         const sql = neon(connectionString);
         const existing = await readExisting(sql, requestId);
-        if (existing) return res.status(200).json({ ok: true, commitment: serialize(existing, true) });
+        if (existing) return replayResponse(res, existing, replayIdentity);
       } catch {}
     }
     console.error('Sandbox commitment failed', { name: error?.name, code: error?.code, message: error?.message });
