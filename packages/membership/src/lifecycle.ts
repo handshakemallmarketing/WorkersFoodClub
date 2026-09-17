@@ -77,6 +77,7 @@ export class InMemoryBeneficiaryStore {
  }
  accept(id:string,tokenDigest:string,beneficiaryParticipantId:ParticipantId,at:string):BeneficiaryInvitation{
   const current=this.require(id); this.requireUsable(current,tokenDigest,at); if(current.state!=='INVITED') throw new Error('BENEFICIARY_INVITATION_NOT_INVITED');
+  if(this.boundElsewhere(beneficiaryParticipantId,id)) throw new Error('BENEFICIARY_ALREADY_BOUND_TO_ANOTHER_SPONSOR');
   return this.replace({...current,state:'ACCEPTED',beneficiaryParticipantId,acceptedAt:at});
  }
  activate(id:string,tokenDigest:string,at:string,policy:BeneficiarySlotPolicy):BeneficiaryInvitation{
@@ -87,6 +88,9 @@ export class InMemoryBeneficiaryStore {
  revoke(id:string):BeneficiaryInvitation{const current=this.require(id);if(current.state==='REVOKED'||current.state==='EXPIRED')return current;return this.replace({...current,state:'REVOKED'});}
  activeForSponsor(id:ParticipantId){return [...this.invitations.values()].filter(x=>x.sponsorParticipantId===id&&x.state==='ACTIVATED');}
  private activeCount(id:ParticipantId){return this.activeForSponsor(id).length;}
+ private boundElsewhere(beneficiaryParticipantId:ParticipantId,excludeId:string):boolean{
+  return [...this.invitations.values()].some(x=>x.id!==excludeId&&x.beneficiaryParticipantId===beneficiaryParticipantId&&(x.state==='ACCEPTED'||x.state==='ACTIVATED'));
+ }
  private requireUsable(i:BeneficiaryInvitation,digest:string,at:string){if(i.tokenDigest!==digest)throw new Error('BENEFICIARY_TOKEN_INVALID');if(Date.parse(at)>=Date.parse(i.expiresAt))throw new Error('BENEFICIARY_TOKEN_EXPIRED');}
  private require(id:string){const x=this.invitations.get(id);if(!x)throw new Error('BENEFICIARY_INVITATION_NOT_FOUND');return x;}
  private replace(value:BeneficiaryInvitation){const frozen=Object.freeze({...value});this.invitations.set(value.id,frozen);return frozen;}
