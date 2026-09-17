@@ -5,11 +5,26 @@
     '/api/member-notifications',
     '/api/operator-orders',
   ]);
+  const previewMemberPaths = new Set([
+    '/api/member-orders',
+    '/api/member-notifications',
+    '/api/commit-sandbox',
+    '/api/pay-sandbox',
+    '/api/accept-fulfillment',
+  ]);
+  const previewOperatorPaths = new Set([
+    '/api/operator-orders',
+    '/api/fulfillment-ready',
+    '/api/authorize-refund',
+    '/api/complete-refund',
+  ]);
 
   let token = null;
   let config = null;
   let verifiedIdentity = null;
   let operatorAccess = false;
+  let previewMemberToken = null;
+  let previewOperatorToken = null;
 
   function requestPath(input) {
     try {
@@ -21,17 +36,26 @@
     }
   }
 
-  function withBearer(init = {}) {
+  function withBearer(init = {}, credential) {
     const headers = new Headers(init.headers || {});
-    headers.set('Authorization', `Bearer ${token}`);
+    headers.set('Authorization', `Bearer ${credential}`);
     return { ...init, headers };
   }
 
+  function bearerFor(path) {
+    if (config?.environment === 'production') {
+      return token && protectedReadPaths.has(path) ? token : null;
+    }
+    if (previewMemberPaths.has(path)) return previewMemberToken;
+    if (previewOperatorPaths.has(path)) return previewOperatorToken;
+    return null;
+  }
+
   window.fetch = (input, init = {}) => {
-    const method = String(init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
     const path = requestPath(input);
-    if (token && method === 'GET' && protectedReadPaths.has(path)) {
-      return originalFetch(input, withBearer(init));
+    const bearer = bearerFor(path);
+    if (bearer) {
+      return originalFetch(input, withBearer(init, bearer));
     }
     return originalFetch(input, init);
   };
@@ -126,9 +150,27 @@
   }
 
   function refreshProtectedViews() {
-    if (!productionMemberAccessAvailable()) return;
+    const production = config?.environment === 'production';
+    if (production && !productionMemberAccessAvailable()) return;
     if (typeof window.refreshOrders === 'function') window.refreshOrders();
-    if (operatorAccess && typeof window.refreshOperatorOrders === 'function') window.refreshOperatorOrders();
+    if ((!production || operatorAccess) && typeof window.refreshOperatorOrders === 'function') window.refreshOperatorOrders();
+    if (typeof window.refreshMemberNotifications === 'function') window.refreshMemberNotifications();
+  }
+
+  async function loadPreviewSession() {
+    try {
+      const response = await originalFetch('/api/preview-session', {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const body = await response.json();
+      if (!response.ok || body?.ok !== true) throw new Error('PREVIEW_SESSION_UNAVAILABLE');
+      previewMemberToken = body.memberToken;
+      previewOperatorToken = body.operatorToken;
+    } catch {
+      previewMemberToken = null;
+      previewOperatorToken = null;
+    }
   }
 
   async function discoverOperatorAccess(credential) {
@@ -276,6 +318,8 @@
 
       if (body.environment !== 'production') {
         setPanel('Preview identity');
+        await loadPreviewSession();
+        refreshProtectedViews();
         return;
       }
       if (body.provider !== 'google' || body.configured !== true || !body.clientId) {
