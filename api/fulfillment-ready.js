@@ -55,5 +55,17 @@ export default async function handler(req,res){
    SELECT f.fulfillment_id,f.obligation_id,f.state,f.ready_event_id,f.ready_at FROM f JOIN cmd ON true JOIN ev ON ev.event_id=f.ready_event_id`;
   if(!rows[0])return res.status(409).json({ok:false,error:'OBLIGATION_NOT_READYABLE'});
   return res.status(201).json({ok:true,fulfillment:{fulfillmentId:String(rows[0].fulfillment_id),obligationId:String(rows[0].obligation_id),state:String(rows[0].state),readyEventId:String(rows[0].ready_event_id),readyAt:String(rows[0].ready_at),idempotent:false}});
- }catch(error){console.error('Fulfillment ready failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'FULFILLMENT_READY_FAILED'});}
+ }catch(error){
+  if(error?.code==='23505'){
+   try{
+    const {neon}=await import('@neondatabase/serverless');const sql=neon(connectionString);
+    const prior=await sql`SELECT * FROM preview_fulfillment WHERE obligation_id=${obligationId} OR ready_request_id=${requestId} LIMIT 1`;
+    if(prior[0]){
+     if(String(prior[0].obligation_id)!==obligationId)return res.status(409).json({ok:false,error:'FULFILLMENT_REQUEST_REBOUND'});
+     return res.status(200).json({ok:true,fulfillment:{fulfillmentId:String(prior[0].fulfillment_id),obligationId:String(prior[0].obligation_id),state:String(prior[0].state),readyEventId:String(prior[0].ready_event_id),idempotent:true}});
+    }
+   }catch{}
+  }
+  console.error('Fulfillment ready failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'FULFILLMENT_READY_FAILED'});
+ }
 }
