@@ -1,0 +1,115 @@
+wave: 2
+status: authorized_for_bounded_review_and_implementation
+baseline_sha: 70d44118044a4077eafee8b4f9a3ef7b673031a9
+governing_rule: >-
+  Wave 2 may advance only journeys whose dependencies are satisfied. UC-08 remains
+  fail-closed pending authorized human policy; no downstream agent may treat it as
+  complete, infer a threshold, or use payment intent as settlement.
+
+active_lanes:
+  - agent: A8
+    domain: engagement_referral_notifications
+    branch: business-logic-v2/wave-02-a8-engagement
+    authorized_journeys: [UC-14, UC-15]
+    can_decide:
+      - contract shapes that preserve survey_interest_is_not_commitment
+      - durable evidence and replay controls for product-request surveys
+      - referral qualification mechanics only where qualifying events are already governed
+      - adverse tests and fail-closed behavior
+    cannot_decide:
+      - referral reward economic value not already ratified
+      - convert survey interest into commitment or authoritative demand
+      - bypass membership eligibility
+      - live communication-provider activation
+      - production mutation expansion
+    required_falsification:
+      - duplicate survey submission cannot create commitment
+      - survey interest cannot enter authoritative demand pool
+      - referral reward cannot issue without proven qualifying event
+      - replay cannot duplicate reward
+      - wrong participant or event lineage fails closed
+
+  - agent: A10
+    domain: support_exception_control_tower
+    branch: business-logic-v2/wave-02-a10-support
+    authorized_journeys: [UC-28]
+    review_only_journeys: [UC-27, UC-29]
+    can_decide:
+      - support-case lifecycle and durable audit lineage
+      - bounded exception classification and recovery workflow
+      - replay/idempotency and authorization checks
+      - projection contracts that explicitly remain non-authoritative
+    cannot_decide:
+      - savings methodology or benchmark not already ratified
+      - treat dashboard projection as source of truth
+      - financial remediation outside governed A4 contracts
+      - production mutation expansion
+    required_falsification:
+      - duplicate case command is idempotent
+      - unauthorized operator cannot mutate case
+      - case projection cannot mutate economic or physical truth
+      - case closure retains evidence and actor lineage
+
+  - agent: A11
+    domain: cross_domain_reconciliation_recovery
+    branch: business-logic-v2/wave-02-a11-recovery
+    authorized_journeys: [UC-30]
+    can_decide:
+      - adversarial tests
+      - reconciliation and recovery falsification
+      - evidence sufficiency findings
+      - require remediation when invariants fail
+    cannot_decide:
+      - author or approve feature under test
+      - invent business policy
+      - waive failed conformance
+      - activate live providers or production mutations
+    required_falsification:
+      - recovery preserves idempotency
+      - recovery preserves actor authority
+      - recovery cannot manufacture settlement, inventory, commitment, or delivery
+      - cross-domain replay does not duplicate economic or physical truth
+
+blocked_lanes:
+  - agent: A5
+    journeys: [UC-10]
+    blocker: A4-PAY-002 / UC-08 minimum-commitment payment policy is unratified
+    rule: review may identify contract gaps, but implementation must not qualify authoritative demand without governed UC-08 semantics
+  - agent: A6
+    journeys: [UC-19, UC-20, UC-21]
+    blocker: UC-19 and UC-21 depend on UC-10 authoritative demand qualification
+    rule: no procurement or grow decision may treat unqualified demand as authoritative
+  - agent: A7
+    journeys: [UC-22, UC-23, UC-24, UC-25, UC-13]
+    blocker: core physical-flow chain depends on procurement/fulfillment prerequisites not yet Wave-2-authorized
+    rule: review-only until upstream dependencies are explicitly opened by A0 after A1 conformance
+
+cross_cutting_reviewers:
+  A1:
+    role: independent constitutional_and_conformance_review
+    cannot_decide: [new_business_policy, human_only_authority]
+  A0:
+    role: integration_control
+    cannot_decide: [override_constitution, exercise_human_only_authority]
+
+integration_gate:
+  required:
+    - builder_tests_green
+    - A1_conformance_pass
+    - CI_green
+    - A11_falsification_pass
+    - decision_register_current
+    - no_blocked_dependency_bypass
+  prohibited:
+    - live_paystack_activation
+    - live_funds
+    - CAGD_deductions
+    - item_level_credit_activation
+    - production_payment_mutation_expansion
+    - production_fulfillment_mutation_expansion
+    - invented_UC08_threshold
+
+exit_condition: >-
+  Active Wave-2 lanes may integrate independently when their own dependencies and
+  integration gates are proven. Blocked lanes remain blocked until an authorized
+  policy/dependency change is recorded and independently reviewed.
