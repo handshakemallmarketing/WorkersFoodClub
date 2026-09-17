@@ -1,6 +1,6 @@
 import { requireApplicationAuth } from '../lib/application-auth.js';
+import { ORDERS_READ_CAPABLE_OPERATORS } from '../lib/operator-tiers.js';
 
-const PREVIEW_OPERATOR_ID = 'preview:operator:001';
 const PREVIEW_PICKUP_PLACE = 'preview:pickup:001';
 
 function safeErrorDiagnostic(error) {
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     req,
     res,
     'operator:orders.read',
-    PREVIEW_OPERATOR_ID,
+    ORDERS_READ_CAPABLE_OPERATORS,
   );
   if (!principal) return;
 

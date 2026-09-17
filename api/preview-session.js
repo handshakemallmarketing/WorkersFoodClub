@@ -1,7 +1,12 @@
 import { mintPreviewApiToken } from '../lib/preview-api-auth.js';
+import {
+  OPERATOR_ADMIN_ACTOR_ID,
+  OPERATOR_FINANCE_ACTOR_ID,
+  OPERATOR_FULFILLMENT_ACTOR_ID,
+  OPERATOR_TIER_SCOPES,
+} from '../lib/operator-tiers.js';
 
 const PREVIEW_MEMBER_ACTOR_ID = 'preview:member:001';
-const PREVIEW_OPERATOR_ACTOR_ID = 'preview:operator:001';
 const TTL_SECONDS = 600;
 
 const MEMBER_SCOPES = [
@@ -10,13 +15,6 @@ const MEMBER_SCOPES = [
   'member:fulfillment.accept',
   'member:orders.read',
   'member:notifications.read',
-];
-
-const OPERATOR_SCOPES = [
-  'operator:fulfillment.manage',
-  'operator:refund.authorize',
-  'operator:refund.complete',
-  'operator:orders.read',
 ];
 
 export default async function handler(req, res) {
@@ -46,20 +44,29 @@ export default async function handler(req, res) {
     expiresAt,
   });
 
-  const operatorToken = mintPreviewApiToken({
+  const mintOperatorTier = (subject, actorId) => mintPreviewApiToken({
     secret,
-    subject: 'preview-operator-session',
-    actorId: PREVIEW_OPERATOR_ACTOR_ID,
-    scopes: OPERATOR_SCOPES,
+    subject,
+    actorId,
+    scopes: OPERATOR_TIER_SCOPES[actorId],
     issuedAt,
     expiresAt,
   });
+
+  const operatorTokens = {
+    fulfillment: mintOperatorTier('preview-operator-fulfillment-session', OPERATOR_FULFILLMENT_ACTOR_ID),
+    finance: mintOperatorTier('preview-operator-finance-session', OPERATOR_FINANCE_ACTOR_ID),
+    admin: mintOperatorTier('preview-operator-session', OPERATOR_ADMIN_ACTOR_ID),
+  };
 
   res.setHeader('Cache-Control', 'no-store');
   return res.status(200).json({
     ok: true,
     memberToken,
-    operatorToken,
+    // Kept for backward compatibility with existing callers: the admin tier holds every
+    // operator scope, matching what this field granted before tiers existed.
+    operatorToken: operatorTokens.admin,
+    operatorTokens,
     expiresAt,
   });
 }
