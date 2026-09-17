@@ -1,6 +1,6 @@
 # A11 Wave 2 — Cross-Domain Reconciliation / Recovery Gap Review
 
-Baseline: 70d44118044a4077eafee8b4f9a3ef7b673031a9
+Baseline: current Wave-2 control plane after A10 integration (`ce97b77e271d09ab1c43c8ee077b2946a1927784`).
 Scope: UC-30 cross_domain_reconciliation_and_recovery
 Disposition: EXTEND EXISTING RECOVERY PRIMITIVES — DO NOT CREATE PARALLEL AUTHORITY
 
@@ -8,50 +8,56 @@ Disposition: EXTEND EXISTING RECOVERY PRIMITIVES — DO NOT CREATE PARALLEL AUTH
 Recovery must preserve idempotency, authority and economic truth. Recovery is not authority to fabricate or reinterpret canonical state.
 
 ## Existing baseline strength
-SW1 already establishes reusable recovery principles: actor-bound idempotency, fail-closed conflicting request reuse, no-effect reconciliation before retry, duplicate-effect avoidance when an effect already exists, durable audit records, and separately authorized stuck-work diagnosis. Wave 2 should compose and falsify these primitives across domains rather than invent a second recovery architecture.
+SW1 already establishes reusable recovery principles: actor-bound idempotency, fail-closed conflicting request reuse, no-effect reconciliation before retry, duplicate-effect avoidance when an effect already exists, durable audit records, and separately authorized stuck-work diagnosis. Wave 2 composes and falsifies these primitives across domains rather than inventing a second recovery architecture.
 
-## A11-REC-001 — Cross-domain idempotency conservation — OPEN
-Falsify recovery across membership, commitment, payment/refund and later physical-domain events:
-- identical retry cannot duplicate canonical effect;
-- conflicting payload under same idempotency identity fails closed;
-- recovery after process loss must converge to one effect;
-- replay of upstream event cannot duplicate downstream allocation.
+## A11-REC-001 — Cross-domain idempotency conservation — PARTIAL / EXECUTABLE
+Behavioral tests now execute commitment replay and membership-settlement replay rather than reading source text. They prove:
+- process-loss-style commitment replay converges to one commitment and one pooled-demand contribution;
+- replay of the same authoritative membership settlement does not create a second settlement or second shipping-credit allocation;
+- shipping overpayment remains SHIPPING-only value.
 
-## A11-REC-002 — Authority conservation — OPEN
-Recovery must execute with the authority required by the original governed command or a separately authorized recovery role. Stuck-work diagnosis is not mutation authority.
+Still required before UC-30 is complete:
+- executable changed-payload reuse rejection for each durable runtime boundary;
+- PostgreSQL concurrency/process-loss proof for the runtime commitment/refund paths, not only in-memory domain stores.
 
-Falsification:
-- revoked original actor cannot use replay to regain authority;
-- diagnostic operator cannot convert diagnosis into privileged mutation;
-- recovery command cannot cross domain authority boundary merely because an event is stuck.
+## A11-REC-002 — Authority conservation — PARTIAL / EXECUTABLE
+Behavioral tests prove a revoked operator grant is inactive at execution time. Existing governance tests also cover role ceilings and authority-grant lineage.
 
-## A11-REC-003 — Economic/physical truth conservation — OPEN
-Recovery/reconciliation must never manufacture:
-- settlement from payment intent/provider acknowledgement alone;
-- commitment from basket/survey interest;
-- inventory from expected harvest/purchase order;
-- pickup/delivery from proximity signal;
-- refund beyond authoritative settled refundable value.
+Still required:
+- exercise a real recovery/retry command after revocation and prove it cannot reuse historical authority;
+- prove diagnostic/stuck-work authority cannot mutate another domain.
 
-Existing A4 settlement/refund tests become seed cases for the cross-domain matrix.
+## A11-REC-003 — Economic/physical truth conservation — PARTIAL / EXECUTABLE
+Behavioral tests prove:
+- unverified or unpersisted caller assertions cannot settle membership invoices;
+- basket/intent without an authorized commitment contributes zero pooled demand;
+- membership overpayment remains shipping-only and is not duplicated on replay.
 
-## A11-REC-004 — Ambiguous external-side-effect protocol — OPEN
-For external effects, recovery must classify at least:
+Existing A4 settlement/refund tests remain seed evidence for refund conservation. Physical-domain rows remain future falsification requirements and are not evidence that A7 is complete.
+
+Still required:
+- PostgreSQL/runtime refund cumulative-cap recovery proof;
+- authoritative physical-domain recovery tests after the A5 -> A6 -> A7 dependency chain is implemented.
+
+## A11-REC-004 — Ambiguous external-side-effect protocol — CONTRACT DEFINED / HARNESS PARTIAL
+The executable recovery test now exercises the three required dispositions using a sandbox classifier:
 1. proven no effect -> exact authorized retry may proceed;
-2. proven effect -> record/reconcile without repeating effect;
-3. ambiguous -> fail closed/escalate, never guess.
+2. proven effect -> reconcile/suppress duplicate;
+3. ambiguous -> fail closed/escalate.
 
-Required evidence must include external reference where available, canonical command/event identity, reconciliation timestamp, actor/authority lineage and resulting disposition.
+This is deliberately not presented as provider proof. Before an external-effect recovery path is production-authorizable, the owning domain must expose authoritative reconciliation evidence and A11 must execute the protocol against that sandbox/fake adapter.
 
 ## A11-REC-005 — Recovery evidence sufficiency — OPEN
-A successful test alone is insufficient. Each recovery path must retain enough durable evidence to explain original command, authority, attempted side effect, reconciliation result, retry/suppression decision and final canonical state.
+A successful behavioral test alone is insufficient. Each durable recovery path must retain enough evidence to explain original command, authority, attempted side effect, reconciliation result, retry/suppression decision and final canonical state.
+
+Required evidence fields remain: external reference where available, canonical command/event identity, reconciliation timestamp, actor/authority lineage, and resulting disposition.
 
 ## Independence boundary
 A11 may create adversarial tests, recovery harnesses and evidence-sufficiency findings. It may not author/approve the business feature being tested, invent policy, waive a failed invariant, activate live providers or expand Production mutation authority.
 
-## Recommended execution sequence
-1. Inventory existing SW1 recovery/idempotency primitives and map them to UC-30.
-2. Build cross-domain falsification matrix beginning with A2/A3/A4/A9 integrated Wave-1 truths.
-3. Add process-loss, replay, conflict and revoked-authority tests.
-4. Add ambiguous-side-effect protocol tests using sandbox/fakes only.
-5. Require remediation from owning agent for any failed feature invariant; A11 does not silently fix policy/business semantics itself.
+## Current execution sequence
+1. Behavioral in-memory cross-domain tranche — implemented on the A11 reconciliation branch.
+2. Exact-head constitutional conformance — required after every reconciliation/test change.
+3. Independent A1 review — required before A0 integration.
+4. PostgreSQL/runtime recovery tranche — remains subsequent UC-30 work; do not mark UC-30 complete after this PR.
+5. Physical-domain recovery tranche — dependency blocked on authoritative A5/A6/A7 truth contracts.
