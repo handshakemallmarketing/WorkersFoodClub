@@ -89,11 +89,12 @@ test('admin tier can reach every operator route', async () => {
   assert.equal((await callAsTier('operatorOrders', OPERATOR_ADMIN_ACTOR_ID)).statusCode, 503);
 });
 
-test('isAdminOperator recognizes only a scope set that holds every admin-tier scope', () => {
+test('isAdminOperator requires the explicit release scope, never infers it from a scope union', () => {
   assert.equal(isAdminOperator(OPERATOR_TIER_SCOPES[OPERATOR_ADMIN_ACTOR_ID]), true);
   assert.equal(isAdminOperator(OPERATOR_TIER_SCOPES[OPERATOR_FULFILLMENT_ACTOR_ID]), false);
   assert.equal(isAdminOperator(OPERATOR_TIER_SCOPES[OPERATOR_FINANCE_ACTOR_ID]), false);
-  assert.equal(isAdminOperator([...OPERATOR_TIER_SCOPES[OPERATOR_FULFILLMENT_ACTOR_ID], ...OPERATOR_TIER_SCOPES[OPERATOR_FINANCE_ACTOR_ID]]), true);
+  // Holding every fulfillment + finance scope is NOT the same as being granted admin/release authority.
+  assert.equal(isAdminOperator([...OPERATOR_TIER_SCOPES[OPERATOR_FULFILLMENT_ACTOR_ID], ...OPERATOR_TIER_SCOPES[OPERATOR_FINANCE_ACTOR_ID]]), false);
   assert.equal(isAdminOperator([]), false);
   assert.equal(isAdminOperator(undefined), false);
 });

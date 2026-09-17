@@ -1,4 +1,4 @@
-import { mintPreviewApiToken } from '../lib/preview-api-auth.js';
+import { mintPreviewApiToken, isPreviewLikeEnvironment } from '../lib/preview-api-auth.js';
 import {
   OPERATOR_ADMIN_ACTOR_ID,
   OPERATOR_FINANCE_ACTOR_ID,
@@ -23,8 +23,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   }
 
-  if (process.env.VERCEL_ENV === 'production') {
-    return res.status(403).json({ ok: false, error: 'PREVIEW_SESSION_DISABLED_IN_PRODUCTION' });
+  if (!isPreviewLikeEnvironment()) {
+    return res.status(403).json({ ok: false, error: 'PREVIEW_SESSION_PREVIEW_ONLY' });
   }
 
   const secret = process.env.PREVIEW_API_AUTH_SECRET;

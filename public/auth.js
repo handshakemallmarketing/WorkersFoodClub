@@ -34,22 +34,32 @@
     finance: 'Authorize and complete member refunds.',
     admin: 'Full operator authority across fulfillment and finance, plus Release Controls.',
   };
+  const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   let token = null;
   let config = null;
   let verifiedIdentity = null;
+  let memberAccessConfirmed = false;
   let operatorAccess = false;
   let superUserAccess = false;
   let previewMemberToken = null;
   let previewOperatorTokensByTier = { fulfillment: null, finance: null, admin: null };
   let previewRole = 'none';
   let chipStatusOverride = null;
+  let lastFocusedElement = null;
+  let expiryTimer = null;
+  let googleScriptState = 'unloaded';
+  let googleScriptPromise = null;
 
   function requestPath(input) {
     try {
-      if (typeof input === 'string') return new URL(input, window.location.origin).pathname;
-      if (input instanceof Request) return new URL(input.url, window.location.origin).pathname;
-      return '';
+      const url = typeof input === 'string' ? new URL(input, window.location.origin)
+        : input instanceof Request ? new URL(input.url, window.location.origin)
+        : null;
+      // Same-origin only: an absolute cross-origin URL that happens to share a
+      // protected pathname must never receive this app's bearer credential.
+      if (!url || url.origin !== window.location.origin) return '';
+      return url.pathname;
     } catch {
       return '';
     }
@@ -62,6 +72,7 @@
   }
 
   function bearerFor(path) {
+    if (!path) return null;
     if (config?.environment === 'production') {
       return token && protectedReadPaths.has(path) ? token : null;
     }
@@ -89,23 +100,53 @@
   function chip() { return document.getElementById('auth-chip'); }
   function chipLabel() { return document.getElementById('auth-chip-label'); }
 
-  function onModalKeydown(event) {
-    if (event.key === 'Escape') closeModal();
+  function setBackgroundInert(value) {
+    document.querySelectorAll('.app-shell').forEach((el) => { el.inert = value; });
+  }
+
+  function trapFocus(event) {
+    if (event.key === 'Escape') {
+      closeModal();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const root = modal();
+    if (!root) return;
+    const focusable = [...root.querySelectorAll(FOCUSABLE_SELECTOR)].filter((el) => el.offsetParent !== null);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   function openModal() {
     const root = modal();
     if (!root) return;
+    lastFocusedElement = document.activeElement;
     root.hidden = false;
     renderModalContent();
-    document.addEventListener('keydown', onModalKeydown);
+    setBackgroundInert(true);
+    document.addEventListener('keydown', trapFocus);
+    requestAnimationFrame(() => {
+      const target = root.querySelector(FOCUSABLE_SELECTOR);
+      target?.focus();
+    });
   }
 
   function closeModal() {
     const root = modal();
     if (!root) return;
     root.hidden = true;
-    document.removeEventListener('keydown', onModalKeydown);
+    setBackgroundInert(false);
+    document.removeEventListener('keydown', trapFocus);
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') lastFocusedElement.focus();
+    lastFocusedElement = null;
   }
 
   function bindAuthChipAndModal() {
@@ -120,7 +161,11 @@
     return config?.environment === 'production'
       && config?.productionApplicationAccessEnabled === true
       && Boolean(verifiedIdentity)
-      && Boolean(token);
+      && Boolean(token)
+      // Operator access already proves a real governed binding; a plain verified
+      // Google identity additionally needs its own membership probe confirmed --
+      // being signed in is not the same as being an approved, active member.
+      && (memberAccessConfirmed || operatorAccess);
   }
 
   /**
@@ -321,7 +366,7 @@
 
   function renderPreviewModal(body, title, subtitle) {
     title.textContent = previewRole === 'none' ? 'Sign in' : 'Switch identity';
-    subtitle.textContent = 'This is a sandboxed preview — nothing here touches live funds. Pick a role to explore its access.';
+    subtitle.textContent = 'This is a sandboxed preview — nothing here touches live funds. Explore demo roles below; production sign-in never offers a role picker.';
     subtitle.style.color = '';
 
     if (previewRole !== 'none') {
@@ -331,6 +376,12 @@
         meta: PREVIEW_ROLE_DESCRIPTIONS[previewRole],
       }));
     }
+
+    const sectionLabel = document.createElement('p');
+    sectionLabel.className = 'eyebrow';
+    sectionLabel.style.margin = '0 0 8px';
+    sectionLabel.textContent = 'Explore demo roles';
+    body.appendChild(sectionLabel);
 
     const grid = document.createElement('div');
     grid.className = 'role-grid';
@@ -370,7 +421,37 @@
     }
   }
 
-  async function renderProductionModal(body, title, subtitle) {
+  function renderGoogleSignInButton(body, subtitle) {
+    const target = document.createElement('div');
+    body.appendChild(target);
+    loadGoogleScript().then(() => {
+      window.google.accounts.id.initialize({
+        client_id: config.clientId,
+        callback: (response) => authenticated(response?.credential),
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      window.google.accounts.id.renderButton(target, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        width: 300,
+      });
+    }).catch(() => {
+      subtitle.textContent = 'Google sign-in failed to load.';
+      subtitle.style.color = 'var(--red)';
+      target.innerHTML = '';
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'secondary small';
+      retry.textContent = 'Retry';
+      retry.addEventListener('click', () => renderModalContent());
+      target.appendChild(retry);
+    });
+  }
+
+  function renderProductionModal(body, title, subtitle) {
     subtitle.style.color = '';
 
     if (config.provider !== 'google' || config.configured !== true || !config.clientId) {
@@ -384,7 +465,7 @@
       subtitle.textContent = config.productionApplicationAccessEnabled === true
         ? 'Your Google identity is verified against the governed application binding.'
         : 'Your Google identity is verified, but member access is not yet activated.';
-      const label = currentRoleLabel() || 'Member';
+      const label = currentRoleLabel() || 'Signed in · access pending';
       body.appendChild(identitySummaryNode({
         iconText: label.charAt(0),
         name: label,
@@ -403,28 +484,7 @@
     subtitle.textContent = config.productionApplicationAccessEnabled === true
       ? 'Verify your Google identity to access your governed member or operator scopes.'
       : 'Verify your Google identity. Member access remains disabled until explicitly activated.';
-
-    const target = document.createElement('div');
-    body.appendChild(target);
-    try {
-      await loadGoogleScript();
-      window.google.accounts.id.initialize({
-        client_id: config.clientId,
-        callback: (response) => authenticated(response?.credential),
-        auto_select: false,
-        cancel_on_tap_outside: true,
-      });
-      window.google.accounts.id.renderButton(target, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        width: 300,
-      });
-    } catch {
-      subtitle.textContent = 'Google sign-in failed to load.';
-      subtitle.style.color = 'var(--red)';
-    }
+    renderGoogleSignInButton(body, subtitle);
   }
 
   function renderModalContent() {
@@ -447,9 +507,9 @@
     renderProductionModal(body, title, subtitle);
   }
 
-  async function discoverOperatorAccess(credential) {
+  async function probeBearerAccess(path, credential) {
     try {
-      const response = await originalFetch('/api/operator-orders', {
+      const response = await originalFetch(path, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -457,19 +517,54 @@
         },
         cache: 'no-store',
       });
-      if (!response.ok) return { operator: false, superUser: false };
-      const body = await response.json().catch(() => null);
-      return { operator: true, superUser: body?.isSuperUser === true };
+      return response;
     } catch {
-      return { operator: false, superUser: false };
+      return null;
     }
+  }
+
+  async function discoverMemberAccess(credential) {
+    const response = await probeBearerAccess('/api/member-orders', credential);
+    return Boolean(response?.ok);
+  }
+
+  async function discoverOperatorAccess(credential) {
+    const response = await probeBearerAccess('/api/operator-orders', credential);
+    if (!response?.ok) return { operator: false, superUser: false };
+    const body = await response.json().catch(() => null);
+    return { operator: true, superUser: body?.isSuperUser === true };
+  }
+
+  function clearExpiryTimer() {
+    if (expiryTimer !== null) {
+      clearTimeout(expiryTimer);
+      expiryTimer = null;
+    }
+  }
+
+  function scheduleExpiry(expiresAtSeconds) {
+    clearExpiryTimer();
+    if (!Number.isFinite(expiresAtSeconds)) return;
+    const delayMs = expiresAtSeconds * 1000 - Date.now();
+    // Cap the timer so it always fires even across very long-lived tokens or a
+    // sleeping/backgrounded tab whose timers were throttled; a stale session
+    // still gets caught promptly on the next tick instead of drifting forever.
+    const boundedDelay = Math.max(0, Math.min(delayMs, 24 * 60 * 60 * 1000));
+    expiryTimer = setTimeout(() => {
+      if (!verifiedIdentity) return;
+      signOut();
+      chipStatusOverride = { message: 'Session expired · sign in again', tone: 'warning' };
+      updateChip();
+    }, boundedDelay);
   }
 
   function signOut() {
     token = null;
     verifiedIdentity = null;
+    memberAccessConfirmed = false;
     operatorAccess = false;
     superUserAccess = false;
+    clearExpiryTimer();
     if (window.google?.accounts?.id) window.google.accounts.id.disableAutoSelect();
     emitAuthState();
   }
@@ -501,16 +596,23 @@
       return;
     }
 
+    chipStatusOverride = null;
     if (subtitle) { subtitle.textContent = 'Verifying Google identity…'; subtitle.style.color = ''; }
     try {
       const identity = await discoverIdentity(credential);
       token = credential;
       verifiedIdentity = identity;
+      scheduleExpiry(identity.expiresAt);
       if (config?.productionApplicationAccessEnabled === true) {
-        const access = await discoverOperatorAccess(credential);
-        operatorAccess = access.operator;
-        superUserAccess = access.superUser;
+        const [memberConfirmed, operatorResult] = await Promise.all([
+          discoverMemberAccess(credential),
+          discoverOperatorAccess(credential),
+        ]);
+        memberAccessConfirmed = memberConfirmed;
+        operatorAccess = operatorResult.operator;
+        superUserAccess = operatorResult.superUser;
       } else {
+        memberAccessConfirmed = false;
         operatorAccess = false;
         superUserAccess = false;
       }
@@ -520,31 +622,35 @@
     } catch {
       token = null;
       verifiedIdentity = null;
+      memberAccessConfirmed = false;
       operatorAccess = false;
       superUserAccess = false;
+      clearExpiryTimer();
       if (subtitle) { subtitle.textContent = 'Google identity verification failed.'; subtitle.style.color = 'var(--red)'; }
       emitAuthState();
     }
   }
 
   function loadGoogleScript() {
-    return new Promise((resolve, reject) => {
-      if (window.google?.accounts?.id) return resolve();
-      const existing = document.querySelector('script[data-foodclub-google-identity]');
-      if (existing) {
-        existing.addEventListener('load', resolve, { once: true });
-        existing.addEventListener('error', reject, { once: true });
-        return;
-      }
+    if (googleScriptState === 'loaded' && window.google?.accounts?.id) return Promise.resolve();
+    if (googleScriptState === 'loading' && googleScriptPromise) return googleScriptPromise;
+
+    // A prior failed <script> tag never re-fires load/error for a listener
+    // attached after the fact, so it must be removed before retrying.
+    document.querySelectorAll('script[data-foodclub-google-identity]').forEach((el) => el.remove());
+
+    googleScriptState = 'loading';
+    googleScriptPromise = new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client';
       script.async = true;
       script.defer = true;
       script.dataset.foodclubGoogleIdentity = 'true';
-      script.onload = resolve;
-      script.onerror = reject;
+      script.onload = () => { googleScriptState = 'loaded'; resolve(); };
+      script.onerror = () => { googleScriptState = 'failed'; script.remove(); reject(new Error('GOOGLE_SCRIPT_LOAD_FAILED')); };
       document.head.appendChild(script);
     });
+    return googleScriptPromise;
   }
 
   async function initialize() {
