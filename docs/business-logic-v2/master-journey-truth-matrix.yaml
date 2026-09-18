@@ -27,23 +27,25 @@ global_gaps:
     finding: constitution/baseline.json says PROPOSED_FOR_RATIFICATION while agent guidance describes C0-C10 as ratified; substantive C0-C10 text is not discoverable on main.
   - id: P0-PROD-EXACT-HEAD
     severity: P0
-    status: CLARIFIED_PARTIAL_CLEANUP_REMAINING
+    status: RESOLVED
     finding: >-
       Two Vercel deployments of this repository existed, disagreeing on application-access state
       at the same commit. Willie Adofo confirmed directly (BLV2-DEC-014): he personally requested
       PRODUCTION_APPLICATION_ACCESS_ENABLED be turned on for workers-food-club.vercel.app (Vercel
       team OriginOS, prj_Ti1NOQryzFeImhMSwncMXNxs01I8) for real-world testing, done via direct
       Vercel dashboard toggle rather than the documented activation-gate ceremony -- a real,
-      intentional authorization, not a rogue/unauthorized one. workers-food-club-chi.vercel.app
-      (the old canonical alias) is a real, different Vercel account this session cannot reach or
-      delete; Willie wants exactly one canonical project and needs to locate and retire it himself.
-      Remediated (BLV2-DEC-015): the activation workflow and governance record (grant v4) on both
-      main and the sw1-production-application-access-activation-gate control branch were repointed
-      to the real project and current main HEAD, so the ceremony would target the right place and
-      not silently roll back the live deployment if fired again. Verified the control-branch push
-      did not itself trigger a deployment (GitHub Actions run concluded "skipped", not fired).
-      Remaining: Willie locating/retiring the chi project in his own Vercel account(s); four
-      older RC3-era workflows referencing the same stale org were left untouched as out of scope.
+      intentional authorization, not a rogue/unauthorized one. The second project (the old
+      canonical alias, workers-food-club-chi.vercel.app) was identified (BLV2-DEC-018): same
+      project name and Project ID (prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE, matching the old hardcoded
+      workflow value) under a different Vercel account (ghanafoodgroup@gmail.com, team
+      "FoodClub"). Willie paused it directly -- reversible, no deletion, visitors now get 503
+      DEPLOYMENT_PAUSED. Its GitHub integration still fires build status checks on every push
+      (confirmed on PR #98) even while paused; only serving traffic stopped. Remediated
+      (BLV2-DEC-015): the activation workflow and governance record (grant v4) on both main and
+      the sw1-production-application-access-activation-gate control branch were repointed to the
+      real project and current main HEAD. Exactly one project now actually serves real users.
+      Four older RC3-era workflows referencing the same stale org were left untouched as out of
+      scope (different, seemingly-retired control branch from an earlier release cycle).
   - id: P0-DB-ISOLATION
     severity: P0
     status: RESOLVED
