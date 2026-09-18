@@ -1,4 +1,5 @@
 import { productionApplicationAccessEnabled } from '../lib/production-access-policy.js';
+import { createHash } from 'node:crypto';
 import {
   readProductionOidcConfig,
   verifyProductionOidcRequest,
@@ -70,6 +71,35 @@ export default async function handler(req, res) {
       tokenPersistence: 'MEMORY_ONLY',
       liveFundsAuthorized: false,
     });
+  }
+
+  if (url.searchParams.get('probe') === 'database-target-fingerprint') {
+    if (process.env.VERCEL_ENV !== 'preview') {
+      return res.status(403).json({
+        ok: false,
+        error: 'DATABASE_TARGET_FINGERPRINT_PREVIEW_ONLY',
+      });
+    }
+
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
+    }
+
+    try {
+      const hostname = new URL(connectionString).hostname.toLowerCase();
+      if (!hostname) throw new Error('DATABASE_HOSTNAME_MISSING');
+      const hostSha256 = createHash('sha256').update(hostname).digest('hex');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({
+        ok: true,
+        environment: 'preview',
+        algorithm: 'sha256',
+        hostSha256,
+      });
+    } catch {
+      return res.status(503).json({ ok: false, error: 'DATABASE_TARGET_FINGERPRINT_FAILED' });
+    }
   }
 
   if (url.searchParams.get('probe') === 'identity-subject') {
