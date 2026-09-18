@@ -2,7 +2,27 @@
 
 Status: LIVE TRACKING DOCUMENT — update in place as items are flipped or superseded
 Last compiled: 2026-09-17, against `main` @ `52b909c4b58ac9346856298c089b014c8e96d80a`
+Updated: 2026-09-18, against `main` @ `f02caaa0d33e893e8cc3a72b6348eee971aaa4dc`
 Owner: Willie Adofo — Founder / Governance Authority (`participant:willie-adofo`)
+
+See also `docs/business-logic-v2/master-journey-truth-matrix.yaml` (added in PR #94), which is
+now the canonical per-journey (UC-01–UC-30) evidence tracker. This document stays focused on
+infrastructure/environment "flip on" items; the journey matrix is the source of truth for
+feature-completeness claims. Both should stay reconciled — do not let either silently drift.
+
+## Update log
+
+- **2026-09-18** — Verified against `main` @ `f02caaa0...`. PR #94 added the journey truth
+  matrix and confirmed, from real repository state (not from an external report), the same
+  P0 findings independently noted below: the stale activation-workflow SHA pin (§1) and a
+  genuine constitutional-ratification gap, added as a new item below. PR #95 closed one item
+  from the deferred list (§6) by routing `api/fulfillment-ready.js` and
+  `api/accept-fulfillment.js` through `requireApplicationAuth` instead of the legacy
+  preview-only auth path — removed from §6, folded into the unified-auth baseline. Added new
+  falsification test coverage (`tests/node/sw1-rc3-governed-principal-binding.test.mjs`)
+  proving a revoked, expired, not-yet-valid, or target-prefix-scoped
+  `application_authority_grant` row cannot satisfy general operator authority — this was
+  true of the shipped code already; the gap was that no test proved it.
 
 ## Purpose
 
@@ -26,6 +46,8 @@ Update this file whenever an item's status changes. Do not delete history — ma
 | Production application-access **activation workflow** | `.github/workflows/production-application-access-activation.yml`, triggered by pushing the exact commit message `AUTHORIZED: enable Production application access` to branch `sw1-production-application-access-activation-gate` | **Stale — see gotcha below** | The only sanctioned path to flip the switch above. Pinned to `ACTIVATION_SHA=de78497e00b58f5157d0622af54cf62f337c27b7`, which predates the sign-in modal, operator-tier, and employee-session work merged as PR #92/#93. **This pin must be updated to the current release candidate SHA (currently `52b909c4b58ac9346856298c089b014c8e96d80a`, or later) and the `docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json` authorization record re-issued for the new candidate SHA, before this workflow is fired.** Firing it unmodified would activate an outdated build. |
 | `PAYSTACK_SECRET_KEY` live-mode gate | `api/paystack-rehearsal.js`, `packages/pilot-payments/src/paystack.ts` (`PaystackConfigurationGate.validate()`) | `sk_test_` only — live keys hard-rejected | Prevents any live Paystack charge. Requires **both** a `sk_live_` key **and** an explicit `liveEnabled: true` config flag to ever accept live mode. This is intentionally a separate, still-withheld authorization track — see §5. |
 | Owner bootstrap | Not yet built (no script exists) | **Not started** | Zero real `application_authority_grant` rows of type Owner exist for any real person. Until a bootstrap process is written and run, nobody can hold `authority:owner`, and therefore nobody can grant Admin, and therefore no real Admin/Operator grants can be issued through the governed `packages/authority/src/hierarchy.ts` path. See §4. |
+| Constitutional (C0–C10) ratification | `constitution/baseline.json` | **`PROPOSED_FOR_RATIFICATION`, unchanged since the file's original commit (`a27132a`, "SW0-02: bootstrap constitutional kernel")** | `docs/agents/README.md` and `docs/agents/work-orders/A9-governance-wave1.md` both describe "Ratified C0-C10" as the superior authority governing all agent work, but the canonical record has never actually been marked ratified, and no substantive C0–C10 corpus text exists anywhere on `main` — only the corpus *index* (`["C0","C1",...,"C10","CB-00"]`) in `baseline.json`. **This is a genuine open governance question, not a clerical bug — I have not changed this file.** Either (a) the constitution was ratified out-of-band and the record needs updating to reflect that, with evidence of who ratified it and when, following the same pattern as `docs/governance/TRANSFER_POLICY_GOVERNANCE-v1.md`; or (b) it was never actually ratified and the agent-facing docs asserting "ratified" are themselves wrong and need correcting. **Willie Adofo needs to say which.** Do not silently flip this to `RATIFIED` on anyone's behalf, including an AI agent's. |
+| Preview/Production Neon database isolation | Vercel/Neon project configuration (not visible from this codebase) | **Unverified — cannot be checked from a coding session** | Every route reads a single `process.env.DATABASE_URL` (confirmed by direct code search across all of `api/*.js`); there is no code-level distinction between Preview and Production connection strings, so isolation is entirely a matter of which Neon project/branch each Vercel environment's `DATABASE_URL` points to. **No Vercel or Neon credentials/CLI are available in this session** — this can only be verified from the Vercel dashboard (Project Settings → Environment Variables, compare the Production and Preview `DATABASE_URL` values) or the Neon console (compare project/branch IDs). If Preview and Production currently resolve to the same Neon branch, that is a real P0: Preview/sandbox test writes could land in the Production database. |
 
 **Who pushes the activation trigger commit:** Willie Adofo personally, after his own testing. This
 is explicitly not delegated to an AI agent in this engagement — see `docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json` for the authorization record format the trigger depends on.
