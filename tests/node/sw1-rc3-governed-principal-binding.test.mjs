@@ -18,7 +18,13 @@ function fakeSql({binding,participant,memberships=[],grants=[],employeeSessions=
     }
     if(text.includes('FROM application_authority_grant')){
       const requiredScope=values[1];
-      return grants.filter((g)=>Array.isArray(g.actions)&&g.actions.includes(requiredScope)&&g.target_prefix==null&&!g.revoked).slice(0,1);
+      return grants.filter((g)=>
+        Array.isArray(g.actions)&&g.actions.includes(requiredScope)
+        &&g.target_prefix==null
+        &&!g.revoked
+        &&!g.expired
+        &&!g.notYetValid
+      ).slice(0,1);
     }
     throw new Error('UNEXPECTED_QUERY');
   };
@@ -100,6 +106,24 @@ test('RC3 an operator-scoped request without a live employee session is denied e
 
   const otherPersonsSession=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({...grantFixture,employeeSessions:[{session_id:'session:1',participant_id:'participant:someone-else'}]}),employeeSessionSecret:EMPLOYEE_SESSION_SECRET,employeeSessionToken:signEmployeeSessionToken(EMPLOYEE_SESSION_SECRET,'session:1')});
   assert.deepEqual(otherPersonsSession,{ok:false,status:401,error:'EMPLOYEE_SESSION_INVALID'});
+});
+
+test('RC3 a revoked, expired, not-yet-valid, or target-scoped grant does not satisfy general operator authority',async()=>{
+  const base=(overrides)=>({binding:binding(['operator:orders.read']),participant,grants:[{grant_id:'grant:x',actions:['operator:orders.read'],target_prefix:null,...overrides}]});
+
+  const revoked=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(base({revoked:true}))});
+  assert.deepEqual(revoked,{ok:false,status:403,error:'OPERATOR_AUTHORITY_REQUIRED'});
+
+  const expired=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(base({expired:true}))});
+  assert.deepEqual(expired,{ok:false,status:403,error:'OPERATOR_AUTHORITY_REQUIRED'});
+
+  const notYetValid=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(base({notYetValid:true}))});
+  assert.deepEqual(notYetValid,{ok:false,status:403,error:'OPERATOR_AUTHORITY_REQUIRED'});
+
+  // A grant scoped to a target prefix (e.g. a policy-ratification-only grant) must not
+  // be usable as general operator authority for an unrelated scope family.
+  const targetScoped=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(base({target_prefix:'GH-PILOT-TITLE-RISK'}))});
+  assert.deepEqual(targetScoped,{ok:false,status:403,error:'OPERATOR_AUTHORITY_REQUIRED'});
 });
 
 test('RC3 governed principal requires an ACTIVE durable participant',async()=>{

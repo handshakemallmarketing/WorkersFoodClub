@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      ACTIVATION_SHA: 'de78497e00b58f5157d0622af54cf62f337c27b7'
+      ACTIVATION_SHA: 'e67bf163db4bf87317766b1c58da84ea076de76f'
       EXPECTED_MEMBER_SUBJECT: '105166970902157294779'
       EXPECTED_OPERATOR_SUBJECT: '100561209688774684064'
       AUTHORIZATION_EVIDENCE_PATH: docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json
-      VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
-      VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
-      PRODUCTION_BASE_URL: https://workers-food-club-chi.vercel.app
+      VERCEL_ORG_ID: team_WkMSXuSv8kDLoOlGHYtIggZ1
+      VERCEL_PROJECT_ID: prj_Ti1NOQryzFeImhMSwncMXNxs01I8
+      PRODUCTION_BASE_URL: https://workers-food-club.vercel.app
       MIN_TOKEN_LIFETIME_SECONDS: '900'
       RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
       RC3_PRODUCTION_OPERATOR_TOKEN: ${{ secrets.RC3_PRODUCTION_OPERATOR_TOKEN }}
@@ -158,12 +158,12 @@ jobs:
       - name: Pull Production project settings
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=origin-os
 
       - name: Build immutable candidate with Production semantics
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=food-club
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=origin-os
 
       - name: Recheck controlled token lifetime immediately before Production deploy
         shell: bash
@@ -192,7 +192,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=food-club --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true)"
+          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=origin-os --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Authorized Production deployment: $url"
           echo "Canonical Production alias under test: $PRODUCTION_BASE_URL"
@@ -257,7 +257,7 @@ jobs:
           }
 
           test -n "$DEPLOY_URL"
-          immutable_build="$(vercel curl /api/build-info --deployment "$DEPLOY_URL" --scope=food-club)"
+          immutable_build="$(vercel curl /api/build-info --deployment "$DEPLOY_URL" --scope=origin-os)"
           assert_sha_json 'immutable Production deployment identity' "$immutable_build"
 
           wait_for_canonical_activation
@@ -306,7 +306,7 @@ jobs:
           test -n "$response"
           echo 'Persisted project-level Production application-access switch as true after successful runtime falsification.'
 
-          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club >/dev/null
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=origin-os >/dev/null
           python - <<'PY'
           import pathlib, re, sys
           path = pathlib.Path('.vercel/.env.production.local')
@@ -333,7 +333,7 @@ jobs:
             --header 'Content-Type: application/json' \
             --data '[{"key":"PRODUCTION_APPLICATION_ACCESS_ENABLED","value":"false","type":"plain","target":["production"],"comment":"Fail-closed rollback after Production application-access activation failure"}]' \
             >/dev/null
-          vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=food-club --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false >/tmp/rollback-url.txt
+          vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=origin-os --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false >/tmp/rollback-url.txt
           rollback_proven=false
           last_body=''
           last_status=''
