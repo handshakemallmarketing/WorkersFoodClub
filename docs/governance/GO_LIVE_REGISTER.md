@@ -101,16 +101,32 @@ before activation — it hard-fails closed on a subject mismatch by design.
 
 ## 3. Database migrations
 
-All 15 migration files under `packages/durability/sql/` (`001_durable_command_execution.sql`
-through `015_employee_authority_hierarchy.sql`, including the two `012_wave2_*` and one
-`014_wave2_support_case.sql` siblings) have been exercised against **local test Postgres only**
-in this engagement. **None of this has been confirmed applied to the real production Neon
-database.** Before go-live:
+**CONFIRMED 2026-09-18, via direct Neon inspection (not inference):** migrations 001-011 are
+applied to the real production Neon branch (`br-winter-poetry-ae8qho57`, project `wispy-dawn-96331519`,
+org "Ghana Food Group"). **Migrations 012-015 were never applied** — `employee_session`,
+`member_application`, `beneficiary_invitation`, `membership_invoice(_settlement)`,
+`member_product_request_survey`, `support_case(_transition)`, and
+`membership_shopping_credit_entry/lot` did not exist. Recorded as `BLV2-DEC-009`.
 
-- [ ] Apply all 15 migrations, in numeric/dependency order, to the production Neon database.
-- [ ] Confirm `015_employee_authority_hierarchy.sql` specifically — it creates the `employee_session`
-      table that `EMPLOYEE_SESSION_SECRET`-gated endpoints depend on. Without it, employee-session
-      endpoints will fail with a SQL error, not a clean authorization error.
+Practical effect: `resolveApplicationPrincipal()`'s employee-session query hits a
+relation-does-not-exist error, which its try/catch turns into `503
+APPLICATION_BINDING_LOOKUP_FAILED` — so this fails closed (no security hole) but every
+operator-scoped action is simply non-functional. UC-01/02/03/04/11/14/28 have no backing
+tables at all in production, independent of `PRODUCTION_APPLICATION_ACCESS_ENABLED`.
+
+**Remediation status:**
+- [x] Forked a `preview` Neon branch (`br-purple-grass-aej54d2x`) from `production` and applied
+      all 6 outstanding migration files to it, statement by statement, including the
+      `014_wave2_support_case.sql` column-rename upgrade path. Verified the resulting schema
+      (27 tables/views, including all previously-missing ones) and confirmed the renamed
+      `support_case`/`support_case_transition` columns landed correctly
+      (`created_by_authn_subject_ref`, `updated_by_authn_subject_ref`, `authn_subject_ref`).
+- [ ] **Not yet applied to the actual `production` branch.** The same statements are now proven
+      clean on an exact fork of production, but writing DDL to the live production database is
+      being held for explicit authorization rather than done automatically just because a
+      dry-run succeeded. Say the word and this gets applied the same way, verified the same way.
+- [ ] After applying to production, re-run `/api/build-info` / `/api/db-health` against the
+      Production Vercel deployment to confirm the app sees the new tables.
 - [ ] Run `api/db-health.js` (or the `/api/build-info` probe path) against production after
       migrating, to confirm schema/runtime agreement before enabling application access.
 
