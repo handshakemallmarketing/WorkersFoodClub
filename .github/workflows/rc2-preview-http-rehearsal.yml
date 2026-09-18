@@ -10,6 +10,10 @@ on:
         description: Exact Git commit SHA deployed at preview_url
         required: true
         type: string
+      expected_database_host_sha256:
+        description: SHA-256 of the separately verified isolated Preview database hostname
+        required: true
+        type: string
 permissions:
   contents: read
   id-token: write
@@ -56,6 +60,7 @@ jobs:
         env:
           PREVIEW_BASE_URL: ${{ inputs.preview_url }}
           EXPECTED_COMMIT_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_DATABASE_HOST_SHA256: ${{ inputs.expected_database_host_sha256 }}
           VERCEL_TRUSTED_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         shell: bash
         run: |
