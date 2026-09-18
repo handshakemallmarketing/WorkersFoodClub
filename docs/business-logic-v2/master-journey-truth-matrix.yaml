@@ -30,7 +30,10 @@ global_gaps:
     finding: Production access authorization pins de78497e00b58f5157d0622af54cf62f337c27b7, not current main; no authority is inferred for the new head.
   - id: P0-DB-ISOLATION
     severity: P0
-    finding: Preview/Production database separation is unproven; preview/sandbox tables coexist on the primary Neon production branch.
+    status: CONFIRMED
+    finding: Preview and Production Vercel environments resolve DATABASE_URL to the same Neon branch. Confirmed 2026-09-18 by direct human comparison of the Production and Preview DATABASE_URL values in the Vercel dashboard and the Neon console branch list (no separate Vercel/Neon read credentials were available to this agent to verify independently). Every api/*.js route reads a single process.env.DATABASE_URL with no code-level environment distinction, so isolation depends entirely on this Vercel/Neon configuration.
+    confirmed_by: human (Willie Adofo), via Vercel + Neon dashboards, 2026-09-18
+    remediation: See docs/governance/GO_LIVE_REGISTER.md section 8 for the proposed non-destructive branch-separation plan. Not yet executed.
   - id: P1-DB-RECOVERY
     severity: P1
     finding: No scheduled snapshots or completed restore drill; current Neon history retention is six hours.

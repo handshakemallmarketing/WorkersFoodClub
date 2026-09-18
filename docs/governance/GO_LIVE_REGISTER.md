@@ -23,6 +23,12 @@ feature-completeness claims. Both should stay reconciled — do not let either s
   proving a revoked, expired, not-yet-valid, or target-prefix-scoped
   `application_authority_grant` row cannot satisfy general operator authority — this was
   true of the shipped code already; the gap was that no test proved it.
+- **2026-09-18 (later same day)** — P0-DB-ISOLATION confirmed by the human owner directly
+  comparing the Vercel dashboard's Production/Preview `DATABASE_URL` values and the Neon
+  console's branch list: they resolve to the same branch. Recorded in
+  `docs/business-logic-v2/decision-register.jsonl` (`BLV2-DEC-008`) and in the journey truth
+  matrix. Added §7 with a proposed non-destructive remediation (new Neon branch for Preview
+  only); not yet executed — this session has no Vercel/Neon write access.
 
 ## Purpose
 
@@ -47,7 +53,7 @@ Update this file whenever an item's status changes. Do not delete history — ma
 | `PAYSTACK_SECRET_KEY` live-mode gate | `api/paystack-rehearsal.js`, `packages/pilot-payments/src/paystack.ts` (`PaystackConfigurationGate.validate()`) | `sk_test_` only — live keys hard-rejected | Prevents any live Paystack charge. Requires **both** a `sk_live_` key **and** an explicit `liveEnabled: true` config flag to ever accept live mode. This is intentionally a separate, still-withheld authorization track — see §5. |
 | Owner bootstrap | Not yet built (no script exists) | **Not started** | Zero real `application_authority_grant` rows of type Owner exist for any real person. Until a bootstrap process is written and run, nobody can hold `authority:owner`, and therefore nobody can grant Admin, and therefore no real Admin/Operator grants can be issued through the governed `packages/authority/src/hierarchy.ts` path. See §4. |
 | Constitutional (C0–C10) ratification | `constitution/baseline.json` | **`PROPOSED_FOR_RATIFICATION`, unchanged since the file's original commit (`a27132a`, "SW0-02: bootstrap constitutional kernel")** | `docs/agents/README.md` and `docs/agents/work-orders/A9-governance-wave1.md` both describe "Ratified C0-C10" as the superior authority governing all agent work, but the canonical record has never actually been marked ratified, and no substantive C0–C10 corpus text exists anywhere on `main` — only the corpus *index* (`["C0","C1",...,"C10","CB-00"]`) in `baseline.json`. **This is a genuine open governance question, not a clerical bug — I have not changed this file.** Either (a) the constitution was ratified out-of-band and the record needs updating to reflect that, with evidence of who ratified it and when, following the same pattern as `docs/governance/TRANSFER_POLICY_GOVERNANCE-v1.md`; or (b) it was never actually ratified and the agent-facing docs asserting "ratified" are themselves wrong and need correcting. **Willie Adofo needs to say which.** Do not silently flip this to `RATIFIED` on anyone's behalf, including an AI agent's. |
-| Preview/Production Neon database isolation | Vercel/Neon project configuration (not visible from this codebase) | **Unverified — cannot be checked from a coding session** | Every route reads a single `process.env.DATABASE_URL` (confirmed by direct code search across all of `api/*.js`); there is no code-level distinction between Preview and Production connection strings, so isolation is entirely a matter of which Neon project/branch each Vercel environment's `DATABASE_URL` points to. **No Vercel or Neon credentials/CLI are available in this session** — this can only be verified from the Vercel dashboard (Project Settings → Environment Variables, compare the Production and Preview `DATABASE_URL` values) or the Neon console (compare project/branch IDs). If Preview and Production currently resolve to the same Neon branch, that is a real P0: Preview/sandbox test writes could land in the Production database. |
+| Preview/Production Neon database isolation | Vercel/Neon project configuration (not visible from this codebase) | **CONFIRMED P0 — Production and Preview share the same Neon branch** (confirmed 2026-09-18 by direct human check of the Vercel dashboard and Neon console) | Every route reads a single `process.env.DATABASE_URL` (confirmed by direct code search across all of `api/*.js`); there is no code-level distinction between Preview and Production connection strings. With both environments pointed at the same Neon branch, any Preview/sandbox request — including anything the automated Preview rehearsal suites write — lands in the same physical database as real Production data. **See §7 for the proposed non-destructive remediation.** |
 
 **Who pushes the activation trigger commit:** Willie Adofo personally, after his own testing. This
 is explicitly not delegated to an AI agent in this engagement — see `docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json` for the authorization record format the trigger depends on.
@@ -185,7 +191,44 @@ a later increment. They require new engineering, not a switch:
 
 ---
 
-## 7. Suggested go-live order
+## 7. Neon branch separation — proposed remediation for the confirmed P0
+
+**Confirmed 2026-09-18:** Production and Preview both resolve `DATABASE_URL` to the same Neon
+branch. This plan separates them without touching existing data or requiring any Production
+downtime. It is a proposal, not yet executed — nothing below has been done.
+
+1. **Create a new Neon branch from the current (shared) branch.** Neon branch creation is a
+   copy-on-write snapshot — it does not modify or lock the source branch. Name it something
+   explicit, e.g. `preview` (leave the existing branch as the Production branch of record; do
+   not rename or recreate the branch Production currently uses).
+2. **Get that new branch's connection string** from the Neon console (Branches → the new branch
+   → Connection Details).
+3. **Update only the Preview environment's `DATABASE_URL`** in Vercel (Project Settings →
+   Environment Variables → `DATABASE_URL` → edit the **Preview** scope only, leave **Production**
+   untouched) to point at the new branch's connection string.
+4. **Redeploy a Preview deployment** (push any branch, or redeploy an existing Preview
+   deployment) and confirm via `/api/db-health` / `/api/build-info` on that Preview URL that it
+   is reachable and schema-healthy on the new branch.
+5. **Apply all 15 migrations** (§3) to the new Preview branch — it was forked from Production's
+   schema at creation time, but confirm it matches exactly and re-run migrations if the fork
+   predates the latest migration.
+6. **Run the existing Preview/rehearsal test suites** against the redeployed Preview URL to
+   confirm nothing broke.
+7. **Do not delete or reset the old shared branch** as part of this change — Production keeps
+   using it unmodified throughout. The only change Production sees is that Preview traffic stops
+   arriving.
+8. Once confirmed working, update this register's status for this item to `DONE (date)` and
+   update `docs/business-logic-v2/master-journey-truth-matrix.yaml`'s `P0-DB-ISOLATION` entry to
+   `status: RESOLVED` with the evidence (new branch id, redeploy confirmation).
+
+This requires Vercel + Neon write access (creating a branch, editing an env var) that this
+session does not currently have. Either grant scoped, revocable credentials (see the prior
+turn's Option A) so I can execute and verify steps 1-6 directly, or run them yourself from the
+dashboards and tell me when done so I can update the evidence trail.
+
+---
+
+## 8. Suggested go-live order
 
 1. Apply all migrations to production Neon (§3), confirm via `/api/build-info`.
 2. Provision `EMPLOYEE_SESSION_SECRET` and confirm all OIDC-related env vars (§2) on Production.
@@ -202,3 +245,6 @@ a later increment. They require new engineering, not a switch:
    rolls back automatically on failure).
 8. Leave §5 (live funds, live Paystack, CAGD, credit expansion) untouched until each is
    separately, explicitly authorized with its own governance record.
+9. Separate the Neon branches (§7) before or alongside the above — it's independent of
+   Production-access activation but should not wait indefinitely, since every day Preview and
+   Production share a branch is a day Preview traffic can touch real data.
