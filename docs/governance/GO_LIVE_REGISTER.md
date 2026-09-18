@@ -141,24 +141,46 @@ UC-01/02/03/04/11/14/28 had no backing tables at all, independent of
 
 ## 4. Identity and authority seed data (Owner bootstrap)
 
-Zero real people currently hold any `application_authority_grant` row in production. This is
-expected — no bootstrap has been run — but it means production application access could be
-enabled with **no one able to reach the Operator console**, because:
+Zero real people currently hold any `application_authority_grant` row in production. This means
+production application access is live (§1) with **no one yet able to reach the Operator
+console**, because:
 
 - `packages/authority/src/hierarchy.ts` requires an active Owner grant to exist before an Admin
   can ever be granted, and an active Owner or Admin before any ordinary operator grant can be
   issued.
 - There is currently no live HTTP invite/grant/revoke API wired to that hierarchy module (it's
-  pure logic only, exercised by unit tests and one manual Postgres integration script this
-  session — not yet callable from production).
+  pure logic only — not yet callable from production for *ordinary* Admin/Operator grants).
 
-**Before go-live, in order:**
-1. [ ] Decide and execute an Owner bootstrap process (a one-time, out-of-band script or manual
-   SQL insert of the first `application_authority_grant` with `actions: ['authority:owner']`,
-   bound to Willie Adofo's real Google identity via `application_identity_binding`). This does
-   not yet exist as a reviewed script — it is the next major piece of unbuilt work, not a
-   "flip on" item.
-2. [ ] From that Owner identity, grant the intended Admin(s).
+**Built 2026-09-18: `POST /api/owner-bootstrap`.** A one-time bootstrap endpoint, not a manual SQL
+script — matches this codebase's existing pattern (`api/employee-session.js`) of requiring live,
+fresh Google re-authentication rather than trusting a caller-supplied identity string. It:
+- Requires production access enabled and a Google ID token issued within the last ~90 seconds
+  (the same "verify again" freshness check used for employee-session step-up) — so the resulting
+  Owner grant is provably bound to whoever is making the live request, never to an identity this
+  agent was merely told about.
+- **Refuses with `409 OWNER_ALREADY_BOOTSTRAPPED` if any active `authority:owner` grant already
+  exists anywhere** — checked and enforced before any write. This is the one safety property that
+  matters: it can only ever establish the *first* Owner. Adding further Owners (e.g. the two
+  backup System Owners from the original spec) is a separate, Owner-authorized succession path —
+  still unbuilt — not a second call to this endpoint.
+- Creates a `SYSTEM` participant (`participant:system-bootstrap`) as the grant's `grantor_id`
+  (idempotent, `ON CONFLICT DO NOTHING`), a `PERSON` participant for the caller if they don't
+  already have an identity binding (reuses an existing one if they do), and the
+  `application_authority_grant` row with `actions: ['authority:owner']`.
+- Tested with 7 unit tests (`tests/node/sw1-owner-bootstrap.test.mjs`) covering the refusal path,
+  freshness check, first-run creation, and identity-binding reuse. The exact SQL sequence was also
+  dry-run against the real, isolated `preview` Neon branch (§7) — not production — end to end,
+  then the test rows were deleted; every statement executed and returned the expected rows before
+  cleanup.
+
+**Not yet done: actually calling it against production.** This requires Willie's own fresh
+Google sign-in — this agent cannot and should not fabricate that identity. See the go-live order
+in §8 for how to do this.
+
+**After that, in order:**
+1. [x] Owner bootstrap mechanism built and dry-run proven. Not yet executed against production.
+2. [ ] From that Owner identity, grant the intended Admin(s) — **no HTTP API exists for this
+   yet**; still needs the invite/grant/revoke surface from §6's deferred list.
 3. [ ] From an Admin, grant the intended Fulfillment/Finance operators — **and remember the
    `operator:release.manage` scope gotcha below.**
 
@@ -258,8 +280,11 @@ prose, so it stays legible as a record of what's actually left.
 1. ✅ **Apply all migrations to production Neon** (§3) — done, verified via `get_database_tables`.
 2. ⬜ Provision `EMPLOYEE_SESSION_SECRET` and confirm all OIDC-related env vars (§2) on
    Production — not independently re-verified since §2 was last updated.
-3. ⬜ Run Owner bootstrap (§4) — still not built. Without this, the app has real application
-   access (see item 6) but nobody can hold real Admin/Operator authority yet.
+3. 🟡 Run Owner bootstrap (§4) — mechanism built (`POST /api/owner-bootstrap`) and dry-run
+   proven against a safe Neon branch, but not yet actually called against production. Needs
+   Willie to fire it himself, freshly signed into Google (see §4 for exactly why this can't be
+   done on his behalf). Without this, the app has real application access (see item 6) but
+   nobody can hold real Admin/Operator authority yet.
 4. ✅ **Repoint the activation workflow's `ACTIVATION_SHA`/org/project** and re-issue the
    authorization record — done (grant v4), on both `main` and the control branch. See §1.
 5. ⬜ Refresh `RC3_PRODUCTION_MEMBER_TOKEN` / `RC3_PRODUCTION_OPERATOR_TOKEN` GitHub secrets —
