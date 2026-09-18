@@ -27,4 +27,18 @@
 .modal-footnote button{background:none;border:0;color:var(--green);font-weight:700;cursor:pointer;padding:0;font-size:12px}
 .identity-summary{display:flex;align-items:center;gap:12px;padding:14px 15px;border:1px solid var(--line);border-radius:14px;background:var(--green2);margin-bottom:16px}
 .identity-summary .role-icon{background:#fff}
-.identity-summary code{display:block;font-size:11px;color:var(--muted);word-break:break-all;margin-top:2px}@media(max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{min-height:auto;padding:18px}.sidebar nav{grid-template-columns:repeat(5,max-content);overflow-x:auto}.sidebar-footer{display:none}.topbar{align-items:flex-start;flex-direction:column}.hero-card,.grid.three,.grid.two{grid-template-columns:1fr}main{padding:22px}.hero-card h2{font-size:30px}.offer-card{grid-template-columns:52px 1fr}.offer-card button{grid-column:1/-1}.control{align-items:flex-start;flex-direction:column;gap:6px}}
+.identity-summary code{display:block;font-size:11px;color:var(--muted);word-break:break-all;margin-top:2px}
+.result-box{margin-top:14px;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.6;word-break:break-word}
+.result-box.ok{background:var(--green2);color:var(--green)}
+.result-box.err{background:var(--redbg);color:var(--red)}
+.result-box code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:5px;font-size:12px}
+.token-reveal{display:flex;gap:8px;margin-top:8px}
+.token-reveal input{flex:1;min-width:0;font-family:ui-monospace,monospace;font-size:12px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
+.role-card.picked{border-color:var(--green);background:var(--green2)}
+#employees-role-grid .role-card{position:relative}
+#employees-role-grid .role-card input{position:absolute;top:0;left:0;width:100%;height:100%;margin:0;opacity:0;pointer-events:none}
+.roster-actions{display:flex;gap:8px;flex-wrap:wrap}
+.danger-btn{background:var(--redbg);color:var(--red);border:1px solid transparent}
+.danger-btn:hover{border-color:var(--red)}
+.employees-empty{color:var(--muted);padding:18px 0}
+@media(max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{min-height:auto;padding:18px}.sidebar nav{grid-template-columns:repeat(5,max-content);overflow-x:auto}.sidebar-footer{display:none}.topbar{align-items:flex-start;flex-direction:column}.hero-card,.grid.three,.grid.two{grid-template-columns:1fr}main{padding:22px}.hero-card h2{font-size:30px}.offer-card{grid-template-columns:52px 1fr}.offer-card button{grid-column:1/-1}.control{align-items:flex-start;flex-direction:column;gap:6px}}
