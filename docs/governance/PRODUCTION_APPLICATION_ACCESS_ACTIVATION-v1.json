@@ -6,19 +6,21 @@
   "authorizationBasis": {
     "type": "explicit_interactive_authorization",
     "instruction": "Authorized",
-    "recordedDate": "2026-09-17",
-    "context": "Supersede the prior Production-application-access candidate authorization (81ca013c, activated and later rolled back to fail-closed for SW1-RC3 finalization) with a new bounded authorization for main head de78497e00b58f5157d0622af54cf62f337c27b7, the candidate produced by merging business-logic-v2/wave-02-control-plane (A2/A4/A8/A9/A10/A11) plus the title/risk quantity and fulfillment-ready race-safety fixes into main via PR #90."
+    "recordedDate": "2026-09-18",
+    "context": "Willie Adofo confirmed directly, in an interactive session with Claude, that he personally requested Production application access be enabled for real-world testing on the workers-food-club project under the Vercel team OriginOS (team_WkMSXuSv8kDLoOlGHYtIggZ1, prj_Ti1NOQryzFeImhMSwncMXNxs01I8, canonical alias https://workers-food-club.vercel.app). This supersedes v3's candidate and canonical-alias fields, which pointed at a different, inaccessible Vercel project (workers-food-club-chi.vercel.app, team_wnL0jYsouqFvJ8VJR0jIAhTl) that turned out not to be the project Willie actually intended or is using. The enablement itself was carried out directly (not via the sw1-production-application-access-activation-gate GitHub Actions ceremony), which is why no automated evidence trail exists for the toggle itself; this record captures the authorization after the fact from Willie's own direct confirmation, following the same pattern used to record BLV2-DEC-014 in docs/business-logic-v2/decision-register.jsonl."
   },
   "grant": {
-    "grantId": "grant:willie-adofo:production-application-access:v3",
+    "grantId": "grant:willie-adofo:production-application-access:v4",
     "actorId": "participant:willie-adofo",
     "action": "EnableProductionApplicationAccess",
     "repository": "handshakemallmarketing/WorkersFoodClub",
     "environment": "production",
-    "candidateSha": "de78497e00b58f5157d0622af54cf62f337c27b7",
-    "canonicalAlias": "https://workers-food-club-chi.vercel.app",
+    "candidateSha": "e67bf163db4bf87317766b1c58da84ea076de76f",
+    "canonicalAlias": "https://workers-food-club.vercel.app",
+    "vercelOrgId": "team_WkMSXuSv8kDLoOlGHYtIggZ1",
+    "vercelProjectId": "prj_Ti1NOQryzFeImhMSwncMXNxs01I8",
     "scope": "Production application access only",
-    "validFrom": "2026-09-17",
+    "validFrom": "2026-09-18",
     "revoked": false
   },
   "explicitExclusions": {
@@ -34,7 +36,7 @@
     "Production sandbox and consequential mutation routes must remain disabled",
     "any unexpected result requires immediate fail-closed rollback"
   ],
-  "supersedes": "grant:willie-adofo:production-application-access:v2",
+  "supersedes": "grant:willie-adofo:production-application-access:v3",
   "supersedesTransferPolicyAuthorityForThisAction": false,
-  "notes": "This is a separate, one-purpose Production application-access authorization. It does not widen the TRANSFER_POLICY_GOVERNANCE-v1 grant and confers no live-funds or Paystack-live authority."
+  "notes": "This is a separate, one-purpose Production application-access authorization. It does not widen the TRANSFER_POLICY_GOVERNANCE-v1 grant and confers no live-funds or Paystack-live authority. The workers-food-club-chi.vercel.app project referenced by v2/v3 remains unresolved: it is not reachable from the Vercel connection scoped to the OriginOS team, and may be a separate, forgotten Vercel account/project. See docs/governance/GO_LIVE_REGISTER.md and BLV2-DEC-012/013/014 in the decision register for the full evidence trail; it is Willie's to locate and retire in his own Vercel account(s), not something this repository or an AI agent can reach or delete."
 }
