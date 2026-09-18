@@ -1,4 +1,4 @@
-import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
+import { requireApplicationAuth } from '../lib/application-auth.js';
 import { FULFILLMENT_CAPABLE_OPERATORS } from '../lib/operator-tiers.js';
 import {
   canonicalRuntimeMetadata,
@@ -15,7 +15,7 @@ export default async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
  if(process.env.VERCEL_ENV==='production')return res.status(403).json({ok:false,error:'PREVIEW_FULFILLMENT_DISABLED_IN_PRODUCTION'});
 
-  const principal = requirePreviewApiAuth(
+  const principal = await requireApplicationAuth(
     req,
     res,
     'operator:fulfillment.manage',
