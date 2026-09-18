@@ -141,9 +141,12 @@ UC-01/02/03/04/11/14/28 had no backing tables at all, independent of
 
 ## 4. Identity and authority seed data (Owner bootstrap)
 
-Zero real people currently hold any `application_authority_grant` row in production. This means
-production application access is live (§1) with **no one yet able to reach the Operator
-console**, because:
+**DONE 2026-09-18.** Willie Adofo is the real, live System Owner. See the confirmed evidence at
+the end of this section. The rest of this section is kept as the historical build record.
+
+Previously: zero real people held any `application_authority_grant` row in production, meaning
+production application access was live (§1) with **no one able to reach the Operator console**,
+because:
 
 - `packages/authority/src/hierarchy.ts` requires an active Owner grant to exist before an Admin
   can ever be granted, and an active Owner or Admin before any ordinary operator grant can be
@@ -173,12 +176,20 @@ fresh Google re-authentication rather than trusting a caller-supplied identity s
   then the test rows were deleted; every statement executed and returned the expected rows before
   cleanup.
 
-**Not yet done: actually calling it against production.** This requires Willie's own fresh
-Google sign-in — this agent cannot and should not fabricate that identity. See the go-live order
-in §8 for how to do this.
+**Confirmed 2026-09-18: executed against real production.** Willie signed into
+`https://workers-food-club.vercel.app/owner-bootstrap.html` with his real Google account
+(`ourpeoples@gmail.com`). `POST /api/owner-bootstrap` succeeded (201), reusing his existing
+identity binding (`participant:rc3:operator:001`, a pre-existing record from earlier SW1-RC3
+rehearsal work) rather than creating a duplicate — exactly the intended reuse path. Independently
+verified directly against the real production Neon branch: `grant:ed0f75a4-311e-4ae2-b50a-3590a61b5d83`
+exists with `actions=['authority:owner']`, `grantor_id=participant:system-bootstrap`,
+`actor_id=participant:rc3:operator:001`, `revoked_at IS NULL` — and a separate query confirms
+this is the **only** active `authority:owner` grant anywhere in the system. Recorded as
+`BLV2-DEC-019`.
 
 **After that, in order:**
-1. [x] Owner bootstrap mechanism built and dry-run proven. Not yet executed against production.
+1. [x] Owner bootstrap mechanism built, dry-run proven, and executed against real production —
+   verified directly in Neon, not just trusted from the page's own success message.
 2. [ ] From that Owner identity, grant the intended Admin(s) — **no HTTP API exists for this
    yet**; still needs the invite/grant/revoke surface from §6's deferred list.
 3. [ ] From an Admin, grant the intended Fulfillment/Finance operators — **and remember the
@@ -280,11 +291,9 @@ prose, so it stays legible as a record of what's actually left.
 1. ✅ **Apply all migrations to production Neon** (§3) — done, verified via `get_database_tables`.
 2. ⬜ Provision `EMPLOYEE_SESSION_SECRET` and confirm all OIDC-related env vars (§2) on
    Production — not independently re-verified since §2 was last updated.
-3. 🟡 Run Owner bootstrap (§4) — mechanism built (`POST /api/owner-bootstrap`) and dry-run
-   proven against a safe Neon branch, but not yet actually called against production. Needs
-   Willie to fire it himself, freshly signed into Google (see §4 for exactly why this can't be
-   done on his behalf). Without this, the app has real application access (see item 6) but
-   nobody can hold real Admin/Operator authority yet.
+3. ✅ **Run Owner bootstrap** (§4) — done. Willie is the real System Owner, verified directly in
+   production Neon (`grant:ed0f75a4-311e-4ae2-b50a-3590a61b5d83`, sole active `authority:owner`
+   grant). No HTTP API yet for him to grant Admin/Operator authority to anyone else — see §6.
 4. ✅ **Repoint the activation workflow's `ACTIVATION_SHA`/org/project** and re-issue the
    authorization record — done (grant v4), on both `main` and the control branch. See §1.
 5. ⬜ Refresh `RC3_PRODUCTION_MEMBER_TOKEN` / `RC3_PRODUCTION_OPERATOR_TOKEN` GitHub secrets —
