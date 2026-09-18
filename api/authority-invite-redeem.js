@@ -124,9 +124,18 @@ export default async function handler(req, res, options = {}) {
         )
         VALUES (
           ${bindingId}, ${verified.principal.issuer}, ${verified.principal.subject}, ${participantId},
-          ARRAY[]::text[], 'ACTIVE',
+          ${actions}, 'ACTIVE',
           ${`evidence:authority-invite-redeem:${grantId}`}, ${nowIso}, ${inviterId}, ${grantId}
         )`;
+    } else {
+      // An existing binding's `scopes` gates operator:/member: route access
+      // (lib/application-principal-binding.js) independently of the grant
+      // table -- a second invite granting new actions to an already-bound
+      // person must union them in, or the new grant would be silently inert.
+      await sql`
+        UPDATE application_identity_binding
+           SET scopes=ARRAY(SELECT DISTINCT unnest(scopes || ${actions})), updated_at=${nowIso}
+         WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject}`;
     }
 
     const claimed = await sql`

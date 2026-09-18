@@ -250,8 +250,22 @@ a later increment. They require new engineering, not a switch:
 
 - ~~Live HTTP invite / grant / revoke API wired to `packages/authority/src/hierarchy.ts`~~ —
   **built 2026-09-18**, see §4. Still not merged/exercised against production.
-- Admin "Employees" management screen (grant/revoke UI, audit-log view) — the API above exists,
-  but there is still no UI for an Admin to use it; invites must be created via a direct API call.
+- ~~Admin "Employees" management screen (grant/revoke UI, audit-log view)~~ — **built 2026-09-18**:
+  `public/employees.js` (new SPA nav view), `api/authority-directory.js` (read-only roster,
+  Owner/Admin gated), `api/authority-invite-cancel.js` (cancel a still-pending invite), and
+  `public/redeem-invite.html` (the invitee's own acceptance page, modeled on
+  `public/owner-bootstrap.html`). This is also the first working step-up UI anywhere in this
+  frontend — every sensitive action re-triggers a fresh interactive Google sign-in at the moment
+  of that specific request, which the `employee_session` mechanism (PR #93) has required since it
+  was built but nothing ever actually drove. While building this, fixed a real defect in
+  `api/authority-invite-redeem.js`: new identity bindings were created with an empty `scopes`
+  column, which would have silently blocked every invited operator from using their granted
+  `operator:*` actions (`lib/application-principal-binding.js` requires the scope in
+  `application_identity_binding.scopes` in addition to the grant). Recorded as `BLV2-DEC-021`.
+  Covered by 12 new unit tests, a headless-Chromium smoke test of both new pages, and a direct
+  dry-run of the scopes-union fix against the isolated `preview` Neon branch. **Not yet merged to
+  `main` or exercised against production** — no real invite has been sent or accepted through this
+  UI.
 - System Owner bootstrap script and succession flow (see §4).
 - Member/employee workspace frontend split (today the employee session mechanism exists
   server-side; the UI still uses a single modal without a distinct "enter employee workspace"

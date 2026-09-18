@@ -73,6 +73,7 @@ function fakeSql({
     if (text.includes('INSERT INTO application_identity_binding')) { inserts.push({ table: 'application_identity_binding', values }); return []; }
     if (text.includes('UPDATE authority_invitation')) { updates.push({ table: 'authority_invitation', values }); return claimSucceeds ? [{ invitation_id: 'invitation:1' }] : []; }
     if (text.includes('UPDATE application_authority_grant')) { updates.push({ table: 'application_authority_grant', values }); return []; }
+    if (text.includes('UPDATE application_identity_binding')) { updates.push({ table: 'application_identity_binding', values }); return []; }
     throw new Error(`UNEXPECTED_QUERY: ${text}`);
   };
   sql.inserts = inserts;
@@ -163,6 +164,27 @@ test('authority-invite-redeem reuses an existing ACTIVE identity binding instead
   assert.equal(res.result.body.participantId, 'participant:already-bound');
   assert.equal(sql.inserts.some((i) => i.table === 'application_participant'), false);
   assert.equal(sql.inserts.some((i) => i.table === 'application_identity_binding'), false);
+});
+
+test('authority-invite-redeem creates a new binding with scopes matching the granted actions, so the operator:/member: gate is not silently blocked', async () => {
+  const sql = fakeSql();
+  const res = response();
+  await redeemHandler(request('POST', { token: oidcToken(), body: { token: RAW_TOKEN } }), res, { ...productionOptions, sql });
+
+  const bindingInsert = sql.inserts.find((i) => i.table === 'application_identity_binding');
+  assert.ok(bindingInsert);
+  assert.deepEqual(bindingInsert.values[4], ['authority:admin']);
+});
+
+test('authority-invite-redeem unions new actions into an already-bound identity\'s existing scopes instead of leaving the new grant inert', async () => {
+  const sql = fakeSql({ binding: { participant_id: 'participant:already-bound', state: 'ACTIVE' } });
+  const res = response();
+  await redeemHandler(request('POST', { token: oidcToken(), body: { token: RAW_TOKEN } }), res, { ...productionOptions, sql });
+
+  assert.equal(res.result.statusCode, 201);
+  const scopeUpdate = sql.updates.find((u) => u.table === 'application_identity_binding');
+  assert.ok(scopeUpdate, 'an existing binding must have its scopes unioned with the newly granted actions');
+  assert.deepEqual(scopeUpdate.values[0], ['authority:admin']);
 });
 
 test('authority-invite-redeem self-heals a lost claim race by revoking the grant it just created', async () => {
