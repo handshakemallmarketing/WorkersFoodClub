@@ -347,3 +347,37 @@ prose, so it stays legible as a record of what's actually left.
    access being live does **not** touch this boundary.
 9. ✅ **Separate the Neon branches** (§7) — done and independently re-verified end-to-end via
    the fingerprint endpoint.
+
+---
+
+## 9. Open P1: member sign-in admits an authenticated non-member
+
+**Flagged 2026-09-18 by Willie**, from real production testing of the (now separated, see below)
+Employees screen. Signing in with Google currently leaves an authenticated identity with no
+active `application_membership` row inside the app shell as **"Signed in · access pending"**,
+rather than denying sign-in outright. Willie's assessment: this is a launch-blocking P1
+authentication/authorization defect — not yet evidence of data exposure or privilege escalation,
+but a violation of the intended access policy. His specified model:
+
+> Google identity → membership lookup → active/eligible member binding → session established.
+> If no qualifying membership exists, authentication should terminate with something like
+> "We couldn't find an active WorkersFoodClub membership for this account," not a signed-in
+> state.
+
+**Status: scope agreed for an immediate fix, not yet built.** The two states that actually exist
+in the schema today (`application_membership.state`: `ACTIVE`, `SUSPENDED`, `ENDED` — see
+`packages/durability/sql/007_application_authority_membership.sql`) can be enforced now: no
+`ACTIVE` row → deny sign-in outright with a clear message, instead of leaving `productionMemberAccessAvailable()`'s soft "access pending" state in `public/auth.js`. Willie's fuller proposed
+access-state table (Anonymous / no-membership / Applicant-awaiting-approval / Approved-not-yet-
+activated / Active-good-standing / past-due-restricted / Beneficiary-not-activated /
+Activated-beneficiary / Employee-operator) names several states — Applicant, Approved-not-
+activated, past-due-restricted, Beneficiary-not-activated — that do not exist in the schema and
+have no self-service application/approval/activation flow anywhere in this codebase. Building
+those is a separate, larger piece of work, not part of this immediate fix.
+
+**Also resolved as part of scoping this:** the Employees screen (`public/employee.html`, moved
+2026-09-18 from an embedded SPA tab — `BLV2-DEC-022`) is explicitly independent of membership.
+Willie's own account holds only an `authority:owner` grant, no membership row; requiring
+membership before the employee/operator path would have locked him out of the tool that manages
+authority. The employee path's own auth (fresh OIDC + `employee_session` + Owner/Admin tier
+check) is unaffected by whatever the member-sign-in fix ends up doing.

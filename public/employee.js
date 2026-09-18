@@ -348,5 +348,5 @@
     setGateStatus('Click "Sign in with Google" above to confirm cancelling this invitation.');
   });
 
-  window.initEmployeesView = init;
+  init();
 })();
