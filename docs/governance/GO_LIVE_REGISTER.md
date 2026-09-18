@@ -187,11 +187,27 @@ exists with `actions=['authority:owner']`, `grantor_id=participant:system-bootst
 this is the **only** active `authority:owner` grant anywhere in the system. Recorded as
 `BLV2-DEC-019`.
 
+**Built 2026-09-18: `POST /api/authority-invite`, `POST /api/authority-invite-redeem`,
+`POST /api/authority-revoke`.** The invite/grant/revoke HTTP surface referenced above. An existing
+Owner or Admin (fresh OIDC + fresh step-up + a live `employee_session`) creates a bounded, expiring
+invitation for someone who has never signed in before — only the token's SHA-256 digest is ever
+stored (`packages/durability/sql/016_authority_invitation.sql`), the raw token is returned exactly
+once in the response (no email provider wired; still "link-only," per the earlier deferred-email
+decision). The invitee redeems the raw token with their own fresh Google identity; the inviter's
+authority is re-checked **as of redemption time**, not assumed still valid from invite-creation
+time, via `assertGrantIssuable`. Revocation mirrors this via `assertGrantRevocable` and does not
+cascade to grants the revoked one delegated onward (`parent_grant_id` stays provenance-only, same
+rule as `lib/application-principal-binding.js`). Covered by 22 unit tests across the three
+endpoints; full `npm run conformance` green (591/591 node tests, canon/traceability/typecheck).
+Migration 016 dry-run applied to the isolated `preview` Neon branch and its `CHECK` constraints
+verified directly, then cleaned up. Recorded as `BLV2-DEC-020`. **Not yet merged to `main` or
+exercised against production** — no real invite has been sent or redeemed yet.
+
 **After that, in order:**
 1. [x] Owner bootstrap mechanism built, dry-run proven, and executed against real production —
    verified directly in Neon, not just trusted from the page's own success message.
-2. [ ] From that Owner identity, grant the intended Admin(s) — **no HTTP API exists for this
-   yet**; still needs the invite/grant/revoke surface from §6's deferred list.
+2. [x] Invite/grant/revoke HTTP API built and unit/dry-run tested (above) — **not yet merged or
+   exercised against production**; Willie has not yet actually invited an Admin through it.
 3. [ ] From an Admin, grant the intended Fulfillment/Finance operators — **and remember the
    `operator:release.manage` scope gotcha below.**
 
@@ -232,9 +248,10 @@ access must **not** be treated as implicitly authorizing any of these:
 These were scoped during the "Improve the sign-in operations" work but deliberately deferred to
 a later increment. They require new engineering, not a switch:
 
-- Live HTTP invite / grant / revoke API wired to `packages/authority/src/hierarchy.ts` (currently
-  pure logic, unreachable from any route).
-- Admin "Employees" management screen (grant/revoke UI, audit-log view).
+- ~~Live HTTP invite / grant / revoke API wired to `packages/authority/src/hierarchy.ts`~~ —
+  **built 2026-09-18**, see §4. Still not merged/exercised against production.
+- Admin "Employees" management screen (grant/revoke UI, audit-log view) — the API above exists,
+  but there is still no UI for an Admin to use it; invites must be created via a direct API call.
 - System Owner bootstrap script and succession flow (see §4).
 - Member/employee workspace frontend split (today the employee session mechanism exists
   server-side; the UI still uses a single modal without a distinct "enter employee workspace"
