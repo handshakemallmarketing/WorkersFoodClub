@@ -320,8 +320,14 @@ Status as of 2026-09-18 — several of these are now done; kept as a checklist, 
 prose, so it stays legible as a record of what's actually left.
 
 1. ✅ **Apply all migrations to production Neon** (§3) — done, verified via `get_database_tables`.
-2. ⬜ Provision `EMPLOYEE_SESSION_SECRET` and confirm all OIDC-related env vars (§2) on
-   Production — not independently re-verified since §2 was last updated.
+2. 🔶 **Provision `EMPLOYEE_SESSION_SECRET`** on Production — **in progress 2026-09-18.** Confirmed
+   missing when Willie hit `EMPLOYEE_SESSION_NOT_CONFIGURED` trying the new Employees screen's
+   step-up flow in real production (the same gap this row already predicted). Willie added the
+   variable via the Vercel dashboard, but the redeploy needed to pick it up got stuck twice
+   (one attempt errored in ~10s with no build logs at all; a second sat in `INITIALIZING` for
+   8+ minutes and was cancelled) — a Vercel platform-side issue, not a code or secret-value
+   problem. Not yet independently verified end to end (a successful `/api/employee-session` call
+   in production). Other OIDC-related env vars (§2) still not independently re-verified either.
 3. ✅ **Run Owner bootstrap** (§4) — done. Willie is the real System Owner, verified directly in
    production Neon (`grant:ed0f75a4-311e-4ae2-b50a-3590a61b5d83`, sole active `authority:owner`
    grant). No HTTP API yet for him to grant Admin/Operator authority to anyone else — see §6.
