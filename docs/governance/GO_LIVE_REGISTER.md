@@ -214,60 +214,65 @@ a later increment. They require new engineering, not a switch:
 
 ---
 
-## 7. Neon branch separation — proposed remediation for the confirmed P0
+## 7. Neon branch separation — DONE (2026-09-18)
 
-**Confirmed 2026-09-18:** Production and Preview both resolve `DATABASE_URL` to the same Neon
-branch. This plan separates them without touching existing data or requiring any Production
-downtime. It is a proposal, not yet executed — nothing below has been done.
+**Confirmed 2026-09-18:** Production and Preview both resolved `DATABASE_URL` to the same Neon
+branch. Remediated the same day, then independently re-verified end-to-end — not just assumed
+from the dashboard edit.
 
-1. **Create a new Neon branch from the current (shared) branch.** Neon branch creation is a
-   copy-on-write snapshot — it does not modify or lock the source branch. Name it something
-   explicit, e.g. `preview` (leave the existing branch as the Production branch of record; do
-   not rename or recreate the branch Production currently uses).
-2. **Get that new branch's connection string** from the Neon console (Branches → the new branch
-   → Connection Details).
-3. **Update only the Preview environment's `DATABASE_URL`** in Vercel (Project Settings →
-   Environment Variables → `DATABASE_URL` → edit the **Preview** scope only, leave **Production**
-   untouched) to point at the new branch's connection string.
-4. **Redeploy a Preview deployment** (push any branch, or redeploy an existing Preview
-   deployment) and confirm via `/api/db-health` / `/api/build-info` on that Preview URL that it
-   is reachable and schema-healthy on the new branch.
-5. **Apply all 15 migrations** (§3) to the new Preview branch — it was forked from Production's
-   schema at creation time, but confirm it matches exactly and re-run migrations if the fork
-   predates the latest migration.
-6. **Run the existing Preview/rehearsal test suites** against the redeployed Preview URL to
-   confirm nothing broke.
-7. **Do not delete or reset the old shared branch** as part of this change — Production keeps
-   using it unmodified throughout. The only change Production sees is that Preview traffic stops
-   arriving.
-8. Once confirmed working, update this register's status for this item to `DONE (date)` and
-   update `docs/business-logic-v2/master-journey-truth-matrix.yaml`'s `P0-DB-ISOLATION` entry to
-   `status: RESOLVED` with the evidence (new branch id, redeploy confirmation).
+1. ✅ **Created a new Neon branch** (`preview`, `br-purple-grass-aej54d2x`) forked from the
+   shared/production branch (`br-winter-poetry-ae8qho57`) — copy-on-write, did not touch the
+   source branch.
+2. ✅ **Applied all 6 outstanding migration files** (012–015; see §3) to the new branch first,
+   proved clean, then applied the same statements to the real production branch with explicit
+   authorization. Both branches now carry all 27 expected tables/views.
+3. ✅ **Willie repointed the Preview scope of `DATABASE_URL`** in Vercel to the new branch's
+   connection string, leaving Production's value untouched.
+4. ✅ **End-to-end re-verified**, using the Preview-only
+   `/api/db-health?probe=database-target-fingerprint` endpoint (added in PR #97), which returns a
+   SHA-256 hash of `DATABASE_URL`'s hostname — never the hostname or credentials themselves. This
+   agent independently computed the expected hash from the `preview` branch's real Neon connection
+   hostname (via an authenticated Neon MCP call, never printed in chat) and Willie opened a live
+   Preview deployment in his own browser and reported back the value. **They matched exactly:**
+   `efecbc10be311dc3b95f981eb70329b7e2402e526399b4414083e96f56549946`. Two independent sources of
+   truth (this agent's Neon-side computation, Willie's Vercel-side browser fetch) agree — this is
+   real proof of isolation, not an assumption.
+5. The old shared branch (now Production's branch of record) was never deleted, reset, or
+   otherwise touched by this remediation. Production always kept using it unmodified.
 
-This requires Vercel + Neon write access (creating a branch, editing an env var) that this
-session does not currently have. Either grant scoped, revocable credentials (see the prior
-turn's Option A) so I can execute and verify steps 1-6 directly, or run them yourself from the
-dashboards and tell me when done so I can update the evidence trail.
+**Gotcha discovered along the way:** the first attempt to test the fingerprint endpoint hit a
+Preview deployment built from the `sw1-production-application-access-activation-gate` control
+branch — weeks-old code that predates PR #97 and doesn't have the fingerprint probe at all, so it
+silently fell through to the default `/api/db-health` handler instead of erroring. Re-tested
+against a deployment built from a commit that actually has PR #97 merged in; that one matched.
+Worth remembering when testing against Preview URLs on this project: which branch a deployment
+was built from matters, not just "is it a Preview deployment."
 
 ---
 
 ## 8. Suggested go-live order
 
-1. Apply all migrations to production Neon (§3), confirm via `/api/build-info`.
-2. Provision `EMPLOYEE_SESSION_SECRET` and confirm all OIDC-related env vars (§2) on Production.
-3. Run Owner bootstrap (§4) — without this, enabling application access produces a working but
-   operator-less production app.
-4. Re-pin the activation workflow's `ACTIVATION_SHA` (and re-issue the
-   `PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json` authorization record) to the actual release
-   candidate commit — not the stale `de78497e...` value currently in the workflow file.
-5. Refresh `RC3_PRODUCTION_MEMBER_TOKEN` / `RC3_PRODUCTION_OPERATOR_TOKEN` GitHub secrets with
-   live-lifetime tokens for the pre-agreed test subjects.
-6. Willie Adofo pushes the exact `AUTHORIZED: enable Production application access` commit to
-   `sw1-production-application-access-activation-gate`.
-7. Confirm the workflow's own falsification step passes (it self-verifies auth boundaries and
-   rolls back automatically on failure).
-8. Leave §5 (live funds, live Paystack, CAGD, credit expansion) untouched until each is
-   separately, explicitly authorized with its own governance record.
-9. Separate the Neon branches (§7) before or alongside the above — it's independent of
-   Production-access activation but should not wait indefinitely, since every day Preview and
-   Production share a branch is a day Preview traffic can touch real data.
+Status as of 2026-09-18 — several of these are now done; kept as a checklist, not rewritten as
+prose, so it stays legible as a record of what's actually left.
+
+1. ✅ **Apply all migrations to production Neon** (§3) — done, verified via `get_database_tables`.
+2. ⬜ Provision `EMPLOYEE_SESSION_SECRET` and confirm all OIDC-related env vars (§2) on
+   Production — not independently re-verified since §2 was last updated.
+3. ⬜ Run Owner bootstrap (§4) — still not built. Without this, the app has real application
+   access (see item 6) but nobody can hold real Admin/Operator authority yet.
+4. ✅ **Repoint the activation workflow's `ACTIVATION_SHA`/org/project** and re-issue the
+   authorization record — done (grant v4), on both `main` and the control branch. See §1.
+5. ⬜ Refresh `RC3_PRODUCTION_MEMBER_TOKEN` / `RC3_PRODUCTION_OPERATOR_TOKEN` GitHub secrets —
+   only relevant if the formal activation-gate ceremony is used again; not required for how
+   access was actually enabled (see item 6).
+6. ✅ **Production application access is enabled**, on `workers-food-club.vercel.app` — done, but
+   via a direct Vercel dashboard toggle for real-world testing (Willie's explicit request,
+   `BLV2-DEC-014`), not via the documented ceremony. Worth deciding whether to keep using
+   dashboard toggles going forward or switch back to the governed workflow now that it's fixed.
+7. ⬜ Confirm the workflow's own falsification step passes — moot unless/until the formal
+   ceremony is actually fired; the real enablement bypassed it.
+8. **Leave §5 untouched** (live funds, live Paystack, CAGD, credit expansion) until each is
+   separately, explicitly authorized with its own governance record. Still true — application
+   access being live does **not** touch this boundary.
+9. ✅ **Separate the Neon branches** (§7) — done and independently re-verified end-to-end via
+   the fingerprint endpoint.
