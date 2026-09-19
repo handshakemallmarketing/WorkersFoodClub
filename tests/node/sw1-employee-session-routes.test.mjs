@@ -57,11 +57,12 @@ test.beforeEach(() => {
   process.env.VERCEL_ENV = 'production';
 });
 
-function fakeMintSql({ binding, grants = [] } = {}) {
+function fakeMintSql({ binding, memberships = [{ membership_id: 'membership:1', state: 'ACTIVE', standing: 'CURRENT' }], grants = [] } = {}) {
   const inserted = [];
   const sql = async (strings, ...values) => {
     const text = strings.join('?');
     if (text.includes('FROM application_identity_binding')) return binding ? [binding] : [];
+    if (text.includes('FROM application_membership')) return memberships.filter((m) => m.state === 'ACTIVE' && m.standing === 'CURRENT');
     if (text.includes('FROM application_authority_grant')) return grants;
     if (text.includes('INSERT INTO employee_session')) { inserted.push(values); return []; }
     throw new Error(`UNEXPECTED_QUERY: ${text}`);
@@ -90,6 +91,14 @@ test('employee-session mint requires an existing active grant -- it never create
   );
   assert.equal(res.result.statusCode, 403);
   assert.equal(res.result.body.error, 'NO_ACTIVE_EMPLOYEE_GRANT');
+});
+
+
+test('employee-session mint requires ACTIVE CURRENT membership before workforce step-up', async () => {
+  const res = response();
+  await mintHandler(request('POST', oidcToken()), res, { ...productionOptions, employeeSessionSecret: SECRET, sql: fakeMintSql({ binding: { participant_id: 'participant:1', state: 'ACTIVE' }, memberships: [], grants: [{ grant_id: 'grant:1' }] }) });
+  assert.equal(res.result.statusCode, 403);
+  assert.equal(res.result.body.error, 'ACTIVE_CURRENT_MEMBERSHIP_REQUIRED');
 });
 
 test('employee-session mint succeeds with a fresh step-up and an active grant, and the token verifies back to an inserted session id', async () => {
