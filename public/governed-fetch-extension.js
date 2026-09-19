@@ -6,6 +6,7 @@
     '/api/workforce-teams',
     '/api/workforce-tasks',
     '/api/workforce-domains',
+    '/api/catalog-admin',
     '/api/fulfillment-plan-schedule',
     '/api/promotion-compliance',
   ]);
