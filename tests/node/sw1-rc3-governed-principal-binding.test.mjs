@@ -37,6 +37,7 @@ function withValidEmployeeSession(fixture){
   const sessionId='session:1';
   return {
     ...fixture,
+    memberships: fixture.memberships ?? [{membership_id:'membership:1',state:'ACTIVE',standing:'CURRENT'}],
     employeeSessions:[{session_id:sessionId,participant_id:'participant:1'}],
     employeeSessionSecret:EMPLOYEE_SESSION_SECRET,
     employeeSessionToken:signEmployeeSessionToken(EMPLOYEE_SESSION_SECRET,sessionId),
@@ -60,7 +61,8 @@ test('AUTH-MEMBERSHIP-001 member APIs reject non-CURRENT standing even when bind
 });
 
 test('AUTH-MEMBERSHIP-001 workforce API access is revoked when membership is no longer CURRENT',async()=>{
-  const denied=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({binding:binding(['operator:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'PAST_DUE'}],grants:[{grant_id:'grant:operator',actions:['operator:orders.read']}]}),employeeSessionSecret:SECRET,employeeSessionToken:sessionToken});
+  const fixture=withValidEmployeeSession({binding:binding(['operator:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'PAST_DUE'}],grants:[{grant_id:'grant:operator',actions:['operator:orders.read'],target_prefix:null}]});
+  const denied=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(fixture),employeeSessionSecret:fixture.employeeSessionSecret,employeeSessionToken:fixture.employeeSessionToken});
   assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_CURRENT_MEMBERSHIP_REQUIRED'});
 });
 
@@ -79,7 +81,7 @@ test('RC3 governed operator principal requires active route-wide root authority'
   assert.equal(allowed.principal.actorId,'participant:1');
   assert.equal(allowed.principal.authorityGrantId,'grant:operator:1');
   assert.equal(allowed.principal.employeeSessionId,'session:1');
-  assert.equal(allowed.principal.membershipId,undefined);
+  assert.equal(allowed.principal.membershipId,'membership:1');
 });
 
 test('RC3 an active operator grant delegated via parent_grant_id (Admin-issued) is still recognized', async () => {
