@@ -29,8 +29,12 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: node --check api/db-health.js && node --check api/member-offers.js && node --check api/member-orders.js && node --check api/member-notifications.js && node --check api/commit-sandbox.js && node --check api/pay-sandbox.js && node --check api/paystack-rehearsal.js && node --check api/operator-orders.js && node --check api/fulfillment-ready.js && node --check api/accept-fulfillment.js && node --check api/authorize-refund.js && node --check api/complete-refund.js && node --check lib/production-access-policy.js && node --check public/auth.js && node --check public/app.js && node --check scripts/wait-for-vercel-status.mjs && node --check scripts/test-preview-http-rehearsal.mjs && node --check scripts/test-paystack-provider-rehearsal.mjs && node --check scripts/test-production-identity-rehearsal.mjs && node --check scripts/test-production-access-rollback.mjs
-      - run: node --check api/preview-session.js && node --check api/product-request-survey.js && node --check api/support-case.js && node --check api/support-case-transition.js
+      - name: Syntax-check production JavaScript surface
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(find api lib public scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print0)
       - run: pnpm canon:check
       - run: pnpm traceability:check
       - run: pnpm typecheck

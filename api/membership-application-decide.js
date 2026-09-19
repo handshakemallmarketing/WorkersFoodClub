@@ -30,19 +30,37 @@ export default async function handler(req, res, options = {}) {
     const apps=await sql`SELECT application_id,issuer,subject,state FROM membership_application WHERE application_id=${applicationId} LIMIT 1`;
     if(apps.length!==1)return res.status(404).json({ok:false,error:'APPLICATION_NOT_FOUND'}); const app=apps[0]; if(String(app.state)!=='SUBMITTED')return res.status(409).json({ok:false,error:'APPLICATION_NOT_DECIDABLE'});
     const nowIso=new Date(options.now??Date.now()).toISOString();
+    const annualFeeMinor=Number(options.annualFeeMinor??process.env.ANNUAL_MEMBERSHIP_FEE_MINOR);
+    // Validate configuration before approval creates any participant/binding/membership rows.
+    if(decision==='APPROVE'&&(!Number.isSafeInteger(annualFeeMinor)||annualFeeMinor<=0))return res.status(503).json({ok:false,error:'ANNUAL_MEMBERSHIP_FEE_NOT_CONFIGURED'});
     if(decision==='REJECT'){const rows=await sql`UPDATE membership_application SET state='REJECTED',decided_at=${nowIso},decided_by=${callerId} WHERE application_id=${applicationId} AND state='SUBMITTED' RETURNING application_id`;if(rows.length!==1)return res.status(409).json({ok:false,error:'APPLICATION_ALREADY_DECIDED'});res.setHeader('Cache-Control','no-store');return res.status(200).json({ok:true,applicationId,decision:'REJECT'});}
     const existing=await sql`SELECT participant_id,state FROM application_identity_binding WHERE issuer=${String(app.issuer)} AND subject=${String(app.subject)} LIMIT 2`;
     if(existing.length>1)return res.status(503).json({ok:false,error:'APPLICANT_IDENTITY_BINDING_AMBIGUOUS'}); if(existing.length===1&&String(existing[0].state)!=='ACTIVE')return res.status(403).json({ok:false,error:'APPLICANT_PRINCIPAL_DISABLED'});
     const participantId=existing.length===0?`participant:${randomUUID()}`:String(existing[0].participant_id);
+    // Claim the application before provisioning membership artifacts. This makes
+    // concurrent approvals single-winner and prevents loser requests from
+    // creating orphan participants, bindings, memberships or invoices.
+    const approved=await sql`UPDATE membership_application SET state='APPROVED',decided_at=${nowIso},decided_by=${callerId} WHERE application_id=${applicationId} AND state='SUBMITTED' RETURNING application_id`;
+    if(approved.length!==1)return res.status(409).json({ok:false,error:'APPLICATION_ALREADY_DECIDED'});
+    let membershipId=null,invoiceId=null;
+    try {
     if(existing.length===0){await sql`INSERT INTO application_participant(participant_id,kind,state) VALUES (${participantId},'PERSON','ACTIVE')`;await sql`INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES (${`binding:${randomUUID()}`},${String(app.issuer)},${String(app.subject)},${participantId},${[]},'ACTIVE',${`evidence:membership-application-decide:${applicationId}`},${nowIso},${callerId},NULL)`;}
-    const membershipId=`membership:${randomUUID()}`;
+    membershipId=`membership:${randomUUID()}`;
     await sql`INSERT INTO application_membership(membership_id,participant_id,state,member_type,standing,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES (${membershipId},${participantId},'INACTIVE','PRIMARY','INITIAL_FEE_DUE',${nowIso},'membership-application-v3',${[applicationId]})`;
-    const subscriptionYear=new Date(nowIso).getUTCFullYear(); const invoiceId=`subscription-invoice:${randomUUID()}`; const annualFeeMinor=Number(options.annualFeeMinor??process.env.ANNUAL_MEMBERSHIP_FEE_MINOR);
-    if(!Number.isSafeInteger(annualFeeMinor)||annualFeeMinor<=0){await sql`UPDATE application_membership SET state='ENDED',standing='ENDED',ended_at=${nowIso} WHERE membership_id=${membershipId}`;return res.status(503).json({ok:false,error:'ANNUAL_MEMBERSHIP_FEE_NOT_CONFIGURED'});}
+    const subscriptionYear=new Date(nowIso).getUTCFullYear(); invoiceId=`subscription-invoice:${randomUUID()}`;
     const dueAt=new Date(new Date(nowIso).getTime()+14*24*60*60*1000).toISOString();
     await sql`INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at) VALUES (${invoiceId},${membershipId},${subscriptionYear},${annualFeeMinor},'GHS','OPEN',${dueAt})`;
-    const approved=await sql`UPDATE membership_application SET state='APPROVED',decided_at=${nowIso},decided_by=${callerId},resulting_membership_id=${membershipId} WHERE application_id=${applicationId} AND state='SUBMITTED' RETURNING application_id`;
-    if(approved.length!==1){await sql`UPDATE membership_subscription_invoice SET state='VOID' WHERE invoice_id=${invoiceId} AND state='OPEN'`;await sql`UPDATE application_membership SET state='ENDED',standing='ENDED',ended_at=${nowIso} WHERE membership_id=${membershipId}`;return res.status(409).json({ok:false,error:'APPLICATION_ALREADY_DECIDED'});}
+    const linked=await sql`UPDATE membership_application SET resulting_membership_id=${membershipId} WHERE application_id=${applicationId} AND state='APPROVED' AND decided_by=${callerId} AND resulting_membership_id IS NULL RETURNING application_id`;
+    if(linked.length!==1)throw Object.assign(new Error('MEMBERSHIP_APPLICATION_LINK_FAILED'),{code:'MEMBERSHIP_APPLICATION_LINK_FAILED'});
     res.setHeader('Cache-Control','no-store');return res.status(200).json({ok:true,applicationId,decision:'APPROVE',participantId,membershipId,membershipState:'INACTIVE',standing:'INITIAL_FEE_DUE',invoiceId,dueAt});
+    } catch(provisionError) {
+      // Compensate a claimed-but-unprovisioned approval. Participant/identity
+      // records are intentionally reusable; economic membership artifacts are
+      // neutralized and the application becomes retryable.
+      if(invoiceId) await sql`UPDATE membership_subscription_invoice SET state='VOID' WHERE invoice_id=${invoiceId} AND state='OPEN'`;
+      if(membershipId) await sql`UPDATE application_membership SET state='ENDED',standing='ENDED',ended_at=${nowIso} WHERE membership_id=${membershipId} AND state='INACTIVE'`;
+      await sql`UPDATE membership_application SET state='SUBMITTED',decided_at=NULL,decided_by=NULL,resulting_membership_id=NULL WHERE application_id=${applicationId} AND state='APPROVED' AND decided_by=${callerId} AND resulting_membership_id IS NULL`;
+      throw provisionError;
+    }
   } catch(error){console.error('Membership application decision failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'MEMBERSHIP_DECIDE_FAILED'});}
 }

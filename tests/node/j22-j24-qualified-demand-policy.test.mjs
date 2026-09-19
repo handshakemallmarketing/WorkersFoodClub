@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { qualificationState, paymentDeadline, deadlineDisposition } from '../../lib/qualified-demand-policy.js';
+
+const settle=fs.readFileSync(new URL('../../api/membership-subscription-settle.js',import.meta.url),'utf8');
+const migration=fs.readFileSync(new URL('../../packages/durability/sql/022_qualified_demand_credit_v1.sql',import.meta.url),'utf8');
+const planning=fs.readFileSync(new URL('../../packages/durability/sql/025_deadline_fulfillment_planning_v1.sql',import.meta.url),'utf8');
+const pay=fs.readFileSync(new URL('../../api/pay-sandbox.js',import.meta.url),'utf8');
+const demand=fs.readFileSync(new URL('../../api/qualified-demand.js',import.meta.url),'utf8');
+const processor=fs.readFileSync(new URL('../../api/process-payment-deadlines.js',import.meta.url),'utf8');
+
+test('J22 primary activation provisions separate stable public member ID',()=>{assert.match(settle,/WFC-P-/);assert.match(settle,/public_member_id=COALESCE\(public_member_id/);assert.match(settle,/PRIMARY_SUBSCRIPTION_REQUIRED/);assert.match(migration,/application_membership_public_member_id_uq/);});
+test('J24 ratified 30/50/70/100 thresholds are exhaustive',()=>{assert.equal(qualificationState({totalMinor:10000,paidMinor:2999}),'UNQUALIFIED');assert.equal(qualificationState({totalMinor:10000,paidMinor:3000}),'DEMAND_QUALIFIED');assert.equal(qualificationState({totalMinor:10000,paidMinor:4999}),'DEMAND_QUALIFIED');assert.equal(qualificationState({totalMinor:10000,paidMinor:5000}),'CURRENT_BATCH_RESCHEDULE');assert.equal(qualificationState({totalMinor:10000,paidMinor:6999}),'CURRENT_BATCH_RESCHEDULE');assert.equal(qualificationState({totalMinor:10000,paidMinor:7000}),'PRORATED_FULFILLMENT');assert.equal(qualificationState({totalMinor:10000,paidMinor:9999}),'PRORATED_FULFILLMENT');assert.equal(qualificationState({totalMinor:10000,paidMinor:10000}),'FULLY_PAID');});
+test('J24 full payment deadline is exactly 24 hours before delivery',()=>{assert.equal(paymentDeadline('2026-09-21T14:00:00.000Z').toISOString(),'2026-09-20T14:00:00.000Z');});
+test('J24 deadline dispositions preserve value without penalties',()=>{assert.equal(deadlineDisposition({totalMinor:10000,paidMinor:4500,deliveryAt:'2026-09-21T14:00:00Z',now:'2026-09-20T14:01:00Z'}).shoppingCreditMinor,4500);assert.equal(deadlineDisposition({totalMinor:10000,paidMinor:6000,deliveryAt:'2026-09-21T14:00:00Z',now:'2026-09-20T14:01:00Z'}).carryForwardMinor,6000);assert.equal(deadlineDisposition({totalMinor:10000,paidMinor:7500,appliedToFulfillmentMinor:7000,deliveryAt:'2026-09-21T14:00:00Z',now:'2026-09-20T14:01:00Z'}).shoppingCreditMinor,500);});
+test('J24 payment and demand projection include all 30%+ tiers',()=>{assert.match(pay,/cumulativePaidMinor/);for(const s of ['DEMAND_QUALIFIED','CURRENT_BATCH_RESCHEDULE','PRORATED_FULFILLMENT'])assert.match(demand,new RegExp(s));});
+test('J24 demand projection subtracts inventory already released at deadline',()=>{assert.match(demand,/quantity-c\.released_quantity/);assert.match(demand,/GREATEST/);});
+test('J24 durable processor is T-24 gated, row-locked, replay-safe and production withheld',()=>{assert.match(processor,/DEADLINE_PROCESSOR_NOT_LIVE_AUTHORIZED/);assert.match(processor,/interval '24 hours'/);assert.match(processor,/FOR UPDATE OF c/);assert.match(processor,/deadline_processed_at IS NULL/);assert.match(processor,/ON CONFLICT\(obligation_id,reason\) DO NOTHING/);});
+test('J24 durable processor preserves paid value and releases only non-fulfilled quantity',()=>{assert.match(processor,/paid_minor-applied_minor/);assert.match(processor,/quantity-fulfill_qty/);assert.match(processor,/cashRefundMinor:\s*0/);assert.match(processor,/penaltyMinor:\s*0/);assert.match(migration,/amount_minor\+applied_to_fulfillment_minor=source_paid_minor/);});
+test('J24 processor has bounded batch mode for scheduler invocation',()=>{assert.match(processor,/MAX_BATCH = 100/);assert.match(processor,/remainingMayExist/);assert.match(processor,/ORDER BY o\.delivery_at,c\.created_at/);});
+test('J24 persists explicit reschedule and fulfillment handoff instead of pretending warehouse readiness',()=>{assert.match(planning,/RESCHEDULE_REQUIRED/);assert.match(planning,/READY_TO_FULFILL/);assert.match(processor,/preview_deadline_fulfillment_plan/);assert.match(processor,/CURRENT_BATCH_RESCHEDULE/);assert.match(processor,/PRORATED_FULFILLMENT/);});

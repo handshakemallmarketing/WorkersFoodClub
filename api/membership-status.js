@@ -10,6 +10,16 @@ export default async function handler(req,res,options={}){
   try{
     let sql=options.sql;if(!sql){const {neon}=await import('@neondatabase/serverless');sql=neon(connectionString,{fetchOptions:{signal:AbortSignal.timeout(4000)}});}
     const bindings=await sql`SELECT participant_id,state FROM application_identity_binding WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject} LIMIT 2`;
+    // Policy AUTH-MEMBERSHIP-001: successful OIDC authentication proves identity only.
+    // Member admission requires exactly one ACTIVE pre-existing identity binding and
+    // an ACTIVE/CURRENT membership. Never synthesize/bind a membership during sign-in.
+    if(bindings.length!==1||String(bindings[0].state)!=='ACTIVE'){
+      const applications=await sql`SELECT application_id,state,submitted_at FROM membership_application WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject} ORDER BY submitted_at DESC LIMIT 1`;
+      const application=applications.length===1?applications[0]:null;
+      const pending=application!=null&&String(application.state)==='SUBMITTED';
+      res.setHeader('Cache-Control','no-store');
+      return res.status(403).json({ok:false,error:'MEMBERSHIP_REQUIRED',accessState:pending?'APPLICANT_PENDING':'AUTHENTICATED_UNBOUND',route:pending?'APPLICATION_STATUS':'NON_MEMBER',memberAccessAvailable:false,membershipState:null,standing:null,applicationState:application?.state==null?null:String(application.state),applicationId:application?.application_id==null?null:String(application.application_id),applicationSubmittedAt:application?.submitted_at??null,hasPendingApplication:pending});
+    }
     let participantId=null,membership=null,invoice=null;
     if(bindings.length===1&&String(bindings[0].state)==='ACTIVE'){
       participantId=String(bindings[0].participant_id);

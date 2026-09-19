@@ -234,7 +234,7 @@
 
     setHidden('[data-view="orders"], [data-view="notifications"], [data-go="orders"]', !memberAccess);
     setHidden('[data-view="operator"]', !operatorLevelAccess);
-    setHidden('[data-view="controls"]', !superUserLevelAccess);
+    setHidden('[data-view="controls"], [data-view="workforce"]', !superUserLevelAccess);
 
     if (audienceLabel) {
       audienceLabel.textContent = superUserLevelAccess ? 'SuperUser Preview'
@@ -244,11 +244,11 @@
     }
 
     const activeProtectedView = document.querySelector(
-      '.view.active#orders, .view.active#notifications, .view.active#operator, .view.active#controls',
+      '.view.active#orders, .view.active#notifications, .view.active#operator, .view.active#workforce, .view.active#controls',
     );
     if (activeProtectedView) {
       const stillAllowed = activeProtectedView.id === 'operator' ? operatorLevelAccess
-        : activeProtectedView.id === 'controls' ? superUserLevelAccess
+        : ['controls','workforce'].includes(activeProtectedView.id) ? superUserLevelAccess
         : memberAccess;
       if (!stillAllowed && typeof window.activate === 'function') window.activate('dashboard');
     }
@@ -566,8 +566,23 @@
 
   async function discoverMembershipStatus(credential) {
     const response = await probeBearerAccess('/api/membership-status', credential);
-    if (!response?.ok) return { accessState: null, route: null, memberAccessAvailable: false, membershipState: null, hasPendingApplication: false, invoice: null, applicationSubmittedAt: null };
-    const body = await response.json().catch(() => null);
+    const body = await response?.json().catch(() => null);
+    // MEMBERSHIP_REQUIRED is a deliberate fail-closed admission response: Google
+    // authenticated the person, but WorkersFoodClub has no admissible member binding.
+    // Preserve the bounded NON_MEMBER/APPLICATION_STATUS route while withholding
+    // every member capability.
+    if (response?.status === 403 && body?.error === 'MEMBERSHIP_REQUIRED') {
+      return {
+        accessState: body?.accessState ?? 'AUTHENTICATED_UNBOUND',
+        route: body?.route ?? 'NON_MEMBER',
+        memberAccessAvailable: false,
+        membershipState: null,
+        hasPendingApplication: body?.hasPendingApplication === true,
+        invoice: null,
+        applicationSubmittedAt: body?.applicationSubmittedAt ?? null,
+      };
+    }
+    if (!response?.ok) return { accessState: null, route: 'NON_MEMBER', memberAccessAvailable: false, membershipState: null, hasPendingApplication: false, invoice: null, applicationSubmittedAt: null };
     return {
       accessState: body?.accessState ?? null,
       route: body?.route ?? null,
