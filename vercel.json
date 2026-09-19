@@ -7,6 +7,10 @@
       "destination": "/employee.html"
     },
     {
+      "source": "/apply",
+      "destination": "/join.html"
+    },
+    {
       "source": "/api/build-info",
       "destination": "/api/db-health?probe=build-info"
     },
