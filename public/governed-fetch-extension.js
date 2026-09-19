@@ -31,9 +31,10 @@
     const suppliedAuthorization = headerValue(init, 'Authorization');
     const suppliedEmployeeSession = headerValue(init, 'x-employee-session');
 
-    // auth.js already governs /api/operator-orders. Observe only that same-origin
-    // authorized request so newly added operator routes can reuse the exact same
-    // short-lived credential pair without exposing either credential globally.
+    // auth.js owns credential selection. This extension observes only the
+    // same-origin governed operator probe and reuses that exact short-lived pair
+    // for the newer operator routes. It never reads credentials from storage or
+    // exposes them globally.
     if (path === '/api/operator-orders' && suppliedAuthorization) {
       operatorAuthorization = suppliedAuthorization;
       employeeSession = suppliedEmployeeSession;
@@ -52,6 +53,19 @@
     if (event.detail?.operatorAccessAvailable !== true) {
       operatorAuthorization = null;
       employeeSession = null;
+      return;
     }
+
+    // Deterministically initialize the bridge at the authority transition.
+    // Because auth.js wraps this fetch layer, its governed /api/operator-orders
+    // request arrives here with the current bearer + employee session before any
+    // Promotions/Workforce listener can issue a dependent request. The response
+    // is intentionally ignored; discoverOperatorAccess already performed the
+    // authoritative server-side access check.
+    window.fetch('/api/operator-orders', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    }).catch(() => {});
   });
 })();
