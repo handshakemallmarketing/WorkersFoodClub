@@ -59,6 +59,11 @@ test('AUTH-MEMBERSHIP-001 member APIs reject non-CURRENT standing even when bind
   assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_CURRENT_MEMBERSHIP_REQUIRED'});
 });
 
+test('AUTH-MEMBERSHIP-001 workforce API access is revoked when membership is no longer CURRENT',async()=>{
+  const denied=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({binding:binding(['operator:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'PAST_DUE'}],grants:[{grant_id:'grant:operator',actions:['operator:orders.read']}]}),employeeSessionSecret:SECRET,employeeSessionToken:sessionToken});
+  assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_CURRENT_MEMBERSHIP_REQUIRED'});
+});
+
 test('RC3 governed operator principal requires active route-wide root authority',async()=>{
   // No matching grant is rejected before the employee-session check is even reached.
   const denied=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({binding:binding(['operator:orders.read']),participant,grants:[]})});
