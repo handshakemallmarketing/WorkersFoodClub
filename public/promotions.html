@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Promotions Settings · WorkersFoodClub</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="container">
+    <h1>Promotions, Rewards & Campaigns</h1>
+    <p>Create governed campaign parameters. New campaigns begin in <strong>DRAFT</strong>; creation never activates a campaign.</p>
+    <p id="promotion-access" aria-live="polite">Checking operator authority…</p>
+    <form id="promotion-form" hidden>
+      <label>Name <input name="name" required></label>
+      <label>Type <select name="promotionType"><option>REFERRAL</option><option>PURCHASE</option><option>MEMBERSHIP</option><option>RAFFLE</option><option>GENERAL</option></select></label>
+      <label>Qualifying event <input name="qualifyingEvent" required placeholder="REFERRED_MEMBER_ACTIVE_CURRENT"></label>
+      <label>Benefit <select name="rewardType"><option>NEXT_PAYMENT_PERCENT_DISCOUNT</option><option>FIXED_DISCOUNT</option><option>SHOPPING_CREDIT</option><option>PHYSICAL_ITEM</option><option>FREE_PRODUCT</option><option>SERVICE_BENEFIT</option><option>RAFFLE_ENTRY</option><option>RAFFLE_PRIZE</option></select></label>
+      <label>Reward percent <input name="rewardPercent" type="number" min="0" max="100" step="0.01"></label>
+      <label>Physical SKU / prize <input name="rewardSku"></label>
+      <label>Geography <input name="geography" placeholder="Ghana nationwide"></label>
+      <label><input name="indefinite" type="checkbox"> Run indefinitely</label>
+      <label>End date <input name="endsAt" type="datetime-local"></label>
+      <label>Per-member cap <input name="perMemberCap" type="number" min="1"></label>
+      <label>Campaign cap <input name="campaignCap" type="number" min="1"></label>
+      <button type="submit">Save Draft</button>
+    </form>
+    <pre id="result" aria-live="polite"></pre>
+  </main>
+  <script src="/governed-fetch-extension.js"></script>
+  <script src="/auth.js"></script>
+  <script>
+    const form = document.getElementById('promotion-form');
+    const access = document.getElementById('promotion-access');
+    const result = document.getElementById('result');
+
+    function applyAuthority(detail = {}) {
+      const allowed = detail.superUserAccessAvailable === true;
+      form.hidden = !allowed;
+      access.textContent = allowed
+        ? 'Governed promotions authority confirmed.'
+        : 'SuperUser operator authority is required to manage promotions.';
+    }
+
+    window.addEventListener('foodclub:auth-state', (event) => applyAuthority(event.detail || {}));
+    if (window.FoodClubAuth) {
+      applyAuthority({ superUserAccessAvailable: window.FoodClubAuth.superUserAccessAvailable });
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!window.FoodClubAuth?.superUserAccessAvailable) {
+        result.textContent = 'Promotions authority is not available.';
+        return;
+      }
+      const f = new FormData(event.target);
+      const pct = Number(f.get('rewardPercent') || 0);
+      const body = {
+        name: f.get('name'),
+        promotionType: f.get('promotionType'),
+        qualifyingEvent: f.get('qualifyingEvent'),
+        rewardType: f.get('rewardType'),
+        rewardValueBps: Math.round(pct * 100),
+        rewardSku: f.get('rewardSku') || null,
+        geography: f.get('geography') || null,
+        indefinite: f.get('indefinite') === 'on',
+        endsAt: f.get('endsAt') || null,
+        perMemberCap: f.get('perMemberCap') ? Number(f.get('perMemberCap')) : null,
+        campaignCap: f.get('campaignCap') ? Number(f.get('campaignCap')) : null,
+      };
+      const response = await fetch('/api/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      result.textContent = JSON.stringify(await response.json(), null, 2);
+    });
+  </script>
+</body>
+</html>
