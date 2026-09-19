@@ -20,6 +20,13 @@ function parseOptionalIso(value) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }
 
+function validRewardEconomics(reward,b) {
+  if (reward === 'NEXT_PAYMENT_PERCENT_DISCOUNT') return Number.isInteger(b.rewardValueBps) && b.rewardValueBps > 0 && b.rewardValueBps <= 10000;
+  if (['FIXED_DISCOUNT','SHOPPING_CREDIT'].includes(reward)) return Number.isInteger(b.rewardAmountMinor) && b.rewardAmountMinor > 0;
+  if (['PHYSICAL_ITEM','FREE_PRODUCT','RAFFLE_PRIZE'].includes(reward)) return typeof b.rewardSku === 'string' && b.rewardSku.trim().length > 0;
+  return true;
+}
+
 export default async function handler(req,res) {
   if (!['GET','POST','PATCH'].includes(req.method)) {
     res.setHeader('Allow','GET, POST, PATCH');
@@ -52,6 +59,8 @@ export default async function handler(req,res) {
         return res.status(400).json({ok:false,error:'PROMOTION_FIELDS_INVALID'});
       }
       if (!indefinite && !ends) return res.status(400).json({ok:false,error:'PROMOTION_END_REQUIRED'});
+      if (starts && ends && Date.parse(ends) <= Date.parse(starts)) return res.status(400).json({ok:false,error:'PROMOTION_WINDOW_INVALID'});
+      if (!validRewardEconomics(reward,b)) return res.status(400).json({ok:false,error:'PROMOTION_REWARD_ECONOMICS_INVALID'});
       const rows = await sql`INSERT INTO promotion_campaign(promotion_id,name,description,state,promotion_type,geography,starts_at,ends_at,indefinite,qualifying_event,reward_type,reward_value_bps,reward_amount_minor,reward_sku,per_member_cap,campaign_cap,budget_minor) VALUES(${id},${name},${b.description||null},'DRAFT',${type},${b.geography||null},${starts},${ends},${indefinite},${qual},${reward},${b.rewardValueBps??null},${b.rewardAmountMinor??null},${b.rewardSku??null},${b.perMemberCap??null},${b.campaignCap??null},${b.budgetMinor??null}) RETURNING promotion_id,state`;
       return res.status(201).json({ok:true,promotion:rows[0]});
     }
