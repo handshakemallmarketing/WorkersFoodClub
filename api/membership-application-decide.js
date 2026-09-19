@@ -50,7 +50,8 @@ export default async function handler(req, res, options = {}) {
     const subscriptionYear=new Date(nowIso).getUTCFullYear(); invoiceId=`subscription-invoice:${randomUUID()}`;
     const dueAt=new Date(new Date(nowIso).getTime()+14*24*60*60*1000).toISOString();
     await sql`INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at) VALUES (${invoiceId},${membershipId},${subscriptionYear},${annualFeeMinor},'GHS','OPEN',${dueAt})`;
-    await sql`UPDATE membership_application SET resulting_membership_id=${membershipId} WHERE application_id=${applicationId} AND state='APPROVED' AND decided_by=${callerId}`;
+    const linked=await sql`UPDATE membership_application SET resulting_membership_id=${membershipId} WHERE application_id=${applicationId} AND state='APPROVED' AND decided_by=${callerId} AND resulting_membership_id IS NULL RETURNING application_id`;
+    if(linked.length!==1)throw Object.assign(new Error('MEMBERSHIP_APPLICATION_LINK_FAILED'),{code:'MEMBERSHIP_APPLICATION_LINK_FAILED'});
     res.setHeader('Cache-Control','no-store');return res.status(200).json({ok:true,applicationId,decision:'APPROVE',participantId,membershipId,membershipState:'INACTIVE',standing:'INITIAL_FEE_DUE',invoiceId,dueAt});
     } catch(provisionError) {
       // Compensate a claimed-but-unprovisioned approval. Participant/identity
