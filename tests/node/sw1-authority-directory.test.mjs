@@ -68,6 +68,7 @@ function fakeSql({
   callerGrants = [{ actions: ['authority:owner'] }],
   grants = [],
   invitations = [],
+  membershipApplications = [],
 } = {}) {
   return async (strings, ...values) => {
     const text = strings.join('?');
@@ -76,6 +77,7 @@ function fakeSql({
     if (text.includes('WHERE actor_id=') && text.includes('FROM application_authority_grant')) return callerGrants;
     if (text.includes('FROM application_authority_grant')) return grants;
     if (text.includes('FROM authority_invitation')) return invitations;
+    if (text.includes('FROM membership_application')) return membershipApplications;
     throw new Error(`UNEXPECTED_QUERY: ${text}`);
   };
 }
@@ -125,4 +127,21 @@ test('authority-directory returns the caller tier, grants, and invitations for a
   assert.equal(res.result.body.grants[0].tier, 'OWNER');
   assert.equal(res.result.body.invitations.length, 1);
   assert.equal(res.result.body.invitations[0].state, 'INVITED');
+});
+
+test('authority-directory returns pending membership applications for review', async () => {
+  const res = response();
+  await directoryHandler(request('GET', { token: oidcToken(), employeeSession: validSessionToken() }), res, {
+    ...productionOptions,
+    sql: fakeSql({
+      membershipApplications: [
+        { application_id: 'application:1', issuer: 'https://accounts.google.com', subject: 'oidc|applicant', contact_note: 'please', state: 'SUBMITTED', submitted_at: new Date(NOW - 1000).toISOString(), decided_at: null, decided_by: null, resulting_membership_id: null },
+      ],
+    }),
+  });
+
+  assert.equal(res.result.statusCode, 200);
+  assert.equal(res.result.body.membershipApplications.length, 1);
+  assert.equal(res.result.body.membershipApplications[0].state, 'SUBMITTED');
+  assert.equal(res.result.body.membershipApplications[0].contactNote, 'please');
 });
