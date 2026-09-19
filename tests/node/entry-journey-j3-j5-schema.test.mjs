@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const sql = readFileSync(new URL('../../packages/durability/sql/018_entry_journey_activation.sql', import.meta.url), 'utf8');
+const decide = readFileSync(new URL('../../api/membership-application-decide.js', import.meta.url), 'utf8');
 
-test('J4 approval has a distinct pending-activation state', () => {
-  assert.match(sql, /APPROVED_PENDING_ACTIVATION/);
-  assert.match(sql, /ACTIVATED/);
+test('J4 approval is activation and does not define a pending activation state', () => {
+  assert.match(sql, /APPROVE decision is the activation event/);
+  assert.doesNotMatch(sql, /APPROVED_PENDING_ACTIVATION/);
+  assert.doesNotMatch(sql, /ADD COLUMN IF NOT EXISTS activation_state/);
+  assert.match(decide, /'ACTIVE'/);
 });
 
 test('J4 public member ID is separate and unique', () => {
