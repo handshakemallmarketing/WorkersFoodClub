@@ -5,6 +5,7 @@
     { "source": "/employee", "destination": "/employee.html" },
     { "source": "/apply", "destination": "/join.html" },
     { "source": "/activate", "destination": "/activate.html" },
+    { "source": "/household", "destination": "/household.html" },
     { "source": "/api/build-info", "destination": "/api/db-health?probe=build-info" },
     { "source": "/api/auth-readiness", "destination": "/api/db-health?probe=identity-readiness" },
     { "source": "/api/auth-client-config", "destination": "/api/db-health?probe=auth-client-config" },
