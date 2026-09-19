@@ -1,106 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign as signData } from 'node:crypto';
-
 import statusHandler from '../../api/membership-status.js';
-
-const NOW = Date.parse('2026-09-18T12:00:00Z');
-const NOW_SEC = Math.floor(NOW / 1000);
-
-const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-const jwk = publicKey.export({ format: 'jwk' });
-jwk.kid = 'membership-status-test-key';
-jwk.alg = 'RS256';
-jwk.use = 'sig';
-
-const OIDC_ENV = {
-  PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
-  OIDC_ISSUER: 'https://identity.example.test/',
-  OIDC_AUDIENCE: 'workers-food-club-api',
-  OIDC_JWKS_URI: 'https://identity.example.test/.well-known/jwks.json',
-};
-
-function oidcToken({ sub = 'oidc|applicant', iatSecondsAgo = 5 } = {}) {
-  const iat = NOW_SEC - iatSecondsAgo;
-  const h = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: jwk.kid })).toString('base64url');
-  const p = Buffer.from(JSON.stringify({ iss: OIDC_ENV.OIDC_ISSUER, aud: OIDC_ENV.OIDC_AUDIENCE, sub, exp: NOW_SEC + 3300, iat })).toString('base64url');
-  const s = signData('RSA-SHA256', Buffer.from(`${h}.${p}`), privateKey).toString('base64url');
-  return `${h}.${p}.${s}`;
-}
-
-function response() {
-  const result = { statusCode: null, body: null, headers: {} };
-  return {
-    result,
-    setHeader(n, v) { result.headers[String(n).toLowerCase()] = v; return this; },
-    status(c) { result.statusCode = c; return this; },
-    json(b) { result.body = b; return this; },
-  };
-}
-
-function request(method, token) {
-  return { method, headers: token ? { authorization: `Bearer ${token}` } : {} };
-}
-
-const productionOptions = { now: NOW, env: OIDC_ENV, production: { now: NOW, env: OIDC_ENV, jwksResolver: async () => ({ keys: [jwk] }) } };
-
-test.beforeEach(() => {
-  process.env.VERCEL_ENV = 'production';
-});
-
-function fakeSql({ binding = null, membership = null, application = null } = {}) {
-  return async (strings) => {
-    const text = strings.join('?');
-    if (text.includes('FROM application_identity_binding')) return binding ? [binding] : [];
-    if (text.includes('FROM application_membership')) return membership ? [membership] : [];
-    if (text.includes('FROM membership_application')) return application ? [application] : [];
-    throw new Error(`UNEXPECTED_QUERY: ${text}`);
-  };
-}
-
-test('membership-status rejects non-GET methods', async () => {
-  const res = response();
-  await statusHandler(request('POST'), res, {});
-  assert.equal(res.result.statusCode, 405);
-});
-
-test('membership-status fails closed when production access is disabled', async () => {
-  const res = response();
-  await statusHandler(request('GET', oidcToken()), res, { ...productionOptions, env: { ...OIDC_ENV, PRODUCTION_APPLICATION_ACCESS_ENABLED: 'false' }, sql: fakeSql() });
-  assert.equal(res.result.statusCode, 503);
-});
-
-test('membership-status reports no membership and no pending application for a brand-new identity', async () => {
-  const res = response();
-  await statusHandler(request('GET', oidcToken()), res, { ...productionOptions, sql: fakeSql() });
-  assert.equal(res.result.statusCode, 200);
-  assert.equal(res.result.body.membershipState, null);
-  assert.equal(res.result.body.hasPendingApplication, false);
-});
-
-test('membership-status reports ACTIVE membership for a bound member', async () => {
-  const res = response();
-  await statusHandler(request('GET', oidcToken()), res, {
-    ...productionOptions,
-    sql: fakeSql({ binding: { participant_id: 'participant:member-1', state: 'ACTIVE' }, membership: { state: 'ACTIVE' } }),
-  });
-  assert.equal(res.result.body.membershipState, 'ACTIVE');
-});
-
-test('membership-status reports SUSPENDED membership rather than treating it as no membership', async () => {
-  const res = response();
-  await statusHandler(request('GET', oidcToken()), res, {
-    ...productionOptions,
-    sql: fakeSql({ binding: { participant_id: 'participant:member-1', state: 'ACTIVE' }, membership: { state: 'SUSPENDED' } }),
-  });
-  assert.equal(res.result.body.membershipState, 'SUSPENDED');
-});
-
-test('membership-status reports a pending application', async () => {
-  const res = response();
-  await statusHandler(request('GET', oidcToken()), res, {
-    ...productionOptions,
-    sql: fakeSql({ application: { application_id: 'application:1' } }),
-  });
-  assert.equal(res.result.body.hasPendingApplication, true);
-});
+const NOW=Date.parse('2026-09-18T12:00:00Z'),NOW_SEC=Math.floor(NOW/1000);
+const {privateKey,publicKey}=generateKeyPairSync('rsa',{modulusLength:2048});const jwk=publicKey.export({format:'jwk'});Object.assign(jwk,{kid:'membership-status-test-key',alg:'RS256',use:'sig'});
+const OIDC_ENV={PRODUCTION_APPLICATION_ACCESS_ENABLED:'true',OIDC_ISSUER:'https://identity.example.test/',OIDC_AUDIENCE:'workers-food-club-api',OIDC_JWKS_URI:'https://identity.example.test/.well-known/jwks.json'};
+function oidcToken({sub='oidc|applicant',iatSecondsAgo=5}={}){const iat=NOW_SEC-iatSecondsAgo,h=Buffer.from(JSON.stringify({alg:'RS256',typ:'JWT',kid:jwk.kid})).toString('base64url'),p=Buffer.from(JSON.stringify({iss:OIDC_ENV.OIDC_ISSUER,aud:OIDC_ENV.OIDC_AUDIENCE,sub,exp:NOW_SEC+3300,iat})).toString('base64url'),s=signData('RSA-SHA256',Buffer.from(`${h}.${p}`),privateKey).toString('base64url');return `${h}.${p}.${s}`;}
+function response(){const result={statusCode:null,body:null,headers:{}};return{result,setHeader(n,v){result.headers[String(n).toLowerCase()]=v;return this;},status(c){result.statusCode=c;return this;},json(b){result.body=b;return this;}};}
+function request(method,token){return{method,headers:token?{authorization:`Bearer ${token}`}:{}};}
+const productionOptions={now:NOW,env:OIDC_ENV,production:{now:NOW,env:OIDC_ENV,jwksResolver:async()=>({keys:[jwk]})}};
+test.beforeEach(()=>{process.env.VERCEL_ENV='production';});
+function fakeSql({binding=null,membership=null,application=null,invoice=null}={}){return async(strings)=>{const text=strings.join('?');if(text.includes('FROM application_identity_binding'))return binding?[binding]:[];if(text.includes('FROM application_membership'))return membership?[membership]:[];if(text.includes('FROM membership_subscription_invoice'))return invoice?[invoice]:[];if(text.includes('FROM membership_application'))return application?[application]:[];throw new Error(`UNEXPECTED_QUERY: ${text}`);};}
+async function invoke(sql){const res=response();await statusHandler(request('GET',oidcToken()),res,{...productionOptions,sql});return res.result;}
+test('membership-status rejects non-GET methods',async()=>{const res=response();await statusHandler(request('POST'),res,{});assert.equal(res.result.statusCode,405);});
+test('membership-status fails closed when production access is disabled',async()=>{const res=response();await statusHandler(request('GET',oidcToken()),res,{...productionOptions,env:{...OIDC_ENV,PRODUCTION_APPLICATION_ACCESS_ENABLED:'false'},sql:fakeSql()});assert.equal(res.result.statusCode,503);});
+test('J2 unbound authenticated identity is NON_MEMBER with no member authority',async()=>{const r=await invoke(fakeSql());assert.equal(r.statusCode,200);assert.equal(r.body.accessState,'AUTHENTICATED_UNBOUND');assert.equal(r.body.route,'NON_MEMBER');assert.equal(r.body.memberAccessAvailable,false);});
+test('J3 submitted applicant resolves only to APPLICATION_STATUS',async()=>{const r=await invoke(fakeSql({application:{application_id:'application:1',state:'SUBMITTED',submitted_at:'2026-09-18T11:00:00Z'}}));assert.equal(r.body.accessState,'APPLICANT_PENDING');assert.equal(r.body.route,'APPLICATION_STATUS');assert.equal(r.body.memberAccessAvailable,false);assert.equal(r.body.hasPendingApplication,true);});
+test('J4 approved primary member remains subscription-gated while INITIAL_FEE_DUE',async()=>{const r=await invoke(fakeSql({binding:{participant_id:'participant:1',state:'ACTIVE'},membership:{membership_id:'membership:1',state:'INACTIVE',standing:'INITIAL_FEE_DUE',role:'PRIMARY',public_member_id:'WFC-1001'},invoice:{invoice_id:'invoice:1',state:'OPEN',due_at:'2026-10-01T00:00:00Z'}}));assert.equal(r.body.accessState,'INACTIVE_INITIAL_FEE_DUE');assert.equal(r.body.route,'SUBSCRIPTION_DUE');assert.equal(r.body.memberAccessAvailable,false);assert.equal(r.body.invoice.invoiceId,'invoice:1');});
+test('J5 only ACTIVE/CURRENT resolves to MEMBER authority',async()=>{const r=await invoke(fakeSql({binding:{participant_id:'participant:1',state:'ACTIVE'},membership:{membership_id:'membership:1',state:'ACTIVE',standing:'CURRENT',role:'PRIMARY',public_member_id:'WFC-1001'}}));assert.equal(r.body.accessState,'ACTIVE_CURRENT');assert.equal(r.body.route,'MEMBER');assert.equal(r.body.memberAccessAvailable,true);assert.equal(r.body.publicMemberId,'WFC-1001');});
+test('SUSPENDED/PAST_DUE member is subscription-gated, never member-authorized',async()=>{const r=await invoke(fakeSql({binding:{participant_id:'participant:1',state:'ACTIVE'},membership:{membership_id:'membership:1',state:'SUSPENDED',standing:'PAST_DUE',role:'PRIMARY'},invoice:{invoice_id:'invoice:renewal',state:'OPEN'}}));assert.equal(r.body.accessState,'SUSPENDED_PAST_DUE');assert.equal(r.body.route,'SUBSCRIPTION_DUE');assert.equal(r.body.memberAccessAvailable,false);});
