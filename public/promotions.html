@@ -36,22 +36,34 @@
     const access = document.getElementById('promotion-access');
     const result = document.getElementById('result');
 
-    function applyAuthority(detail = {}) {
-      const allowed = detail.superUserAccessAvailable === true;
-      form.hidden = !allowed;
-      access.textContent = allowed
-        ? 'Governed promotions authority confirmed.'
-        : 'Governed promotions authority is required to manage promotions.';
+    let promotionsAuthority = false;
+    async function refreshPromotionAuthority(detail = {}) {
+      promotionsAuthority = false;
+      form.hidden = true;
+      if (detail.operatorAccessAvailable !== true) {
+        access.textContent = 'Governed promotions authority is required to manage promotions.';
+        return;
+      }
+      try {
+        const response = await fetch('/api/promotions', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+        promotionsAuthority = response.ok;
+        form.hidden = !promotionsAuthority;
+        access.textContent = promotionsAuthority
+          ? 'Governed promotions authority confirmed.'
+          : 'Your employee session does not have Promotions authority.';
+      } catch {
+        access.textContent = 'Unable to verify Promotions authority.';
+      }
     }
 
-    window.addEventListener('foodclub:auth-state', (event) => applyAuthority(event.detail || {}));
+    window.addEventListener('foodclub:auth-state', (event) => refreshPromotionAuthority(event.detail || {}));
     if (window.FoodClubAuth) {
-      applyAuthority({ superUserAccessAvailable: window.FoodClubAuth.superUserAccessAvailable });
+      refreshPromotionAuthority({ operatorAccessAvailable: window.FoodClubAuth.operatorAccessAvailable });
     }
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      if (!window.FoodClubAuth?.superUserAccessAvailable) {
+      if (!promotionsAuthority) {
         result.textContent = 'Promotions authority is not available.';
         return;
       }
