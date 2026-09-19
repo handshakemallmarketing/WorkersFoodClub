@@ -43,15 +43,20 @@ function withValidEmployeeSession(fixture){
   };
 }
 
-test('RC3 governed member principal requires ACTIVE membership',async()=>{
+test('RC3 governed member principal requires ACTIVE CURRENT membership',async()=>{
   const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[]})});
-  assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_MEMBERSHIP_REQUIRED'});
+  assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_CURRENT_MEMBERSHIP_REQUIRED'});
 
-  const allowed=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[{membership_id:'membership:1'}]})});
+  const allowed=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'CURRENT'}]})});
   assert.equal(allowed.ok,true);
   assert.equal(allowed.principal.actorId,'participant:1');
   assert.equal(allowed.principal.membershipId,'membership:1');
   assert.equal(allowed.principal.authorityGrantId,undefined);
+});
+
+test('AUTH-MEMBERSHIP-001 member APIs reject non-CURRENT standing even when binding retains member scope',async()=>{
+  const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[]})});
+  assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_CURRENT_MEMBERSHIP_REQUIRED'});
 });
 
 test('RC3 governed operator principal requires active route-wide root authority',async()=>{
