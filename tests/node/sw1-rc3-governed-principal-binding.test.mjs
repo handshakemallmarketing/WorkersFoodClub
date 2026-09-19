@@ -68,7 +68,7 @@ test('AUTH-MEMBERSHIP-001 workforce API access is revoked when membership is no 
 
 test('RC3 governed operator principal requires active route-wide root authority',async()=>{
   // No matching grant is rejected before the employee-session check is even reached.
-  const denied=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({binding:binding(['operator:orders.read']),participant,grants:[]})});
+  const denied=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({binding:binding(['operator:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'CURRENT'}],grants:[]})});
   assert.deepEqual(denied,{ok:false,status:403,error:'OPERATOR_AUTHORITY_REQUIRED'});
 
   const fixture=withValidEmployeeSession({binding:binding(['operator:orders.read']),participant,grants:[{grant_id:'grant:operator:1',actions:['operator:orders.read'],target_prefix:null}]});
@@ -96,7 +96,7 @@ test('RC3 an active operator grant delegated via parent_grant_id (Admin-issued) 
 });
 
 test('RC3 an operator-scoped request without a live employee session is denied even with a valid grant', async () => {
-  const grantFixture={binding:binding(['operator:orders.read']),participant,grants:[{grant_id:'grant:operator:1',actions:['operator:orders.read'],target_prefix:null}]};
+  const grantFixture={binding:binding(['operator:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'CURRENT'}],grants:[{grant_id:'grant:operator:1',actions:['operator:orders.read'],target_prefix:null}]};
 
   const notConfigured=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(grantFixture)});
   assert.deepEqual(notConfigured,{ok:false,status:503,error:'EMPLOYEE_SESSION_NOT_CONFIGURED'});
@@ -121,7 +121,7 @@ test('RC3 an operator-scoped request without a live employee session is denied e
 });
 
 test('RC3 a revoked, expired, not-yet-valid, or target-scoped grant does not satisfy general operator authority',async()=>{
-  const base=(overrides)=>({binding:binding(['operator:orders.read']),participant,grants:[{grant_id:'grant:x',actions:['operator:orders.read'],target_prefix:null,...overrides}]});
+  const base=(overrides)=>({binding:binding(['operator:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'CURRENT'}],grants:[{grant_id:'grant:x',actions:['operator:orders.read'],target_prefix:null,...overrides}]});
 
   const revoked=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(base({revoked:true}))});
   assert.deepEqual(revoked,{ok:false,status:403,error:'OPERATOR_AUTHORITY_REQUIRED'});
