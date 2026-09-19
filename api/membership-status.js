@@ -2,16 +2,10 @@ import { verifyProductionOidcRequest } from '../lib/production-oidc-auth.js';
 import { requireProductionApplicationAccess } from '../lib/production-access-policy.js';
 
 /**
- * Tells the caller's own Google identity where it stands, so the frontend
- * can decide whether to admit, restrict, or route to /join -- without
- * requiring any existing application_identity_binding or membership row
- * to exist yet (a brand-new applicant has neither).
- *
- * membershipState is the *current* membership's state ('ACTIVE'|'SUSPENDED'
- * |'ENDED'), or null if this identity has never had a membership row at
- * all. hasPendingApplication is true only while a SUBMITTED application
- * exists for this exact identity, so the frontend never invites a second
- * submission on top of one already awaiting review.
+ * Authoritative entry-journey resolver for J2-J5.
+ * Authentication proves identity only. This endpoint resolves the caller into
+ * exactly one application access state; the browser must not infer membership
+ * authority from the mere presence of an OIDC token or identity binding.
  */
 export default async function handler(req, res, options = {}) {
   if (req.method !== 'GET') {
@@ -41,29 +35,83 @@ export default async function handler(req, res, options = {}) {
        WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject}
        LIMIT 2`;
 
-    let membershipState = null;
+    let participantId = null;
+    let membership = null;
+    let invoice = null;
     if (bindings.length === 1 && String(bindings[0].state) === 'ACTIVE') {
-      const participantId = String(bindings[0].participant_id);
+      participantId = String(bindings[0].participant_id);
       const memberships = await sql`
-        SELECT state
+        SELECT membership_id, state, standing, role, public_member_id
           FROM application_membership
          WHERE participant_id=${participantId}
          ORDER BY established_at DESC
          LIMIT 1`;
-      if (memberships.length === 1) membershipState = String(memberships[0].state);
+      if (memberships.length === 1) {
+        membership = memberships[0];
+        if (String(membership.state) !== 'ACTIVE' || String(membership.standing) !== 'CURRENT') {
+          const invoices = await sql`
+            SELECT invoice_id, state, due_at
+              FROM membership_subscription_invoice
+             WHERE membership_id=${String(membership.membership_id)}
+               AND state='OPEN'
+             ORDER BY issued_at DESC
+             LIMIT 1`;
+          if (invoices.length === 1) invoice = invoices[0];
+        }
+      }
     }
 
     const applications = await sql`
-      SELECT application_id
+      SELECT application_id, state, submitted_at
         FROM membership_application
-       WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject} AND state='SUBMITTED'
+       WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject}
+       ORDER BY submitted_at DESC
        LIMIT 1`;
+    const application = applications.length === 1 ? applications[0] : null;
+
+    const membershipState = membership ? String(membership.state) : null;
+    const standing = membership?.standing == null ? null : String(membership.standing);
+    let accessState = 'AUTHENTICATED_UNBOUND';
+    let memberAccessAvailable = false;
+    let route = 'NON_MEMBER';
+
+    if (membershipState === 'ACTIVE' && standing === 'CURRENT') {
+      accessState = 'ACTIVE_CURRENT';
+      memberAccessAvailable = true;
+      route = 'MEMBER';
+    } else if (membershipState === 'INACTIVE' && standing === 'INITIAL_FEE_DUE') {
+      accessState = 'INACTIVE_INITIAL_FEE_DUE';
+      route = 'SUBSCRIPTION_DUE';
+    } else if (membershipState === 'SUSPENDED' || standing === 'PAST_DUE') {
+      accessState = 'SUSPENDED_PAST_DUE';
+      route = 'SUBSCRIPTION_DUE';
+    } else if (application && String(application.state) === 'SUBMITTED') {
+      accessState = 'APPLICANT_PENDING';
+      route = 'APPLICATION_STATUS';
+    } else if (membershipState) {
+      accessState = `MEMBERSHIP_${membershipState}${standing ? `_${standing}` : ''}`;
+      route = 'RESTRICTED';
+    }
 
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       ok: true,
+      accessState,
+      route,
+      memberAccessAvailable,
       membershipState,
-      hasPendingApplication: applications.length === 1,
+      standing,
+      membershipRole: membership?.role == null ? null : String(membership.role),
+      publicMemberId: membership?.public_member_id == null ? null : String(membership.public_member_id),
+      applicationState: application?.state == null ? null : String(application.state),
+      applicationId: application?.application_id == null ? null : String(application.application_id),
+      applicationSubmittedAt: application?.submitted_at ?? null,
+      hasPendingApplication: application != null && String(application.state) === 'SUBMITTED',
+      invoice: invoice ? {
+        invoiceId: String(invoice.invoice_id),
+        state: String(invoice.state),
+        dueAt: invoice.due_at ?? null,
+      } : null,
     });
   } catch (error) {
     console.error('Membership status read failed', { name: error?.name, code: error?.code, message: error?.message });
