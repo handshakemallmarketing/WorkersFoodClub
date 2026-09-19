@@ -41,8 +41,8 @@ test('RC3 member mutation canonical records bind to authenticated actor', async 
     assert.match(text, /requireApplicationAuth/);
     assert.match(text, /canonicalRuntimeMetadata\(\{\s*principal,\s*environment:\s*runtimeEnvironment\(\)\s*\}\)/);
     assert.match(text, /\$\{runtime\.actorId\}/);
-    assert.match(text, /'actorId'/);
-    assert.match(text, /'environment',\s*\$\{runtime\.environment\}/);
+    assert.match(text, /(?:'actorId'\s*,\s*\$\{runtime\.actorId\}|actorId\s*:\s*runtime\.actorId)/);
+    assert.match(text, /(?:'environment'\s*,\s*\$\{runtime\.environment\}|environment\s*:\s*runtime\.environment)/);
   }
 
   assert.doesNotMatch(commit, /SELECT \$\{obligationId\}, \$\{requestId\}, \$\{PREVIEW_PARTICIPANT_ID\}/);
