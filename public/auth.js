@@ -234,7 +234,7 @@
 
     setHidden('[data-view="orders"], [data-view="notifications"], [data-go="orders"]', !memberAccess);
     setHidden('[data-view="operator"]', !operatorLevelAccess);
-    setHidden('[data-view="controls"]', !superUserLevelAccess);
+    setHidden('[data-view="controls"], [data-view="workforce"]', !superUserLevelAccess);
 
     if (audienceLabel) {
       audienceLabel.textContent = superUserLevelAccess ? 'SuperUser Preview'
@@ -244,11 +244,11 @@
     }
 
     const activeProtectedView = document.querySelector(
-      '.view.active#orders, .view.active#notifications, .view.active#operator, .view.active#controls',
+      '.view.active#orders, .view.active#notifications, .view.active#operator, .view.active#workforce, .view.active#controls',
     );
     if (activeProtectedView) {
       const stillAllowed = activeProtectedView.id === 'operator' ? operatorLevelAccess
-        : activeProtectedView.id === 'controls' ? superUserLevelAccess
+        : ['controls','workforce'].includes(activeProtectedView.id) ? superUserLevelAccess
         : memberAccess;
       if (!stillAllowed && typeof window.activate === 'function') window.activate('dashboard');
     }
