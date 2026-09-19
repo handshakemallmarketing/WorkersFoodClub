@@ -1,59 +1,14 @@
--- J26/J27/J29 ratified business contracts. No live deduction/payment rail is activated by this migration.
-ALTER TABLE preview_member_offer ADD COLUMN IF NOT EXISTS credit_enabled boolean NOT NULL DEFAULT false;
-ALTER TABLE preview_member_offer ADD COLUMN IF NOT EXISTS credit_deposit_bps integer CHECK (credit_deposit_bps BETWEEN 0 AND 10000);
-ALTER TABLE preview_member_offer ADD COLUMN IF NOT EXISTS credit_max_financed_minor bigint CHECK (credit_max_financed_minor >= 0);
-ALTER TABLE preview_member_offer ADD COLUMN IF NOT EXISTS credit_payroll_installments integer CHECK (credit_payroll_installments > 0);
-
-CREATE TABLE IF NOT EXISTS cag_deduction_enrollment (
- enrollment_id text PRIMARY KEY, membership_id text NOT NULL REFERENCES application_membership(membership_id),
- state text NOT NULL CHECK(state IN ('PENDING','ACTIVE','SUSPENDED','CANCELLED','SEPARATED')),
- mandate_reference text NOT NULL UNIQUE, enrolled_at timestamptz NOT NULL DEFAULT now(), ended_at timestamptz,
- UNIQUE(membership_id)
-);
-CREATE TABLE IF NOT EXISTS electronic_payment_evidence (
- evidence_id text PRIMARY KEY, membership_id text NOT NULL REFERENCES application_membership(membership_id), obligation_id text,
- rail text NOT NULL CHECK(rail IN ('MOBILE_MONEY','BANK_TRANSFER','CAGD_PAYROLL')),
- state text NOT NULL CHECK(state IN ('SUBMITTED','RECEIVED','RECONCILED','FAILED','REVERSED')),
- amount_minor bigint NOT NULL CHECK(amount_minor>0), currency text NOT NULL DEFAULT 'GHS' CHECK(currency='GHS'),
- provider_reference text, reconciled_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
- CHECK(rail <> 'CAGD_PAYROLL' OR provider_reference IS NOT NULL)
-);
-CREATE TABLE IF NOT EXISTS item_credit_receivable (
- receivable_id text PRIMARY KEY, membership_id text NOT NULL REFERENCES application_membership(membership_id), offer_id text NOT NULL,
- principal_minor bigint NOT NULL CHECK(principal_minor>0), outstanding_minor bigint NOT NULL CHECK(outstanding_minor>=0 AND outstanding_minor<=principal_minor),
- deposit_minor bigint NOT NULL CHECK(deposit_minor>=0), interest_bps integer NOT NULL DEFAULT 0 CHECK(interest_bps=0),
- transferable boolean NOT NULL DEFAULT false CHECK(transferable=false),
- state text NOT NULL CHECK(state IN ('ACTIVE','PAID','ACCELERATED','DELINQUENT','CLOSED')),
- enrollment_id text NOT NULL REFERENCES cag_deduction_enrollment(enrollment_id), created_at timestamptz NOT NULL DEFAULT now(), accelerated_at timestamptz
-);
-
-CREATE TABLE IF NOT EXISTS promotion_campaign (
- promotion_id text PRIMARY KEY, name text NOT NULL, description text,
- state text NOT NULL DEFAULT 'DRAFT' CHECK(state IN ('DRAFT','APPROVED','SCHEDULED','ACTIVE','PAUSED','CLOSED')),
- promotion_type text NOT NULL CHECK(promotion_type IN ('REFERRAL','PURCHASE','MEMBERSHIP','RAFFLE','GENERAL')),
- geography text, starts_at timestamptz, ends_at timestamptz, indefinite boolean NOT NULL DEFAULT false,
- qualifying_event text NOT NULL, reward_type text NOT NULL CHECK(reward_type IN ('NEXT_PAYMENT_PERCENT_DISCOUNT','FIXED_DISCOUNT','SHOPPING_CREDIT','PHYSICAL_ITEM','FREE_PRODUCT','SERVICE_BENEFIT','RAFFLE_ENTRY','RAFFLE_PRIZE')),
- reward_value_bps integer CHECK(reward_value_bps BETWEEN 0 AND 10000), reward_amount_minor bigint CHECK(reward_amount_minor>=0), reward_sku text,
- per_member_cap integer CHECK(per_member_cap>0), campaign_cap integer CHECK(campaign_cap>0), budget_minor bigint CHECK(budget_minor>=0),
- created_at timestamptz NOT NULL DEFAULT now(), activated_at timestamptz,
- CHECK(indefinite OR ends_at IS NOT NULL)
-);
-CREATE TABLE IF NOT EXISTS promotion_qualification (
- qualification_id text PRIMARY KEY, promotion_id text NOT NULL REFERENCES promotion_campaign(promotion_id), member_id text NOT NULL,
- qualifying_event_id text NOT NULL, qualified_at timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz,
- UNIQUE(promotion_id,qualifying_event_id)
-);
-CREATE TABLE IF NOT EXISTS promotion_reward_entitlement (
- entitlement_id text PRIMARY KEY, promotion_id text NOT NULL REFERENCES promotion_campaign(promotion_id), qualification_id text NOT NULL UNIQUE REFERENCES promotion_qualification(qualification_id),
- member_id text NOT NULL, reward_type text NOT NULL, calculated_minor bigint, reward_sku text,
- state text NOT NULL DEFAULT 'ISSUED' CHECK(state IN ('ISSUED','RESERVED','REDEEMED','EXPIRED','REVERSED')),
- issued_at timestamptz NOT NULL DEFAULT now(), redeemed_at timestamptz
-);
-CREATE TABLE IF NOT EXISTS promotion_raffle_entry (
- entry_id text PRIMARY KEY, promotion_id text NOT NULL REFERENCES promotion_campaign(promotion_id), qualification_id text NOT NULL REFERENCES promotion_qualification(qualification_id),
- member_id text NOT NULL, entry_number bigint NOT NULL, issued_at timestamptz NOT NULL DEFAULT now(), UNIQUE(promotion_id,qualification_id), UNIQUE(promotion_id,entry_number)
-);
-CREATE TABLE IF NOT EXISTS promotion_raffle_draw (
- draw_id text PRIMARY KEY, promotion_id text NOT NULL REFERENCES promotion_campaign(promotion_id), state text NOT NULL CHECK(state IN ('LOCKED','EXECUTED','VOID')),
- eligibility_snapshot_hash text NOT NULL, selection_method text NOT NULL, executed_at timestamptz, evidence_json jsonb NOT NULL DEFAULT '{}'::jsonb
-);
+-- J26/J27/J29 ratified contracts. No live deduction/payment rail is activated.
+ALTER TABLE preview_member_offer ADD COLUMN IF NOT EXISTS credit_enabled boolean NOT NULL DEFAULT false,ADD COLUMN IF NOT EXISTS credit_deposit_bps integer CHECK(credit_deposit_bps BETWEEN 0 AND 10000),ADD COLUMN IF NOT EXISTS credit_max_financed_minor bigint CHECK(credit_max_financed_minor>=0),ADD COLUMN IF NOT EXISTS credit_payroll_installments integer CHECK(credit_payroll_installments>0);
+CREATE TABLE IF NOT EXISTS cag_deduction_enrollment(enrollment_id text PRIMARY KEY,membership_id text NOT NULL REFERENCES application_membership(membership_id),state text NOT NULL CHECK(state IN('PENDING','ACTIVE','SUSPENDED','CANCELLED','SEPARATED')),mandate_reference text NOT NULL UNIQUE,enrolled_at timestamptz NOT NULL DEFAULT now(),ended_at timestamptz,UNIQUE(membership_id));
+CREATE TABLE IF NOT EXISTS electronic_payment_evidence(evidence_id text PRIMARY KEY,membership_id text NOT NULL REFERENCES application_membership(membership_id),obligation_id text,rail text NOT NULL CHECK(rail IN('MOBILE_MONEY','BANK_TRANSFER','CAGD_PAYROLL')),state text NOT NULL CHECK(state IN('SUBMITTED','RECEIVED','RECONCILED','FAILED','REVERSED')),amount_minor bigint NOT NULL CHECK(amount_minor>0),currency text NOT NULL DEFAULT 'GHS' CHECK(currency='GHS'),provider_reference text,reconciled_at timestamptz,created_at timestamptz NOT NULL DEFAULT now(),CHECK(rail<>'CAGD_PAYROLL' OR provider_reference IS NOT NULL));
+CREATE TABLE IF NOT EXISTS item_credit_receivable(receivable_id text PRIMARY KEY,membership_id text NOT NULL REFERENCES application_membership(membership_id),offer_id text NOT NULL,principal_minor bigint NOT NULL CHECK(principal_minor>0),outstanding_minor bigint NOT NULL CHECK(outstanding_minor>=0 AND outstanding_minor<=principal_minor),deposit_minor bigint NOT NULL CHECK(deposit_minor>=0),interest_bps integer NOT NULL DEFAULT 0 CHECK(interest_bps=0),transferable boolean NOT NULL DEFAULT false CHECK(transferable=false),state text NOT NULL CHECK(state IN('ACTIVE','PAID','ACCELERATED','DELINQUENT','CLOSED')),enrollment_id text NOT NULL REFERENCES cag_deduction_enrollment(enrollment_id),created_at timestamptz NOT NULL DEFAULT now(),accelerated_at timestamptz);
+CREATE TABLE IF NOT EXISTS item_credit_repayment_allocation(allocation_id text PRIMARY KEY,receivable_id text NOT NULL REFERENCES item_credit_receivable(receivable_id),evidence_id text NOT NULL UNIQUE REFERENCES electronic_payment_evidence(evidence_id),amount_minor bigint NOT NULL CHECK(amount_minor>0),allocated_at timestamptz NOT NULL DEFAULT now());
+-- Membership inactivity blocks new credit but does not accelerate existing debt. Employment separation does.
+CREATE OR REPLACE FUNCTION accelerate_credit_on_cagd_separation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.state='SEPARATED' AND OLD.state IS DISTINCT FROM 'SEPARATED' THEN UPDATE item_credit_receivable SET state='ACCELERATED',accelerated_at=COALESCE(accelerated_at,now()) WHERE enrollment_id=NEW.enrollment_id AND state='ACTIVE' AND outstanding_minor>0; END IF; RETURN NEW; END $$;
+DROP TRIGGER IF EXISTS item_credit_cagd_separation_trg ON cag_deduction_enrollment;CREATE TRIGGER item_credit_cagd_separation_trg AFTER UPDATE OF state ON cag_deduction_enrollment FOR EACH ROW EXECUTE FUNCTION accelerate_credit_on_cagd_separation();
+CREATE TABLE IF NOT EXISTS promotion_campaign(promotion_id text PRIMARY KEY,name text NOT NULL,description text,state text NOT NULL DEFAULT 'DRAFT' CHECK(state IN('DRAFT','APPROVED','SCHEDULED','ACTIVE','PAUSED','CLOSED')),promotion_type text NOT NULL CHECK(promotion_type IN('REFERRAL','PURCHASE','MEMBERSHIP','RAFFLE','GENERAL')),geography text,starts_at timestamptz,ends_at timestamptz,indefinite boolean NOT NULL DEFAULT false,qualifying_event text NOT NULL,reward_type text NOT NULL CHECK(reward_type IN('NEXT_PAYMENT_PERCENT_DISCOUNT','FIXED_DISCOUNT','SHOPPING_CREDIT','PHYSICAL_ITEM','FREE_PRODUCT','SERVICE_BENEFIT','RAFFLE_ENTRY','RAFFLE_PRIZE')),reward_value_bps integer CHECK(reward_value_bps BETWEEN 0 AND 10000),reward_amount_minor bigint CHECK(reward_amount_minor>=0),reward_sku text,per_member_cap integer CHECK(per_member_cap>0),campaign_cap integer CHECK(campaign_cap>0),budget_minor bigint CHECK(budget_minor>=0),created_at timestamptz NOT NULL DEFAULT now(),activated_at timestamptz,CHECK(indefinite OR ends_at IS NOT NULL));
+CREATE TABLE IF NOT EXISTS promotion_qualification(qualification_id text PRIMARY KEY,promotion_id text NOT NULL REFERENCES promotion_campaign(promotion_id),member_id text NOT NULL,qualifying_event_id text NOT NULL,qualified_at timestamptz NOT NULL DEFAULT now(),revoked_at timestamptz,UNIQUE(promotion_id,qualifying_event_id));
+CREATE TABLE IF NOT EXISTS promotion_reward_entitlement(entitlement_id text PRIMARY KEY,promotion_id text NOT NULL REFERENCES promotion_campaign(promotion_id),qualification_id text NOT NULL UNIQUE REFERENCES promotion_qualification(qualification_id),member_id text NOT NULL,reward_type text NOT NULL,calculated_minor bigint,reward_sku text,state text NOT NULL DEFAULT 'ISSUED' CHECK(state IN('ISSUED','RESERVED','REDEEMED','EXPIRED','REVERSED')),issued_at timestamptz NOT NULL DEFAULT now(),redeemed_at timestamptz);
+CREATE TABLE IF NOT EXISTS promotion_raffle_entry(entry_id text PRIMARY KEY,promotion_id text NOT NULL REFERENCES promotion_campaign(promotion_id),qualification_id text NOT NULL REFERENCES promotion_qualification(qualification_id),member_id text NOT NULL,entry_number bigint NOT NULL,issued_at timestamptz NOT NULL DEFAULT now(),UNIQUE(promotion_id,qualification_id),UNIQUE(promotion_id,entry_number));
+CREATE TABLE IF NOT EXISTS promotion_raffle_draw(draw_id text PRIMARY KEY,promotion_id text NOT NULL REFERENCES promotion_campaign(promotion_id),state text NOT NULL CHECK(state IN('LOCKED','EXECUTED','VOID')),eligibility_snapshot_hash text NOT NULL,selection_method text NOT NULL,executed_at timestamptz,evidence_json jsonb NOT NULL DEFAULT '{}'::jsonb);
