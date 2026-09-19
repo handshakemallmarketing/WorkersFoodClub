@@ -17,7 +17,7 @@ test('J1 locally suppresses protected guest reads and mutations', () => {
     assert.match(guard, new RegExp(path.replaceAll('/', '\\/')));
   }
   assert.match(guard, /X-WFC-Local-Guard/);
-  assert.match(guard, /status: identityVerified \? 403 : 401/);
+  assert.match(guard, /status\s*:\s*identityVerified\s*\?\s*403\s*:\s*401/);
 });
 
 test('J1 public offer mutation is converted to a conversion CTA', () => {
@@ -27,7 +27,7 @@ test('J1 public offer mutation is converted to a conversion CTA', () => {
 });
 
 test('J2 authenticated unbound identity is isolated from normal shell', () => {
-  assert.match(guard, /identityVerified && !memberAccess/);
+  assert.match(guard, /identityVerified\s*&&\s*!memberAccess/);
   assert.match(guard, /We couldn't find an active WorkersFoodClub membership/);
   assert.match(guard, /Signing in verifies your identity, but it does not create membership/);
   assert.match(guard, /MEMBERSHIP_REQUIRED/);
