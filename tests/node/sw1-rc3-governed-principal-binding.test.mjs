@@ -11,7 +11,7 @@ function fakeSql({binding,participant,memberships=[],grants=[],employeeSessions=
     const text=strings.join('?');
     if(text.includes('FROM application_identity_binding')) return binding?[binding]:[];
     if(text.includes('FROM application_participant')) return participant?[participant]:[];
-    if(text.includes('FROM application_membership')) return memberships;
+    if(text.includes('FROM application_membership')) return text.includes("standing='CURRENT'") ? memberships.filter(m=>String(m.state||'ACTIVE')==='ACTIVE'&&String(m.standing||'CURRENT')==='CURRENT') : memberships;
     if(text.includes('FROM employee_session')){
       const [sessionId,participantId]=values;
       return employeeSessions.filter((s)=>s.session_id===sessionId&&s.participant_id===participantId&&!s.expired&&!s.revoked).slice(0,1);
@@ -55,7 +55,7 @@ test('RC3 governed member principal requires ACTIVE CURRENT membership',async()=
 });
 
 test('AUTH-MEMBERSHIP-001 member APIs reject non-CURRENT standing even when binding retains member scope',async()=>{
-  const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[]})});
+  const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'PAST_DUE'}]})});
   assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_CURRENT_MEMBERSHIP_REQUIRED'});
 });
 
