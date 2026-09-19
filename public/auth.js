@@ -41,7 +41,12 @@
   let verifiedIdentity = null;
   let memberAccessConfirmed = false;
   let membershipRestricted = false;
+  let membershipAccessState = null;
+  let membershipRoute = null;
+  let membershipInvoice = null;
+  let applicationSubmittedAt = null;
   let denialInfo = null;
+  let employeeSessionToken = null;
   let operatorAccess = false;
   let superUserAccess = false;
   let previewMemberToken = null;
@@ -90,7 +95,11 @@
     const path = requestPath(input);
     const bearer = bearerFor(path);
     if (bearer) {
-      return originalFetch(input, withBearer(init, bearer));
+      const authorized = withBearer(init, bearer);
+      if (config?.environment === 'production' && employeeSessionToken && previewOperatorPaths.has(path)) {
+        authorized.headers.set('x-employee-session', employeeSessionToken);
+      }
+      return originalFetch(input, authorized);
     }
     return originalFetch(input, init);
   };
@@ -167,7 +176,7 @@
       // Operator access already proves a real governed binding; a plain verified
       // Google identity additionally needs its own membership probe confirmed --
       // being signed in is not the same as being an approved, active member.
-      && (memberAccessConfirmed || operatorAccess);
+      && memberAccessConfirmed;
   }
 
   /**
@@ -307,6 +316,11 @@
         memberAccessAvailable: memberAccess,
         operatorAccessAvailable: operatorLevelAccess,
         superUserAccessAvailable: superUserLevelAccess,
+        membershipRestricted,
+        accessState: membershipAccessState,
+        route: membershipRoute,
+        invoice: membershipInvoice,
+        applicationSubmittedAt,
       },
     }));
   }
@@ -552,19 +566,48 @@
 
   async function discoverMembershipStatus(credential) {
     const response = await probeBearerAccess('/api/membership-status', credential);
-    if (!response?.ok) return { membershipState: null, hasPendingApplication: false };
+    if (!response?.ok) return { accessState: null, route: null, memberAccessAvailable: false, membershipState: null, hasPendingApplication: false, invoice: null, applicationSubmittedAt: null };
     const body = await response.json().catch(() => null);
     return {
+      accessState: body?.accessState ?? null,
+      route: body?.route ?? null,
+      memberAccessAvailable: body?.memberAccessAvailable === true,
       membershipState: body?.membershipState ?? null,
       hasPendingApplication: body?.hasPendingApplication === true,
+      invoice: body?.invoice ?? null,
+      applicationSubmittedAt: body?.applicationSubmittedAt ?? null,
     };
   }
 
-  async function discoverOperatorAccess(credential) {
-    const response = await probeBearerAccess('/api/operator-orders', credential);
-    if (!response?.ok) return { operator: false, superUser: false };
-    const body = await response.json().catch(() => null);
-    return { operator: true, superUser: body?.isSuperUser === true };
+  async function elevateEmployeeSession(credential) {
+    try {
+      const response = await originalFetch('/api/employee-session', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${credential}` },
+        cache: 'no-store',
+      });
+      const body = await response.json().catch(() => null);
+      return response.ok && body?.ok === true && typeof body.employeeSessionToken === 'string'
+        ? body.employeeSessionToken : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function discoverOperatorAccess(credential, sessionToken) {
+    if (!sessionToken) return { operator: false, superUser: false };
+    try {
+      const response = await originalFetch('/api/operator-orders', {
+        method: 'GET',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${credential}`, 'x-employee-session': sessionToken },
+        cache: 'no-store',
+      });
+      if (!response.ok) return { operator: false, superUser: false };
+      const body = await response.json().catch(() => null);
+      return { operator: true, superUser: body?.isSuperUser === true };
+    } catch {
+      return { operator: false, superUser: false };
+    }
   }
 
   function clearExpiryTimer() {
@@ -595,6 +638,11 @@
     verifiedIdentity = null;
     memberAccessConfirmed = false;
     membershipRestricted = false;
+    membershipAccessState = null;
+    membershipRoute = null;
+    membershipInvoice = null;
+    applicationSubmittedAt = null;
+    employeeSessionToken = null;
     operatorAccess = false;
     superUserAccess = false;
     clearExpiryTimer();
@@ -636,33 +684,28 @@
       const identity = await discoverIdentity(credential);
 
       if (config?.productionApplicationAccessEnabled === true) {
-        // Membership is checked BEFORE this identity is treated as signed in at
-        // all -- an authenticated Google identity with no qualifying
-        // WorkersFoodClub membership must never be admitted into the app
-        // shell, even in a "pending" limbo state.
-        const [membershipResult, operatorResult] = await Promise.all([
-          discoverMembershipStatus(credential),
-          discoverOperatorAccess(credential),
-        ]);
-        const admitted = membershipResult.membershipState === 'ACTIVE' || membershipResult.membershipState === 'SUSPENDED';
-        if (!admitted) {
-          token = null;
-          verifiedIdentity = null;
-          memberAccessConfirmed = false;
-          membershipRestricted = false;
-          operatorAccess = false;
-          superUserAccess = false;
-          clearExpiryTimer();
-          denialInfo = membershipResult.hasPendingApplication ? { reason: 'pending' } : { reason: 'no-membership' };
-          emitAuthState();
-          renderModalContent();
-          return;
-        }
+        const membershipResult = await discoverMembershipStatus(credential);
         token = credential;
         verifiedIdentity = identity;
         scheduleExpiry(identity.expiresAt);
-        memberAccessConfirmed = true;
-        membershipRestricted = membershipResult.membershipState === 'SUSPENDED';
+        membershipAccessState = membershipResult.accessState;
+        membershipRoute = membershipResult.route;
+        membershipInvoice = membershipResult.invoice;
+        applicationSubmittedAt = membershipResult.applicationSubmittedAt;
+        memberAccessConfirmed = membershipResult.memberAccessAvailable === true
+          && membershipResult.accessState === 'ACTIVE_CURRENT'
+          && membershipResult.route === 'MEMBER';
+        membershipRestricted = membershipResult.route === 'SUBSCRIPTION_DUE'
+          || membershipResult.accessState === 'SUSPENDED_PAST_DUE'
+          || membershipResult.accessState === 'INACTIVE_INITIAL_FEE_DUE';
+        denialInfo = membershipResult.route === 'APPLICATION_STATUS'
+          ? { reason: 'pending' }
+          : membershipResult.route === 'NON_MEMBER' ? { reason: 'no-membership' } : null;
+
+        // Employee/operator authority is a separate, independently revocable
+        // step-up session. A member credential alone never grants operator access.
+        employeeSessionToken = await elevateEmployeeSession(credential);
+        const operatorResult = await discoverOperatorAccess(credential, employeeSessionToken);
         operatorAccess = operatorResult.operator;
         superUserAccess = operatorResult.superUser;
       } else {
@@ -671,6 +714,11 @@
         scheduleExpiry(identity.expiresAt);
         memberAccessConfirmed = false;
         membershipRestricted = false;
+        membershipAccessState = null;
+        membershipRoute = null;
+        membershipInvoice = null;
+        applicationSubmittedAt = null;
+        employeeSessionToken = null;
         operatorAccess = false;
         superUserAccess = false;
       }
@@ -682,6 +730,11 @@
       verifiedIdentity = null;
       memberAccessConfirmed = false;
       membershipRestricted = false;
+      membershipAccessState = null;
+      membershipRoute = null;
+      membershipInvoice = null;
+      applicationSubmittedAt = null;
+      employeeSessionToken = null;
       operatorAccess = false;
       superUserAccess = false;
       clearExpiryTimer();
