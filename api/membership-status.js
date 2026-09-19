@@ -29,9 +29,15 @@ export default async function handler(req, res, options = {}) {
         membershipState = String(memberships[0].state);
       }
     }
-    const applications = await sql`SELECT application_id, state, activation_state, submitted_at, decided_at FROM membership_application WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject} ORDER BY created_at DESC LIMIT 1`;
+    const applications = await sql`SELECT application_id, state, activation_state, submitted_at, decided_at FROM membership_application WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject} ORDER BY submitted_at DESC LIMIT 1`;
     const application = applications[0] || null;
-    const journeyState = membershipState === 'ACTIVE' ? 'ACTIVE' : membershipState === 'PENDING_ACTIVATION' ? 'APPROVED_PENDING_ACTIVATION' : application && ['SUBMITTED','UNDER_REVIEW'].includes(String(application.state)) ? 'APPLICANT' : 'AUTHENTICATED_UNBOUND';
+    const journeyState = membershipState === 'ACTIVE'
+      ? 'ACTIVE'
+      : membershipState === 'PENDING_ACTIVATION'
+        ? 'APPROVED_PENDING_ACTIVATION'
+        : application && String(application.state) === 'SUBMITTED'
+          ? 'APPLICANT'
+          : 'AUTHENTICATED_UNBOUND';
 
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
