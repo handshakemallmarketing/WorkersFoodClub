@@ -1,4 +1,78 @@
 import crypto from 'node:crypto';
-import {requireApplicationAuth} from '../lib/application-auth.js';import {PROMOTIONS_CAPABLE_OPERATORS} from '../lib/operator-tiers.js';
-const TYPES=['REFERRAL','PURCHASE','MEMBERSHIP','RAFFLE','GENERAL'];const REWARDS=['NEXT_PAYMENT_PERCENT_DISCOUNT','FIXED_DISCOUNT','SHOPPING_CREDIT','PHYSICAL_ITEM','FREE_PRODUCT','SERVICE_BENEFIT','RAFFLE_ENTRY','RAFFLE_PRIZE'];
-export default async function handler(req,res){if(!['GET','POST','PATCH'].includes(req.method)){res.setHeader('Allow','GET, POST, PATCH');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}const p=await requireApplicationAuth(req,res,'operator:promotions.manage',PROMOTIONS_CAPABLE_OPERATORS);if(!p)return;const cs=process.env.DATABASE_URL;if(!cs)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});try{const {neon}=await import('@neondatabase/serverless');const sql=neon(cs,{fetchOptions:{signal:AbortSignal.timeout(5000)}});if(req.method==='GET'){const rows=await sql`SELECT * FROM promotion_campaign ORDER BY created_at DESC`;return res.status(200).json({ok:true,promotions:rows});}const b=req.body||{},id=String(b.promotionId||`promo:${crypto.randomUUID()}`),type=String(b.promotionType||''),reward=String(b.rewardType||''),name=String(b.name||'').trim(),qual=String(b.qualifyingEvent||'').trim();if(!name||!qual||!TYPES.includes(type)||!REWARDS.includes(reward))return res.status(400).json({ok:false,error:'PROMOTION_FIELDS_INVALID'});const indefinite=b.indefinite===true,ends=b.endsAt?new Date(b.endsAt).toISOString():null;if(!indefinite&&!ends)return res.status(400).json({ok:false,error:'PROMOTION_END_REQUIRED'});if(req.method==='POST'){const rows=await sql`INSERT INTO promotion_campaign(promotion_id,name,description,state,promotion_type,geography,starts_at,ends_at,indefinite,qualifying_event,reward_type,reward_value_bps,reward_amount_minor,reward_sku,per_member_cap,campaign_cap,budget_minor) VALUES(${id},${name},${b.description||null},'DRAFT',${type},${b.geography||null},${b.startsAt||null},${ends},${indefinite},${qual},${reward},${b.rewardValueBps??null},${b.rewardAmountMinor??null},${b.rewardSku??null},${b.perMemberCap??null},${b.campaignCap??null},${b.budgetMinor??null}) RETURNING promotion_id,state`;return res.status(201).json({ok:true,promotion:rows[0]});}const state=String(b.state||'');if(!['DRAFT','APPROVED','SCHEDULED','ACTIVE','PAUSED','CLOSED'].includes(state))return res.status(400).json({ok:false,error:'PROMOTION_STATE_INVALID'});const rows=await sql`UPDATE promotion_campaign SET state=${state},activated_at=CASE WHEN ${state}='ACTIVE' AND activated_at IS NULL THEN now() ELSE activated_at END WHERE promotion_id=${id} RETURNING promotion_id,state`;if(!rows[0])return res.status(404).json({ok:false,error:'PROMOTION_NOT_FOUND'});return res.status(200).json({ok:true,promotion:rows[0]});}catch(e){console.error('Promotions failed',{message:e?.message});return res.status(503).json({ok:false,error:'PROMOTIONS_FAILED'});}}
+import { requireApplicationAuth } from '../lib/application-auth.js';
+import { PROMOTIONS_CAPABLE_OPERATORS } from '../lib/operator-tiers.js';
+
+const TYPES = ['REFERRAL','PURCHASE','MEMBERSHIP','RAFFLE','GENERAL'];
+const REWARDS = ['NEXT_PAYMENT_PERCENT_DISCOUNT','FIXED_DISCOUNT','SHOPPING_CREDIT','PHYSICAL_ITEM','FREE_PRODUCT','SERVICE_BENEFIT','RAFFLE_ENTRY','RAFFLE_PRIZE'];
+const STATES = ['DRAFT','APPROVED','SCHEDULED','ACTIVE','PAUSED','CLOSED'];
+const TRANSITIONS = {
+  DRAFT: new Set(['APPROVED','CLOSED']),
+  APPROVED: new Set(['DRAFT','SCHEDULED','ACTIVE','CLOSED']),
+  SCHEDULED: new Set(['ACTIVE','PAUSED','CLOSED']),
+  ACTIVE: new Set(['PAUSED','CLOSED']),
+  PAUSED: new Set(['ACTIVE','CLOSED']),
+  CLOSED: new Set(),
+};
+
+function parseOptionalIso(value) {
+  if (value == null || value === '') return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+}
+
+export default async function handler(req,res) {
+  if (!['GET','POST','PATCH'].includes(req.method)) {
+    res.setHeader('Allow','GET, POST, PATCH');
+    return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});
+  }
+  const principal = await requireApplicationAuth(req,res,'operator:promotions.manage',PROMOTIONS_CAPABLE_OPERATORS);
+  if (!principal) return;
+  const cs = process.env.DATABASE_URL;
+  if (!cs) return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
+
+  try {
+    const {neon} = await import('@neondatabase/serverless');
+    const sql = neon(cs,{fetchOptions:{signal:AbortSignal.timeout(5000)}});
+    if (req.method === 'GET') {
+      const rows = await sql`SELECT * FROM promotion_campaign ORDER BY created_at DESC`;
+      return res.status(200).json({ok:true,promotions:rows});
+    }
+
+    const b = req.body || {};
+    if (req.method === 'POST') {
+      const id = String(b.promotionId || `promo:${crypto.randomUUID()}`);
+      const type = String(b.promotionType || '');
+      const reward = String(b.rewardType || '');
+      const name = String(b.name || '').trim();
+      const qual = String(b.qualifyingEvent || '').trim();
+      const indefinite = b.indefinite === true;
+      const starts = parseOptionalIso(b.startsAt);
+      const ends = parseOptionalIso(b.endsAt);
+      if (!name || !qual || !TYPES.includes(type) || !REWARDS.includes(reward) || starts === undefined || ends === undefined) {
+        return res.status(400).json({ok:false,error:'PROMOTION_FIELDS_INVALID'});
+      }
+      if (!indefinite && !ends) return res.status(400).json({ok:false,error:'PROMOTION_END_REQUIRED'});
+      const rows = await sql`INSERT INTO promotion_campaign(promotion_id,name,description,state,promotion_type,geography,starts_at,ends_at,indefinite,qualifying_event,reward_type,reward_value_bps,reward_amount_minor,reward_sku,per_member_cap,campaign_cap,budget_minor) VALUES(${id},${name},${b.description||null},'DRAFT',${type},${b.geography||null},${starts},${ends},${indefinite},${qual},${reward},${b.rewardValueBps??null},${b.rewardAmountMinor??null},${b.rewardSku??null},${b.perMemberCap??null},${b.campaignCap??null},${b.budgetMinor??null}) RETURNING promotion_id,state`;
+      return res.status(201).json({ok:true,promotion:rows[0]});
+    }
+
+    const id = String(b.promotionId || '').trim();
+    const state = String(b.state || '');
+    if (!id) return res.status(400).json({ok:false,error:'PROMOTION_ID_REQUIRED'});
+    if (!STATES.includes(state)) return res.status(400).json({ok:false,error:'PROMOTION_STATE_INVALID'});
+    const existing = await sql`SELECT promotion_id,state,promotion_type FROM promotion_campaign WHERE promotion_id=${id} LIMIT 1`;
+    if (!existing[0]) return res.status(404).json({ok:false,error:'PROMOTION_NOT_FOUND'});
+    const current = String(existing[0].state);
+    if (current === state) return res.status(200).json({ok:true,promotion:{promotion_id:id,state},replayed:true});
+    if (!TRANSITIONS[current]?.has(state)) return res.status(409).json({ok:false,error:'PROMOTION_STATE_TRANSITION_INVALID',from:current,to:state});
+    if (String(existing[0].promotion_type) === 'RAFFLE' && ['APPROVED','SCHEDULED','ACTIVE'].includes(state)) {
+      return res.status(409).json({ok:false,error:'RAFFLE_COMPLIANCE_EVIDENCE_REQUIRED'});
+    }
+    const rows = await sql`UPDATE promotion_campaign SET state=${state},activated_at=CASE WHEN ${state}='ACTIVE' AND activated_at IS NULL THEN now() ELSE activated_at END WHERE promotion_id=${id} AND state=${current} RETURNING promotion_id,state`;
+    if (!rows[0]) return res.status(409).json({ok:false,error:'PROMOTION_STATE_CHANGED_RETRY'});
+    return res.status(200).json({ok:true,promotion:rows[0]});
+  } catch(e) {
+    console.error('Promotions failed',{message:e?.message});
+    return res.status(503).json({ok:false,error:'PROMOTIONS_FAILED'});
+  }
+}
