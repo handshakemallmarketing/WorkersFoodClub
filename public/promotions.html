@@ -17,9 +17,11 @@
       <label>Qualifying event <input name="qualifyingEvent" required placeholder="REFERRED_MEMBER_ACTIVE_CURRENT"></label>
       <label>Benefit <select name="rewardType"><option>NEXT_PAYMENT_PERCENT_DISCOUNT</option><option>FIXED_DISCOUNT</option><option>SHOPPING_CREDIT</option><option>PHYSICAL_ITEM</option><option>FREE_PRODUCT</option><option>SERVICE_BENEFIT</option><option>RAFFLE_ENTRY</option><option>RAFFLE_PRIZE</option></select></label>
       <label>Reward percent <input name="rewardPercent" type="number" min="0" max="100" step="0.01"></label>
+      <label>Fixed reward amount (GHS) <input name="rewardAmount" type="number" min="0" step="0.01"></label>
       <label>Physical SKU / prize <input name="rewardSku"></label>
       <label>Geography <input name="geography" placeholder="Ghana nationwide"></label>
       <label><input name="indefinite" type="checkbox"> Run indefinitely</label>
+      <label>Start date <input name="startsAt" type="datetime-local"></label>
       <label>End date <input name="endsAt" type="datetime-local"></label>
       <label>Per-member cap <input name="perMemberCap" type="number" min="1"></label>
       <label>Campaign cap <input name="campaignCap" type="number" min="1"></label>
@@ -39,7 +41,7 @@
       form.hidden = !allowed;
       access.textContent = allowed
         ? 'Governed promotions authority confirmed.'
-        : 'SuperUser operator authority is required to manage promotions.';
+        : 'Governed promotions authority is required to manage promotions.';
     }
 
     window.addEventListener('foodclub:auth-state', (event) => applyAuthority(event.detail || {}));
@@ -55,15 +57,18 @@
       }
       const f = new FormData(event.target);
       const pct = Number(f.get('rewardPercent') || 0);
+      const amount = Number(f.get('rewardAmount') || 0);
       const body = {
         name: f.get('name'),
         promotionType: f.get('promotionType'),
         qualifyingEvent: f.get('qualifyingEvent'),
         rewardType: f.get('rewardType'),
         rewardValueBps: Math.round(pct * 100),
+        rewardAmountMinor: Math.round(amount * 100),
         rewardSku: f.get('rewardSku') || null,
         geography: f.get('geography') || null,
         indefinite: f.get('indefinite') === 'on',
+        startsAt: f.get('startsAt') || null,
         endsAt: f.get('endsAt') || null,
         perMemberCap: f.get('perMemberCap') ? Number(f.get('perMemberCap')) : null,
         campaignCap: f.get('campaignCap') ? Number(f.get('campaignCap')) : null,
