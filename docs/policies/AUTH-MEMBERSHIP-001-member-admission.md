@@ -35,7 +35,7 @@ These states MUST NOT mount the ordinary active-member shell or grant member eco
 
 ## Workforce separation
 
-Employee/operator/admin/system-owner authority is independently governed. No workforce authority is inferred from Google authentication or membership, and member admission is not a substitute for employee step-up.
+Employee/operator/admin/system-owner authority is independently governed. No workforce authority is inferred from Google authentication or membership, and member admission is not a substitute for employee step-up. Workforce step-up is downstream of member admission: an employee/operator must have an ACTIVE/CURRENT membership before an employee session can be minted. A pre-provisioned authority invitation or grant does not bypass this member-first requirement.
 
 ## Required regression evidence
 
