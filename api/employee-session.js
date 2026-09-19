@@ -54,6 +54,15 @@ export default async function handler(req, res, options = {}) {
     if (String(bindings[0].state) !== 'ACTIVE') return res.status(403).json({ ok: false, error: 'APPLICATION_PRINCIPAL_DISABLED' });
     const participantId = String(bindings[0].participant_id);
 
+    // Workforce step-up is downstream of member admission: an employee/operator
+    // must first be an ACTIVE/CURRENT WorkersFoodClub member.
+    const memberships = await sql`
+      SELECT membership_id
+        FROM application_membership
+       WHERE participant_id=${participantId} AND state='ACTIVE' AND standing='CURRENT'
+       LIMIT 2`;
+    if (memberships.length !== 1) return res.status(403).json({ ok: false, error: 'ACTIVE_CURRENT_MEMBERSHIP_REQUIRED' });
+
     const grants = await sql`
       SELECT grant_id
         FROM application_authority_grant
