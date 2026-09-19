@@ -74,7 +74,7 @@
       eyebrow: 'Membership required',
       title: "We couldn't find an active WorkersFoodClub membership for this account.",
       copy: 'Signing in verifies your identity, but it does not create membership or application access.',
-      action: '<a class="primary" href="/join.html">Apply for membership</a> <a class="secondary" href="mailto:support@workersfoodclub.com">Contact support</a>',
+      action: '<a class="primary" href="/apply">Apply for membership</a> <a class="secondary" href="mailto:support@workersfoodclub.com">Contact support</a>',
     };
   }
 
