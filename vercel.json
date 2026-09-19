@@ -2,29 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm add -w --lockfile=false @neondatabase/serverless@1.1.0 && pnpm run build",
   "rewrites": [
-    {
-      "source": "/employee",
-      "destination": "/employee.html"
-    },
-    {
-      "source": "/apply",
-      "destination": "/join.html"
-    },
-    {
-      "source": "/api/build-info",
-      "destination": "/api/db-health?probe=build-info"
-    },
-    {
-      "source": "/api/auth-readiness",
-      "destination": "/api/db-health?probe=identity-readiness"
-    },
-    {
-      "source": "/api/auth-client-config",
-      "destination": "/api/db-health?probe=auth-client-config"
-    },
-    {
-      "source": "/api/identity-subject",
-      "destination": "/api/db-health?probe=identity-subject"
-    }
+    { "source": "/employee", "destination": "/employee.html" },
+    { "source": "/apply", "destination": "/join.html" },
+    { "source": "/activate", "destination": "/activate.html" },
+    { "source": "/household", "destination": "/household.html" },
+    { "source": "/api/build-info", "destination": "/api/db-health?probe=build-info" },
+    { "source": "/api/auth-readiness", "destination": "/api/db-health?probe=identity-readiness" },
+    { "source": "/api/auth-client-config", "destination": "/api/db-health?probe=auth-client-config" },
+    { "source": "/api/identity-subject", "destination": "/api/db-health?probe=identity-subject" }
   ]
 }
