@@ -350,7 +350,27 @@ prose, so it stays legible as a record of what's actually left.
 
 ---
 
-## 9. Open P1: member sign-in admits an authenticated non-member
+## 9. P1: member sign-in admitted an authenticated non-member — RESOLVED 2026-09-19
+
+**Built 2026-09-19.** `BLV2-DEC-023`. `public/auth.js`'s `authenticated()` now checks
+`/api/membership-status` before ever treating an identity as signed in: no qualifying membership
+→ `token`/`verifiedIdentity` are cleared and a dedicated denial screen is shown (routing to the
+new `public/join.html` self-service application page, or "application already pending review" if
+one exists) — never the old ambiguous "Signed in · access pending" state. Per Willie's refinement,
+`SUSPENDED` (past-due) membership is still **admitted** (flagged `· restricted` in the UI), so a
+delinquent member is never locked out of the remediation path back to good standing — only "no
+membership row at all" or `ENDED` is denied. New: `packages/durability/sql/017_membership_application.sql`
+(a `membership_application` table plus relaxing `application_identity_binding.authority_grant_id`
+to nullable — a plain member binding has no authority grant to reference), `api/membership-status.js`,
+`api/membership-apply.js`, `api/membership-application-decide.js` (Owner/Admin approve/reject,
+added as a review section on `public/employee.html`). Covered by 25 new unit tests, full
+`npm run conformance` green, migration dry-run proven end-to-end against the isolated preview Neon
+branch, and headless smoke tests of all four gate scenarios (no membership / pending application /
+SUSPENDED / ACTIVE) plus the approval and application flows. **Explicitly not built**: locking down
+specific economic actions (purchase/payment) for `SUSPENDED` members app-wide — tracked as a
+follow-on, not silently skipped. **Not yet exercised against real production.**
+
+The original report, kept for the record:
 
 **Flagged 2026-09-18 by Willie**, from real production testing of the (now separated, see below)
 Employees screen. Signing in with Google currently leaves an authenticated identity with no

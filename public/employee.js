@@ -50,6 +50,13 @@
     LAST_OWNER_PROTECTED: 'This is the last active Owner grant in the system and cannot be revoked.',
     ONLY_INVITER_OR_OWNER_MAY_CANCEL: 'Only the person who sent this invitation, or an Owner, can cancel it.',
     INVITATION_NOT_CANCELLABLE: 'This invitation has already been accepted, expired, or cancelled.',
+    MEMBERSHIP_DECIDE_STEP_UP_NOT_FRESH: 'Your Google sign-in was a few seconds too old by the time the request reached the server. Click "Sign in with Google" again immediately.',
+    MEMBERSHIP_DECISION_REQUIRES_OWNER_OR_ADMIN: "You're signed in, but this Google account doesn't hold Owner or Admin authority.",
+    APPLICATION_NOT_FOUND: 'This application no longer exists.',
+    APPLICATION_NOT_DECIDABLE: 'This application has already been approved or rejected.',
+    APPLICATION_ALREADY_DECIDED: 'Someone else just decided this application at nearly the same moment.',
+    APPLICANT_PRINCIPAL_DISABLED: "The applicant's identity has been disabled.",
+    APPLICANT_IDENTITY_BINDING_AMBIGUOUS: 'The applicant is bound to more than one participant record already, which should never happen. Stop and investigate before retrying.',
   };
 
   function el(id) { return document.getElementById(id); }
@@ -182,6 +189,32 @@
       : '<p class="employees-empty">No invitations yet.</p>';
   }
 
+  function applicationRow(application) {
+    const canDecide = application.state === 'SUBMITTED';
+    const noteLine = application.contactNote ? `<p>${escapeHtml(application.contactNote)}</p>` : '';
+    return `<div class="timeline-row">
+      <span class="timeline-dot${application.state === 'SUBMITTED' ? '' : ' done'}"></span>
+      <div>
+        <strong>${escapeHtml(shortId(application.subject))} · ${escapeHtml(application.state)}</strong>
+        ${noteLine}
+        <p class="order-evidence">Submitted ${new Date(application.submittedAt).toLocaleString()}</p>
+        ${canDecide ? `<div class="roster-actions">
+          <button type="button" class="primary small" data-approve-application="${escapeHtml(application.applicationId)}">Approve</button>
+          <button type="button" class="secondary small danger-btn" data-reject-application="${escapeHtml(application.applicationId)}">Reject</button>
+        </div>` : ''}
+      </div>
+      <time>${new Date(application.submittedAt).toLocaleDateString()}</time>
+    </div>`;
+  }
+
+  function renderApplications(applications) {
+    const node = el('employees-applications');
+    if (!node) return;
+    node.innerHTML = applications.length
+      ? applications.map((a) => applicationRow(a)).join('')
+      : '<p class="employees-empty">No membership applications yet.</p>';
+  }
+
   async function parseJsonResponse(response) {
     const body = await response.json().catch(() => null);
     if (!response.ok || !body || body.ok !== true) {
@@ -210,6 +243,7 @@
     renderRoleGrid(body.self.tier);
     renderGrants(body.grants, body.self);
     renderInvitations(body.invitations, body.self);
+    renderApplications(body.membershipApplications || []);
     el('employees-panel').hidden = false;
     el('employees-source').textContent = `Verified · ${body.self.tier}`;
     el('employees-source').className = 'badge neutral';
@@ -250,6 +284,17 @@
     await loadDirectory(credential, sessionToken);
   }
 
+  async function submitDecideApplication(credential, sessionToken, applicationId, decision) {
+    const response = await fetch('/api/membership-application-decide', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${credential}`, 'x-employee-session': sessionToken, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ applicationId, decision }),
+    });
+    await parseJsonResponse(response);
+    setGateStatus(decision === 'APPROVE' ? 'Application approved — membership created.' : 'Application rejected.', 'ok');
+    await loadDirectory(credential, sessionToken);
+  }
+
   async function onCredential(response) {
     const credential = response && response.credential;
     if (typeof credential !== 'string' || credential.split('.').length !== 3) {
@@ -264,6 +309,7 @@
       if (action.type === 'invite') await submitInvite(credential, sessionToken, action.actions);
       else if (action.type === 'revoke') await submitRevoke(credential, sessionToken, action.grantId);
       else if (action.type === 'cancel') await submitCancel(credential, sessionToken, action.invitationId);
+      else if (action.type === 'decide-application') await submitDecideApplication(credential, sessionToken, action.applicationId, action.decision);
       else await loadDirectory(credential, sessionToken);
     } catch (error) {
       setGateStatus(friendlyError(error), 'err');
@@ -346,6 +392,18 @@
     if (!button) return;
     pendingAction = { type: 'cancel', invitationId: button.dataset.cancelInvitation };
     setGateStatus('Click "Sign in with Google" above to confirm cancelling this invitation.');
+  });
+
+  document.getElementById('employees-applications')?.addEventListener('click', (event) => {
+    const approveButton = event.target.closest('[data-approve-application]');
+    const rejectButton = event.target.closest('[data-reject-application]');
+    if (approveButton) {
+      pendingAction = { type: 'decide-application', applicationId: approveButton.dataset.approveApplication, decision: 'APPROVE' };
+      setGateStatus('Click "Sign in with Google" above to confirm approving this application.');
+    } else if (rejectButton) {
+      pendingAction = { type: 'decide-application', applicationId: rejectButton.dataset.rejectApplication, decision: 'REJECT' };
+      setGateStatus('Click "Sign in with Google" above to confirm rejecting this application.');
+    }
   });
 
   init();

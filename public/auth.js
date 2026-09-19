@@ -40,6 +40,8 @@
   let config = null;
   let verifiedIdentity = null;
   let memberAccessConfirmed = false;
+  let membershipRestricted = false;
+  let denialInfo = null;
   let operatorAccess = false;
   let superUserAccess = false;
   let previewMemberToken = null;
@@ -277,18 +279,17 @@
       button.className = 'auth-chip needs-attention';
       return;
     }
+    if (denialInfo) {
+      label.textContent = denialInfo.reason === 'pending' ? 'Application pending review' : 'No membership found';
+      button.className = 'auth-chip needs-attention';
+      return;
+    }
     if (!verifiedIdentity || !token) {
       label.textContent = 'Sign in';
       button.className = 'auth-chip';
       return;
     }
-    const { memberAccess } = computeAccessLevels();
-    if (!memberAccess) {
-      label.textContent = 'Signed in · access pending';
-      button.className = 'auth-chip needs-attention';
-      return;
-    }
-    label.textContent = currentRoleLabel();
+    label.textContent = membershipRestricted ? `${currentRoleLabel()} · restricted` : currentRoleLabel();
     button.className = 'auth-chip signed-in';
   }
 
@@ -460,6 +461,32 @@
       return;
     }
 
+    if (denialInfo) {
+      if (denialInfo.reason === 'pending') {
+        title.textContent = 'Application pending review';
+        subtitle.textContent = "You already have a WorkersFoodClub membership application awaiting review. There's nothing more to do right now — check back once it's been decided.";
+      } else {
+        title.textContent = 'No membership found';
+        subtitle.textContent = "We couldn't find an active WorkersFoodClub membership for this account.";
+        const applyLink = document.createElement('a');
+        applyLink.href = '/join.html';
+        applyLink.className = 'primary';
+        applyLink.style.display = 'inline-block';
+        applyLink.style.textDecoration = 'none';
+        applyLink.style.marginTop = '4px';
+        applyLink.textContent = 'Apply to join';
+        body.appendChild(applyLink);
+      }
+      const tryAgainButton = document.createElement('button');
+      tryAgainButton.type = 'button';
+      tryAgainButton.className = 'secondary';
+      tryAgainButton.style.marginTop = '10px';
+      tryAgainButton.textContent = 'Try a different account';
+      tryAgainButton.addEventListener('click', () => { denialInfo = null; renderModalContent(); });
+      body.appendChild(tryAgainButton);
+      return;
+    }
+
     if (verifiedIdentity && token) {
       title.textContent = 'Signed in';
       subtitle.textContent = config.productionApplicationAccessEnabled === true
@@ -523,9 +550,14 @@
     }
   }
 
-  async function discoverMemberAccess(credential) {
-    const response = await probeBearerAccess('/api/member-orders', credential);
-    return Boolean(response?.ok);
+  async function discoverMembershipStatus(credential) {
+    const response = await probeBearerAccess('/api/membership-status', credential);
+    if (!response?.ok) return { membershipState: null, hasPendingApplication: false };
+    const body = await response.json().catch(() => null);
+    return {
+      membershipState: body?.membershipState ?? null,
+      hasPendingApplication: body?.hasPendingApplication === true,
+    };
   }
 
   async function discoverOperatorAccess(credential) {
@@ -562,6 +594,7 @@
     token = null;
     verifiedIdentity = null;
     memberAccessConfirmed = false;
+    membershipRestricted = false;
     operatorAccess = false;
     superUserAccess = false;
     clearExpiryTimer();
@@ -597,22 +630,47 @@
     }
 
     chipStatusOverride = null;
+    denialInfo = null;
     if (subtitle) { subtitle.textContent = 'Verifying Google identity…'; subtitle.style.color = ''; }
     try {
       const identity = await discoverIdentity(credential);
-      token = credential;
-      verifiedIdentity = identity;
-      scheduleExpiry(identity.expiresAt);
+
       if (config?.productionApplicationAccessEnabled === true) {
-        const [memberConfirmed, operatorResult] = await Promise.all([
-          discoverMemberAccess(credential),
+        // Membership is checked BEFORE this identity is treated as signed in at
+        // all -- an authenticated Google identity with no qualifying
+        // WorkersFoodClub membership must never be admitted into the app
+        // shell, even in a "pending" limbo state.
+        const [membershipResult, operatorResult] = await Promise.all([
+          discoverMembershipStatus(credential),
           discoverOperatorAccess(credential),
         ]);
-        memberAccessConfirmed = memberConfirmed;
+        const admitted = membershipResult.membershipState === 'ACTIVE' || membershipResult.membershipState === 'SUSPENDED';
+        if (!admitted) {
+          token = null;
+          verifiedIdentity = null;
+          memberAccessConfirmed = false;
+          membershipRestricted = false;
+          operatorAccess = false;
+          superUserAccess = false;
+          clearExpiryTimer();
+          denialInfo = membershipResult.hasPendingApplication ? { reason: 'pending' } : { reason: 'no-membership' };
+          emitAuthState();
+          renderModalContent();
+          return;
+        }
+        token = credential;
+        verifiedIdentity = identity;
+        scheduleExpiry(identity.expiresAt);
+        memberAccessConfirmed = true;
+        membershipRestricted = membershipResult.membershipState === 'SUSPENDED';
         operatorAccess = operatorResult.operator;
         superUserAccess = operatorResult.superUser;
       } else {
+        token = credential;
+        verifiedIdentity = identity;
+        scheduleExpiry(identity.expiresAt);
         memberAccessConfirmed = false;
+        membershipRestricted = false;
         operatorAccess = false;
         superUserAccess = false;
       }
@@ -623,6 +681,7 @@
       token = null;
       verifiedIdentity = null;
       memberAccessConfirmed = false;
+      membershipRestricted = false;
       operatorAccess = false;
       superUserAccess = false;
       clearExpiryTimer();
