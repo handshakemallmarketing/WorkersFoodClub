@@ -1,12 +1,10 @@
--- J3-J5 entry-journey durability. Approval and activation are deliberately
--- separate: an approved application is not an ACTIVE membership until UC-02
--- activation completes.
+-- J3-J5 entry-journey durability.
+-- Business invariant: an authorized APPROVE decision is the activation event.
+-- Approval creates an ACTIVE membership; there is no separate pending-activation
+-- membership state or second activation ceremony.
 
-ALTER TABLE membership_application
-  ADD COLUMN IF NOT EXISTS activation_state text NOT NULL DEFAULT 'NOT_APPROVED'
-    CHECK (activation_state IN ('NOT_APPROVED','APPROVED_PENDING_ACTIVATION','ACTIVATED')),
-  ADD COLUMN IF NOT EXISTS activated_at timestamptz;
-
+-- Public Member ID remains deliberately separate from internal membership,
+-- participant and OAuth/provider identifiers.
 ALTER TABLE application_membership
   ADD COLUMN IF NOT EXISTS public_member_id text;
 
@@ -14,6 +12,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS application_membership_public_member_id_uq
   ON application_membership(public_member_id)
   WHERE public_member_id IS NOT NULL;
 
+-- Durable access/audit lineage for J3-J5. This table does not itself grant
+-- authority; it records authentication/access decisions and state transitions.
 CREATE TABLE IF NOT EXISTS application_access_audit (
   audit_id text PRIMARY KEY,
   participant_id text REFERENCES application_participant(participant_id),
