@@ -2,71 +2,36 @@ import { verifyProductionOidcRequest } from '../lib/production-oidc-auth.js';
 import { requireProductionApplicationAccess } from '../lib/production-access-policy.js';
 
 /**
- * Tells the caller's own Google identity where it stands, so the frontend
- * can decide whether to admit, restrict, or route to /join -- without
- * requiring any existing application_identity_binding or membership row
- * to exist yet (a brand-new applicant has neither).
- *
- * membershipState is the *current* membership's state ('ACTIVE'|'SUSPENDED'
- * |'ENDED'), or null if this identity has never had a membership row at
- * all. hasPendingApplication is true only while a SUBMITTED application
- * exists for this exact identity, so the frontend never invites a second
- * submission on top of one already awaiting review.
+ * Authoritative entry-journey resolver for J2-J5.
+ * Authentication proves identity only. Primary approval is subscription-gated;
+ * APPROVED_PENDING_ACTIVATION is reserved for invited household beneficiaries.
  */
 export default async function handler(req, res, options = {}) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET');
-    return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
-  }
-
-  const access = requireProductionApplicationAccess(options.env || process.env);
-  if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
-
-  const verified = await verifyProductionOidcRequest(req, undefined, undefined, options.production || {});
-  if (!verified.ok) return res.status(verified.status).json({ ok: false, error: verified.error });
-
-  const connectionString = options.databaseUrl || process.env.DATABASE_URL;
-  if (!connectionString && !options.sql) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
-
+  if (req.method !== 'GET') { res.setHeader('Allow','GET'); return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'}); }
+  const access=requireProductionApplicationAccess(options.env||process.env); if(!access.ok)return res.status(access.status).json({ok:false,error:access.error});
+  const verified=await verifyProductionOidcRequest(req,undefined,undefined,options.production||{}); if(!verified.ok)return res.status(verified.status).json({ok:false,error:verified.error});
+  const connectionString=options.databaseUrl||process.env.DATABASE_URL; if(!connectionString&&!options.sql)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
   try {
-    let sql = options.sql;
-    if (!sql) {
-      const { neon } = await import('@neondatabase/serverless');
-      sql = neon(connectionString, { fetchOptions: { signal: AbortSignal.timeout(4000) } });
+    let sql=options.sql; if(!sql){const {neon}=await import('@neondatabase/serverless');sql=neon(connectionString,{fetchOptions:{signal:AbortSignal.timeout(4000)}});}
+    const bindings=await sql`SELECT participant_id,state FROM application_identity_binding WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject} LIMIT 2`;
+    let participantId=null,membership=null,invoice=null;
+    if(bindings.length===1&&String(bindings[0].state)==='ACTIVE'){
+      participantId=String(bindings[0].participant_id);
+      const memberships=await sql`SELECT membership_id,state,standing,role,public_member_id FROM application_membership WHERE participant_id=${participantId} ORDER BY established_at DESC LIMIT 1`;
+      if(memberships.length===1){membership=memberships[0];if(String(membership.state)!=='ACTIVE'||String(membership.standing)!=='CURRENT'){
+        const invoices=await sql`SELECT invoice_id,state,due_at FROM membership_subscription_invoice WHERE membership_id=${String(membership.membership_id)} AND state='OPEN' ORDER BY issued_at DESC LIMIT 1`;if(invoices.length===1)invoice=invoices[0];
+      }}
     }
-
-    const bindings = await sql`
-      SELECT participant_id, state
-        FROM application_identity_binding
-       WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject}
-       LIMIT 2`;
-
-    let membershipState = null;
-    if (bindings.length === 1 && String(bindings[0].state) === 'ACTIVE') {
-      const participantId = String(bindings[0].participant_id);
-      const memberships = await sql`
-        SELECT state
-          FROM application_membership
-         WHERE participant_id=${participantId}
-         ORDER BY established_at DESC
-         LIMIT 1`;
-      if (memberships.length === 1) membershipState = String(memberships[0].state);
-    }
-
-    const applications = await sql`
-      SELECT application_id
-        FROM membership_application
-       WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject} AND state='SUBMITTED'
-       LIMIT 1`;
-
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({
-      ok: true,
-      membershipState,
-      hasPendingApplication: applications.length === 1,
-    });
-  } catch (error) {
-    console.error('Membership status read failed', { name: error?.name, code: error?.code, message: error?.message });
-    return res.status(503).json({ ok: false, error: 'MEMBERSHIP_STATUS_FAILED' });
-  }
+    const applications=await sql`SELECT application_id,state,submitted_at FROM membership_application WHERE issuer=${verified.principal.issuer} AND subject=${verified.principal.subject} ORDER BY submitted_at DESC LIMIT 1`;
+    const application=applications.length===1?applications[0]:null;
+    const membershipState=membership?String(membership.state):null,standing=membership?.standing==null?null:String(membership.standing),role=membership?.role==null?null:String(membership.role);
+    let accessState='AUTHENTICATED_UNBOUND',memberAccessAvailable=false,route='NON_MEMBER';
+    if(membershipState==='ACTIVE'&&standing==='CURRENT'){accessState='ACTIVE_CURRENT';memberAccessAvailable=true;route='MEMBER';}
+    else if(role==='PRIMARY'&&membershipState==='INACTIVE'&&standing==='INITIAL_FEE_DUE'){accessState='INACTIVE_INITIAL_FEE_DUE';route='SUBSCRIPTION_DUE';}
+    else if(role==='HOUSEHOLD'&&membershipState==='APPROVED_PENDING_ACTIVATION'){accessState='HOUSEHOLD_APPROVED_PENDING_ACTIVATION';route='HOUSEHOLD_ACTIVATION';}
+    else if(membershipState==='SUSPENDED'||standing==='PAST_DUE'){accessState='SUSPENDED_PAST_DUE';route='SUBSCRIPTION_DUE';}
+    else if(application&&String(application.state)==='SUBMITTED'){accessState='APPLICANT_PENDING';route='APPLICATION_STATUS';}
+    else if(membershipState){accessState=`MEMBERSHIP_${membershipState}${standing?`_${standing}`:''}`;route='RESTRICTED';}
+    res.setHeader('Cache-Control','no-store');return res.status(200).json({ok:true,accessState,route,memberAccessAvailable,membershipState,standing,membershipRole:role,publicMemberId:membership?.public_member_id==null?null:String(membership.public_member_id),applicationState:application?.state==null?null:String(application.state),applicationId:application?.application_id==null?null:String(application.application_id),applicationSubmittedAt:application?.submitted_at??null,hasPendingApplication:application!=null&&String(application.state)==='SUBMITTED',invoice:invoice?{invoiceId:String(invoice.invoice_id),state:String(invoice.state),dueAt:invoice.due_at??null}:null});
+  } catch(error){console.error('Membership status read failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'MEMBERSHIP_STATUS_FAILED'});}
 }
