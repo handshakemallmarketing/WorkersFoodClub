@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=p=>fs.readFileSync(new URL('../../'+p,import.meta.url),'utf8');
+const api=read('api/catalog-admin.js'),schema=read('packages/durability/sql/027_catalog_administration_v1.sql');
+test('J20 catalog admin is governed by explicit catalog authority',()=>{assert.match(api,/operator:catalog\.manage/);assert.match(api,/CATALOG_CAPABLE_OPERATORS/);});
+test('J20 uses Neon tagged templates',()=>{assert.match(api,/await sql`SELECT/);assert.doesNotMatch(api,/sql\(['"]/);});
+test('J20 durable catalog versions specifications, categories and unique SKUs',()=>{assert.match(schema,/CREATE TABLE IF NOT EXISTS catalog_category/);assert.match(schema,/PRIMARY KEY\(specification_id,version\)/);assert.match(schema,/sku text NOT NULL UNIQUE/);assert.match(schema,/DEFERRABLE INITIALLY DEFERRED/);assert.match(schema,/CATALOG_MULTIPLE_ACTIVE_SPECIFICATION/);});
+test('J20 publication uses guarded atomic data-modifying CTEs',()=>{assert.match(api,/candidate AS MATERIALIZED/);assert.match(api,/deactivated AS \(UPDATE catalog_specification/);assert.match(api,/spec AS \(INSERT INTO catalog_specification/);assert.match(api,/listing AS \(INSERT INTO catalog_listing/);assert.match(api,/SPECIFICATION_VERSION_NOT_ADVANCED/);});
+test('J20 supports soft lifecycle rather than destructive catalog deletes',()=>{assert.match(api,/SET active=false/);assert.match(api,/REACTIVATE/);assert.doesNotMatch(api,/DELETE FROM catalog_/);});
+test('J20 mutations carry durable actor audit lineage',()=>{assert.match(schema,/CREATE TABLE IF NOT EXISTS catalog_audit_event/);assert.match(schema,/before_state jsonb/);assert.match(schema,/after_state jsonb/);assert.match(api,/catalog_audit_event/);});
