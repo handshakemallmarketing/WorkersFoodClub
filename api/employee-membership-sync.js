@@ -1,21 +1,19 @@
 import { randomUUID } from 'node:crypto';
-import { verifyEmployeeSessionRequest } from '../lib/employee-session.js';
+import { extractEmployeeSessionToken, verifyEmployeeSessionTokenShape } from '../lib/employee-session.js';
 import { requireProductionApplicationAccess } from '../lib/production-access-policy.js';
 
-/**
- * Explicit bridge between independent workforce and membership state machines.
- * An ACTIVE authority grant makes an employee eligible for free membership, but
- * never silently converts authority into membership. This command establishes
- * the separately persisted entitlement and is idempotent for an active sponsor.
- */
+/** Explicit bridge between independent workforce and membership state machines. */
 export default async function handler(req,res,options={}) {
   if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
   const access=requireProductionApplicationAccess(options.env||process.env);if(!access.ok)return res.status(access.status).json({ok:false,error:access.error});
-  const employee=await verifyEmployeeSessionRequest(req,options);if(!employee.ok)return res.status(employee.status).json({ok:false,error:employee.error});
+  const secret=options.employeeSessionSecret||process.env.EMPLOYEE_SESSION_SECRET;if(typeof secret!=='string'||secret.length<32)return res.status(503).json({ok:false,error:'EMPLOYEE_SESSION_NOT_CONFIGURED'});
+  const sessionId=verifyEmployeeSessionTokenShape(secret,extractEmployeeSessionToken(req));if(!sessionId)return res.status(401).json({ok:false,error:'EMPLOYEE_SESSION_INVALID'});
   const connectionString=options.databaseUrl||process.env.DATABASE_URL;if(!connectionString&&!options.sql)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
   try {
     let sql=options.sql;if(!sql){const {neon}=await import('@neondatabase/serverless');sql=neon(connectionString,{fetchOptions:{signal:AbortSignal.timeout(5000)}});}
-    const participantId=employee.participantId;
+    const sessions=await sql`SELECT participant_id FROM employee_session WHERE session_id=${sessionId} AND revoked_at IS NULL AND expires_at>now() LIMIT 2`;
+    if(sessions.length!==1)return res.status(401).json({ok:false,error:'EMPLOYEE_SESSION_INACTIVE'});
+    const participantId=String(sessions[0].participant_id);
     const grants=await sql`SELECT grant_id FROM application_authority_grant WHERE actor_id=${participantId} AND valid_from<=now() AND (valid_until IS NULL OR valid_until>=now()) AND (revoked_at IS NULL OR revoked_at>now()) ORDER BY valid_from DESC LIMIT 1`;
     if(grants.length!==1)return res.status(409).json({ok:false,error:'EMPLOYEE_NOT_ACTIVE'});
     const existing=await sql`SELECT s.sponsorship_id,s.membership_id,m.state FROM employee_membership_sponsorship s JOIN application_membership m ON m.membership_id=s.membership_id WHERE s.participant_id=${participantId} AND s.state='ACTIVE' LIMIT 2`;
