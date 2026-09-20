@@ -9,6 +9,11 @@ function configured(value) {
   return typeof value === 'string' && value.length > 0;
 }
 
+function applicationAccessEnabled(env = process.env) {
+  const environment = env.VERCEL_ENV || 'unknown';
+  return environment === 'production' ? productionApplicationAccessEnabled(env) : environment === 'preview';
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -35,18 +40,17 @@ export default async function handler(req, res) {
     const production = environment === 'production';
     const oidc = readProductionOidcConfig(process.env);
     const databaseConfigured = configured(process.env.DATABASE_URL);
-    const accessEnabled = production && productionApplicationAccessEnabled(process.env);
+    const accessEnabled = applicationAccessEnabled(process.env);
 
     return res.status(200).json({
       ok: true,
       environment,
-      authenticationMode: production ? 'OIDC' : 'PREVIEW',
-      productionApplicationAccessEnabled: accessEnabled,
+      authenticationMode: 'OIDC',
+      applicationAccessEnabled: accessEnabled,
+      productionApplicationAccessEnabled: production && productionApplicationAccessEnabled(process.env),
       oidcConfigured: oidc.ok === true,
       applicationBindingStoreConfigured: databaseConfigured,
-      identityRuntimeReady: production
-        ? oidc.ok === true && databaseConfigured && accessEnabled
-        : true,
+      identityRuntimeReady: oidc.ok === true && databaseConfigured && accessEnabled,
       liveFundsAuthorized: false,
     });
   }
@@ -62,9 +66,10 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       environment,
-      authenticationMode: environment === 'production' ? 'OIDC' : 'PREVIEW',
+      authenticationMode: 'OIDC',
       provider,
       clientId,
+      applicationAccessEnabled: applicationAccessEnabled(process.env),
       productionApplicationAccessEnabled:
         environment === 'production' && productionApplicationAccessEnabled(process.env),
       configured: provider === 'google' && configured(clientId),
@@ -75,28 +80,16 @@ export default async function handler(req, res) {
 
   if (url.searchParams.get('probe') === 'database-target-fingerprint') {
     if (process.env.VERCEL_ENV !== 'preview') {
-      return res.status(403).json({
-        ok: false,
-        error: 'DATABASE_TARGET_FINGERPRINT_PREVIEW_ONLY',
-      });
+      return res.status(403).json({ ok: false, error: 'DATABASE_TARGET_FINGERPRINT_PREVIEW_ONLY' });
     }
-
     const connectionString = process.env.DATABASE_URL;
-    if (!connectionString) {
-      return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
-    }
-
+    if (!connectionString) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
     try {
       const hostname = new URL(connectionString).hostname.toLowerCase();
       if (!hostname) throw new Error('DATABASE_HOSTNAME_MISSING');
       const hostSha256 = createHash('sha256').update(hostname).digest('hex');
       res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).json({
-        ok: true,
-        environment: 'preview',
-        algorithm: 'sha256',
-        hostSha256,
-      });
+      return res.status(200).json({ ok: true, environment: 'preview', algorithm: 'sha256', hostSha256 });
     } catch {
       return res.status(503).json({ ok: false, error: 'DATABASE_TARGET_FINGERPRINT_FAILED' });
     }
@@ -104,142 +97,58 @@ export default async function handler(req, res) {
 
   if (url.searchParams.get('probe') === 'identity-subject') {
     res.setHeader('Cache-Control', 'no-store');
-    if ((process.env.VERCEL_ENV || 'unknown') !== 'production') {
-      return res.status(403).json({
-        ok: false,
-        error: 'IDENTITY_SUBJECT_DISCOVERY_PRODUCTION_ONLY',
-      });
+    if (!applicationAccessEnabled(process.env)) {
+      return res.status(503).json({ ok: false, error: 'APPLICATION_ACCESS_DISABLED' });
     }
-
     const verified = await verifyProductionOidcRequest(req);
-    if (!verified.ok) {
-      return res.status(verified.status).json({
-        ok: false,
-        error: verified.error,
-      });
-    }
-
+    if (!verified.ok) return res.status(verified.status).json({ ok: false, error: verified.error });
     return res.status(200).json({
       ok: true,
       verified: true,
       issuer: verified.principal.issuer,
       subject: verified.principal.subject,
       expiresAt: verified.principal.expiresAt,
-      applicationAccessEnabled: productionApplicationAccessEnabled(process.env),
+      applicationAccessEnabled: true,
       bindingCreated: false,
       liveFundsAuthorized: false,
     });
   }
 
   if (url.searchParams.get('probe') === 'config-isolation') {
-    if (process.env.VERCEL_ENV !== 'preview') {
-      return res.status(403).json({
-        ok: false,
-        error: 'CONFIG_ISOLATION_PROBE_PREVIEW_ONLY',
-      });
-    }
-
+    if (process.env.VERCEL_ENV !== 'preview') return res.status(403).json({ ok: false, error: 'CONFIG_ISOLATION_PROBE_PREVIEW_ONLY' });
     const cases = {
-      'sandbox-provider-in-production': {
-        input: {
-          environment: 'production',
-          paymentProvider: 'SANDBOX_MOMO',
-          webhookSecret: 'synthetic-webhook-secret',
-          databaseUrl: 'postgres://prod-db.internal/foodclub',
-        },
-        expected: 'SANDBOX_PROVIDER_FORBIDDEN_IN_PRODUCTION',
-      },
-      'live-provider-outside-production': {
-        input: {
-          environment: 'staging',
-          paymentProvider: 'PAYSTACK_GH_LIVE',
-          webhookSecret: 'synthetic-webhook-secret',
-          databaseUrl: 'postgres://staging-db.internal/foodclub',
-        },
-        expected: 'LIVE_PROVIDER_FORBIDDEN_OUTSIDE_PRODUCTION',
-      },
-      'non-production-db-in-production': {
-        input: {
-          environment: 'production',
-          paymentProvider: 'PAYSTACK_GH_LIVE',
-          webhookSecret: 'synthetic-webhook-secret',
-          databaseUrl: 'postgres://localhost/foodclub-test',
-        },
-        expected: 'NON_PRODUCTION_DATABASE_FORBIDDEN_IN_PRODUCTION',
-      },
+      'sandbox-provider-in-production': { input: { environment: 'production', paymentProvider: 'SANDBOX_MOMO', webhookSecret: 'synthetic-webhook-secret', databaseUrl: 'postgres://prod-db.internal/foodclub' }, expected: 'SANDBOX_PROVIDER_FORBIDDEN_IN_PRODUCTION' },
+      'live-provider-outside-production': { input: { environment: 'staging', paymentProvider: 'PAYSTACK_GH_LIVE', webhookSecret: 'synthetic-webhook-secret', databaseUrl: 'postgres://staging-db.internal/foodclub' }, expected: 'LIVE_PROVIDER_FORBIDDEN_OUTSIDE_PRODUCTION' },
+      'non-production-db-in-production': { input: { environment: 'production', paymentProvider: 'PAYSTACK_GH_LIVE', webhookSecret: 'synthetic-webhook-secret', databaseUrl: 'postgres://localhost/foodclub-test' }, expected: 'NON_PRODUCTION_DATABASE_FORBIDDEN_IN_PRODUCTION' },
     };
-
     const caseName = url.searchParams.get('case');
     const diagnostic = cases[caseName];
-
-    if (!diagnostic) {
-      return res.status(400).json({
-        ok: false,
-        error: 'CONFIG_ISOLATION_PROBE_CASE_INVALID',
-      });
-    }
-
+    if (!diagnostic) return res.status(400).json({ ok: false, error: 'CONFIG_ISOLATION_PROBE_CASE_INVALID' });
     try {
-      const { RuntimeConfigurationGate } = await import(
-        '../dist/packages/production-readiness/src/index.js'
-      );
-
+      const { RuntimeConfigurationGate } = await import('../dist/packages/production-readiness/src/index.js');
       const gate = new RuntimeConfigurationGate();
       gate.validate(diagnostic.input);
-
-      console.error('RC2_CONFIG_ISOLATION_PROBE_UNEXPECTED_ACCEPT', {
-        case: caseName,
-      });
-
-      return res.status(500).json({
-        ok: false,
-        case: caseName,
-        error: 'CONFIG_ISOLATION_PROBE_UNEXPECTED_ACCEPT',
-      });
+      console.error('RC2_CONFIG_ISOLATION_PROBE_UNEXPECTED_ACCEPT', { case: caseName });
+      return res.status(500).json({ ok: false, case: caseName, error: 'CONFIG_ISOLATION_PROBE_UNEXPECTED_ACCEPT' });
     } catch (error) {
       const reason = error?.message || 'UNKNOWN_CONFIGURATION_REJECTION';
       const passed = reason === diagnostic.expected;
-
-      console.info('RC2_CONFIG_ISOLATION_PROBE', {
-        case: caseName,
-        rejected: true,
-        reason,
-        expected: diagnostic.expected,
-        passed,
-      });
-
+      console.info('RC2_CONFIG_ISOLATION_PROBE', { case: caseName, rejected: true, reason, expected: diagnostic.expected, passed });
       res.setHeader('Cache-Control', 'no-store');
-
-      return res.status(passed ? 200 : 500).json({
-        ok: passed,
-        case: caseName,
-        rejected: true,
-        reason,
-      });
+      return res.status(passed ? 200 : 500).json({ ok: passed, case: caseName, rejected: true, reason });
     }
   }
 
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    return res.status(503).json({ ok: false, status: 'unavailable', error: 'DATABASE_URL_MISSING' });
-  }
-
+  if (!connectionString) return res.status(503).json({ ok: false, status: 'unavailable', error: 'DATABASE_URL_MISSING' });
   try {
     const { neon } = await import('@neondatabase/serverless');
     const sql = neon(connectionString, { fetchOptions: { signal: AbortSignal.timeout(3000) } });
     const rows = await sql`SELECT status, database_name, schema_name, governed_table_count FROM preview_health LIMIT 1`;
     const row = rows?.[0] ?? null;
     const healthy = row?.status === 'connected' && row?.database_name === 'neondb' && Number(row?.governed_table_count) === 7;
-
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(healthy ? 200 : 503).json({
-      ok: healthy,
-      status: healthy ? 'connected' : 'degraded',
-      database: row?.database_name ?? null,
-      schema: row?.schema_name ?? null,
-      governedTableCount: Number(row?.governed_table_count ?? 0),
-      checkedAt: new Date().toISOString(),
-    });
+    return res.status(healthy ? 200 : 503).json({ ok: healthy, status: healthy ? 'connected' : 'degraded', database: row?.database_name ?? null, schema: row?.schema_name ?? null, governedTableCount: Number(row?.governed_table_count ?? 0), checkedAt: new Date().toISOString() });
   } catch (error) {
     console.error('Neon health probe failed', { name: error?.name, message: error?.message });
     return res.status(503).json({ ok: false, status: 'unavailable', error: 'NEON_HEALTH_CHECK_FAILED' });
