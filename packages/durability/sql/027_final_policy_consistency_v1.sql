@@ -3,6 +3,18 @@
 -- 2) Demand qualification is offer-specific, not a universal 30% rule.
 -- 3) Already-paid value preserved after a deadline is a member prepaid/refundable
 --    balance, not credit extended by WorkersFoodClub.
+--
+-- GOVERNANCE SUPERSESSION NOTE:
+-- Migration 022 is preserved as immutable historical migration evidence. Its comments
+-- describing a universal 30% demand-qualification threshold as "Owner-ratified" and
+-- describing preserved already-paid member value as "shopping credit" are superseded
+-- by WorkersFoodClub Policy Ratification Register v1.1, specifically PR-15 and PR-19,
+-- and by this migration. The 30% value retained below is only a compatibility default
+-- for existing offers that do not yet carry an explicit threshold; it is not a
+-- constitutional or universal policy. Likewise, member_prepaid_balance_ledger records
+-- member-owned already-paid/refundable value and does not authorize lending or member
+-- credit. Historical migration 022 terminology MUST NOT be interpreted as current
+-- owner-ratified policy.
 
 ALTER TABLE application_membership DROP CONSTRAINT IF EXISTS application_membership_standing_check;
 ALTER TABLE application_membership
