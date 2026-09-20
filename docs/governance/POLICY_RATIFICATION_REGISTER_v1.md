@@ -1,22 +1,22 @@
-# WorkersFoodClub Policy Ratification Register v1.0
+# WorkersFoodClub Policy Ratification Register v1.1
 
 Status: OWNER-RATIFIED POLICY BASELINE
 Ratification date: 2026-09-19
 Governance authority: System Owner
 Scope: WorkersFoodClub initial operational policy baseline
 
-This register formalizes owner decisions Q1-Q32. It supplies business-policy authority; it does not by itself prove implementation, runtime evidence, legal compliance, or launch authorization. Code may implement this policy baseline but may not silently amend it.
+This register formalizes owner decisions Q1-Q34. It supplies business-policy authority; it does not by itself prove implementation, runtime evidence, legal compliance, or launch authorization. Code may implement this policy baseline but may not silently amend it.
 
 ## 1. Access, identity, membership and workforce
 
 ### PR-01 Guest access
 Unauthenticated persons may access only the bounded Guest/non-member area. Guest access may expose public information and membership-application journeys but no Member or workforce capability.
 
-### PR-02 Membership and authentication
-Membership is established before Member-area authentication. A Member who is not authenticated is treated as a Guest for application access. Authentication is required before a Member may enter Member areas. Authentication proves identity/access eligibility; it does not itself create membership.
+### PR-02 Membership eligibility, rights and authentication
+Membership eligibility is established by approval. Active membership rights are established only by confirmed annual subscription settlement or a valid employee-sponsored membership entitlement. A person with active membership rights who is not authenticated is treated as a Guest for application access. Authentication is required before a Member may enter Member areas. Authentication proves identity/access eligibility; it never creates membership eligibility or membership rights.
 
 ### PR-03 Membership acquisition
-A Guest/non-member may apply for membership. Application alone confers no membership rights. For an approved ordinary applicant, confirmed settlement of the required annual membership subscription activates membership rights. An unsolicited payment or payment without required approval must not manufacture membership.
+A Guest/non-member may apply for membership. Application alone confers no membership rights. Approval establishes eligibility, not active rights. For an approved ordinary applicant, confirmed settlement of the required annual membership subscription activates membership rights. An unsolicited payment or payment without required approval must not manufacture membership.
 
 ### PR-04 Operator step-up
 Operator access requires additional workforce authentication/step-up through a dedicated Employee/Operator access area. Member authentication alone never grants Operator access.
@@ -54,6 +54,12 @@ Beneficiaries use individual identities and may transact independently within ho
 
 ### PR-14 Sponsor restriction
 Household economic privileges derive from the sponsoring membership. Restriction of the sponsoring membership restricts beneficiary economic privileges, while bounded records/support/remediation access remains available.
+
+### PR-33 Employee-sponsored renewal and separation
+While workforce standing remains ACTIVE, EMPLOYEE_SPONSORED_MEMBERSHIP automatically renews for each annual membership period without generating a member-paid subscription obligation. Employment suspension, revocation or termination stops future sponsorship renewal but does not retroactively erase or cancel an already-sponsored annual membership period. The person's current membership remains governed independently through the end of that sponsored period unless a separate legitimate membership suspension/termination rule applies.
+
+### PR-34 Beneficiary eligibility and replacement
+A Primary Member may nominate up to two individually identified beneficiaries. Beneficiaries do not independently pay the annual membership subscription but must satisfy identity and any age/service eligibility requirements applicable to the capabilities they use. Beneficiary slots may not be sold, rented or commercially transferred. Beneficiary replacement is permitted subject to a versioned anti-abuse change limit established as operational policy/configuration under System Owner authority. The Constitution does not hard-code the replacement frequency.
 
 ## 3. Commerce and payment qualification
 
@@ -93,7 +99,7 @@ These owner decisions authorize reconciliation and formal ratification of GH-PIL
 ## 6. Refunds, remedies and corrections
 
 ### PR-24 Refund authority separation
-Refund handling separates REQUEST_REFUND, APPROVE_REFUND and EXECUTE_REFUND authority. Bounded routine thresholds may be delegated; higher-risk refunds require elevated authority according to configured governance thresholds.
+Refund handling separates REQUEST_REFUND, APPROVE_REFUND and EXECUTE_REFUND authority. Bounded routine thresholds may be delegated; higher-risk refunds require elevated authority according to configured governance thresholds. Monetary thresholds are versioned operational policy/configuration ratified or delegated by the System Owner and are not hard-coded into the Constitution. Production refund mutations remain withheld until the applicable thresholds and runtime authority are separately authorized and proven.
 
 ### PR-25 Immutable transaction history
 Refunds, credits, replacements and other remedies do not erase or mutate the original transaction. They are additive canonical events linked to the original transaction.
@@ -109,7 +115,7 @@ Production recovery policy targets RPO <= 1 hour and RTO <= 4 hours. Production 
 ## 8. Constitution and governance
 
 ### PR-28 Constitution reconciliation and ratification
-C0-C10 are to become the binding WorkersFoodClub constitutional corpus only after exact substantive text is reconstructed/discovered, reconciled against this ratified policy baseline, conflicts are resolved, and a canonical WorkersFoodClub Constitution v1.0 is formally ratified. Historical references to C0-C10 do not authorize blindly ratifying unknown or conflicting text.
+C0-C10 are to become the binding WorkersFoodClub constitutional corpus only after exact substantive text is reconstructed/discovered, reconciled against this ratified policy baseline, conflicts are resolved, and a canonical WorkersFoodClub Constitution v1.0 is formally ratified. If the historical C0-C10 substantive source cannot be recovered, it must not be fabricated: a separately reviewed and ratified Constitution v1.0 may explicitly supersede the inaccessible historical corpus while preserving the discoverable CB-00 executable invariants and this owner-ratified policy hierarchy.
 
 ### PR-29 Authority hierarchy of artifacts
 The governing hierarchy is:
@@ -134,17 +140,18 @@ An ACTIVE employee's free membership is activated through the auditable EMPLOYEE
 
 ### Access
 GUEST/UNAUTHENTICATED -> bounded Guest area only
-MEMBER + UNAUTHENTICATED -> Guest access posture
-MEMBER + AUTHENTICATED + sufficient standing -> Member area
+MEMBERSHIP_ELIGIBLE but not ACTIVE -> bounded Guest/application/payment posture
+ACTIVE_MEMBER + UNAUTHENTICATED -> Guest access posture
+ACTIVE_MEMBER + AUTHENTICATED + sufficient standing -> Member area
 EMPLOYEE/OPERATOR -> Member/public identity context + dedicated workforce step-up + active workforce grant -> bounded Operator area
 ADMIN -> elevated workforce authority within delegated administration scope
 SYSTEM_OWNER -> reserved governance authority
 
 ### Ordinary membership
-APPLIED -> APPROVED -> ANNUAL_SUBSCRIPTION_SETTLED -> ACTIVE -> GRACE(30 days) -> RESTRICTED/SUSPENDED -> restored or TERMINATED
+APPLIED -> APPROVED/ELIGIBLE -> ANNUAL_SUBSCRIPTION_SETTLED -> ACTIVE -> GRACE(30 days) -> RESTRICTED/SUSPENDED -> restored or TERMINATED
 
 ### Employee-sponsored membership
-ACTIVE_WORKFORCE + valid sponsorship entitlement -> ACTIVE membership for sponsorship period. Workforce authority remains separately evaluated.
+ACTIVE_WORKFORCE + valid sponsorship entitlement -> ACTIVE membership for sponsorship period -> automatic annual sponsorship renewal while ACTIVE_WORKFORCE. Workforce cessation stops future sponsorship renewal but does not retroactively cancel the current sponsored membership period.
 
 ### Workforce
 INVITED -> ACTIVE -> SUSPENDED -> REVOKED/TERMINATED
@@ -162,9 +169,9 @@ Implementation teams must classify follow-on work as:
 
 ## 11. Immediate reconciliation requirements
 
-1. Reconcile AUTH-MEMBERSHIP-001 with PR-01 through PR-05, especially the prior member-first workforce requirement and the new employee-sponsored membership rule.
-2. Reconcile GH-PILOT-TITLE-RISK-v1 with PR-21 through PR-23 and complete formal governance evidence before changing its ratification status.
-3. Reconstruct/discover C0-C10 and reconcile them against PR-01 through PR-32 before constitutional ratification.
+1. Reconcile AUTH-MEMBERSHIP-001 with PR-01 through PR-05, PR-31 through PR-34, including eligibility versus active rights, employee renewal, and beneficiary rules.
+2. Reconcile GH-PILOT-TITLE-RISK-v1 with PR-21 through PR-23 and complete formal governance evidence before changing its remaining evidence status.
+3. Recover C0-C10 or explicitly supersede the inaccessible historical corpus through a separately reviewed Constitution v1.0; never fabricate historical wording.
 4. Update the master journey truth matrix so policy-blocked journeys distinguish resolved policy authority from remaining implementation/evidence gaps.
-5. Consolidate the decision register so this ratification is a canonical indexed owner decision.
+5. Consolidate the decision register so this ratification is a canonical indexed owner decision and stale open-policy records are superseded additively.
 6. Preserve all existing WITHHELD live-money and production-mutation boundaries unless separately authorized.
