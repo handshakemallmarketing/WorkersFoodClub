@@ -1,0 +1,93 @@
+version: "1.0"
+status: CANONICAL_TRUTH_MATRIX_CORRECTION
+as_of_utc: "2026-09-20"
+repository: handshakemallmarketing/WorkersFoodClub
+supersedes_conflicting_fields_in:
+  - docs/business-logic-v2/master-journey-truth-matrix.yaml
+  - docs/business-logic-v2/policy-ratification-truth-matrix-reconciliation-2026-09-19.yaml
+authority:
+  - docs/governance/POLICY_RATIFICATION_REGISTER_v1.md
+  - docs/policies/AUTH-MEMBERSHIP-001-member-admission.md
+
+canonical_invariants:
+  - enrollment_is_guest_non_member_capability
+  - enrollment_requires_no_google_oidc_or_other_identity_provider_authentication
+  - enrollment_contact_information_is_not_login_identity_binding
+  - application_submission_confers_no_membership_rights
+  - approval_establishes_eligibility_not_active_member_login_authority
+  - ordinary_membership_activation_requires_confirmed_annual_subscription_settlement
+  - google_is_only_a_supported_member_login_option
+  - google_login_identity_may_be_bound_only_to_pre_existing_authoritative_member_information_through_a_separate_governed_binding_ceremony
+  - google_authentication_alone_must_never_create_apply_approve_activate_or_auto_bind_membership
+  - member_area_requires_valid_membership_plus_valid_identity_binding_plus_successful_login
+
+journey_corrections:
+  UC-01:
+    objective: Member application
+    actor: GUEST_NON_MEMBER
+    authentication_required: false
+    google_oidc_required: false
+    implementation_status: IMPLEMENTED_REQUIRES_HOSTED_RUNTIME_PROOF
+    implementation_files:
+      - public/join.html
+      - api/membership-apply.js
+      - packages/durability/sql/020_guest_membership_enrollment.sql
+    required_proof:
+      - unauthenticated browser form submission reaches API and PostgreSQL
+      - request with no Authorization header succeeds with valid applicant data
+      - malformed or arbitrary Authorization header cannot become enrollment authority
+      - duplicate pending application handling
+      - application creates no application_identity_binding
+      - application creates no active membership rights
+    superseded_gap_text:
+      - authenticated UI→API→PostgreSQL proof
+    canonical_gap_text:
+      - unauthenticated Guest UI→API→PostgreSQL proof
+
+  UC-02:
+    objective: Membership activation and Member ID
+    enrollment_identity_provider_dependency: PROHIBITED
+    member_login_binding: SEPARATE_POST_ENROLLMENT_CEREMONY
+    google_role: OPTIONAL_MEMBER_LOGIN_PROVIDER_ONLY
+    implementation_status: PARTIAL
+    required_proof:
+      - approval creates eligibility/inactive membership without Google binding
+      - confirmed annual subscription settlement activates ordinary membership
+      - explicit member-information-to-login binding is unique auditable and replay-safe
+      - ambiguous binding fails closed
+      - Google login without a valid binding has no Member authority
+      - Google authentication cannot manufacture membership or activation
+
+  AUTHENTICATION_AND_WORKFORCE:
+    policy_status: CLOSED_BY_POLICY
+    implementation_status: OPEN_P1_UNTIL_RUNTIME_PROVEN
+    requirements:
+      - Guest enrollment available without authentication
+      - no Google/OIDC SDK token or client configuration required by Join journey
+      - Google is a Member Sign In option only
+      - member login identity binding occurs separately after authoritative member record exists
+      - login identity binding cannot infer membership from Google email alone
+      - Member authentication requires pre-existing valid membership and binding
+      - dedicated Employee/Operator step-up remains separate
+      - hosted PostgreSQL happy adverse ambiguity and revocation proof
+
+falsification_cases:
+  - name: guest_without_google_can_apply
+    expected: ALLOW_APPLICATION_ONLY
+  - name: google_token_present_during_enrollment
+    expected: TOKEN_HAS_NO_ENROLLMENT_AUTHORITY
+  - name: google_login_before_member_binding
+    expected: DENY_MEMBER_AREA
+  - name: google_email_matches_application_but_no_binding
+    expected: DENY_MEMBER_AREA_NO_AUTO_BIND
+  - name: approved_but_unsettled_applicant_google_login
+    expected: DENY_MEMBER_AREA
+  - name: active_member_explicitly_bound_to_google_then_logs_in
+    expected: ALLOW_SUBJECT_TO_STANDING_AND_SERVER_AUTHORIZATION
+  - name: ambiguous_member_binding
+    expected: DENY_FAIL_CLOSED
+
+safety_boundary:
+  live_funds: WITHHELD
+  paystack_live_mode: WITHHELD
+  production_payment_mutations: WITHHELD
