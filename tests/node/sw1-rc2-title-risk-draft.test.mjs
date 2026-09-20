@@ -33,6 +33,6 @@ test('quantity-aware semantics remain mandatory after owner ratification while p
  assert.match(policy,/Matching trigger quantities accumulate monotonically/i);
  assert.match(policy,/Partial acceptance transfers only accepted quantity/i);
  assert.match(policy,/legacy boolean evaluator.*MUST NOT be used as the production source of truth for partial-quantity(?: title\/risk)? decisions/i);
- assert.match(policy,/quantity-aware transfer semantics to remain green under conformance and integrated pilot evidence/i);
+ assert.match(policy,/green quantity-aware conformance\/integrated evidence/i);
  assert.match(policy,/Owner ratification does not by itself authorize production release or live-money\/fulfillment mutations/i);
 });
