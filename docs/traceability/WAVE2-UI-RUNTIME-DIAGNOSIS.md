@@ -10,7 +10,7 @@ Repair executed 2026-09-20:
 - created the additive `fulfillment_release_code` table and indexes from migration 021;
 - verified the three columns are queryable after migration.
 
-The member document now uses `member-shell.js`; operator/refund/fulfillment rendering is no longer loaded into the member shell. Preview member-session issuance no longer returns privileged operator tokens.
+The member document now uses `member-shell.js`; operator/refund/fulfillment rendering is no longer loaded into the member shell. Sandbox operator tokens remain available to automated preview rehearsal infrastructure, but privileged personas are not exposed through the rendered member sign-in journey and cannot mint a production employee session.
 
 Residual verification gate: exact-head CI and Vercel deployment must remain green. Member Orders and Notifications remain authorization-bound projections and must be tested with an admitted member credential; absence of an unauthenticated 5xx is not treated as proof of authenticated business correctness.
 
