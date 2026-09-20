@@ -1,8 +1,10 @@
-# WorkersFoodClub Constitution v1.0 — Recommended C0-C10 Substantive Corpus
+# WorkersFoodClub Constitution v1.0 — C0-C10 Substantive Corpus
 
-**Status: PROPOSED FOR SYSTEM OWNER RATIFICATION — NOT YET CONSTITUTIONAL AUTHORITY**
+**Status: SYSTEM OWNER RATIFIED**  
+**Ratification date: 2026-09-19**  
+**Authority: System Owner**
 
-This document is a forward-looking recommended Constitution. It does **not** claim to reconstruct the missing historical C0-C10 wording. If ratified, it should explicitly supersede the inaccessible historical C0-C10 corpus while preserving CB-00-v0.1's 30 executable invariants and the owner-ratified Policy Register v1.1.
+This document is the ratified WorkersFoodClub Constitution v1.0. It does **not** claim to reconstruct the missing historical C0-C10 wording. It explicitly supersedes the inaccessible historical C0-C10 substantive corpus while preserving CB-00-v0.1's 30 executable invariants. Policy Ratification Register v1.1 remains subordinate owner-ratified policy authority.
 
 ## C0 — Constitutional Supremacy, Truth and Amendment
 1. The Constitution is the highest internal governance authority for WorkersFoodClub application behavior.
@@ -89,11 +91,10 @@ This document is a forward-looking recommended Constitution. It does **not** cla
 5. Production activation decisions must be versioned, attributable and reversible/containable where feasible.
 6. No launch action may weaken C0-C9 or CB-00 invariants without a separately ratified constitutional amendment.
 
-## Ratification recommendation
-If accepted, ratification should:
-1. designate this text as `WorkersFoodClub Constitution v1.0`;
-2. state explicitly that it supersedes the inaccessible historical C0-C10 substantive corpus rather than claiming to reproduce it;
-3. preserve CB-00-v0.1's 30 executable invariants as the machine-testable constitutional baseline unless a separately ratified amendment changes them;
-4. update `constitution/baseline.json` only after exact-head conformance succeeds;
-5. retain Policy Ratification Register v1.1 as subordinate owner-ratified policy authority;
-6. preserve all current WITHHELD live-money and Production mutation boundaries unless separately authorized.
+## Ratification effect
+1. This text is designated `WorkersFoodClub Constitution v1.0`.
+2. It supersedes the inaccessible historical C0-C10 substantive corpus rather than claiming to reproduce it.
+3. CB-00-v0.1's 30 executable invariants remain the machine-testable constitutional baseline unless a separately ratified amendment changes them.
+4. Policy Ratification Register v1.1 remains subordinate owner-ratified policy authority.
+5. All current WITHHELD live-money and Production mutation boundaries remain unchanged unless separately authorized.
+6. Ratification establishes governance authority; implementation, runtime evidence, external review, recovery proof and launch authorization remain separate gates where applicable.
