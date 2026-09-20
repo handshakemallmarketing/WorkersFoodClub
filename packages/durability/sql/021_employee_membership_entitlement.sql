@@ -3,13 +3,18 @@
 -- status; this entitlement records why annual membership fees are waived.
 -- It does not itself grant operator authority or mutate employment state.
 
--- Normalize the application membership vocabulary to the policy kernel.
+-- Normalize legacy standing values before tightening the constraint. ACTIVE is
+-- paid/current standing; PAST_DUE enters the ratified grace lifecycle; ENDED is
+-- the terminal standing name in the canonical policy kernel.
 ALTER TABLE application_membership DROP CONSTRAINT IF EXISTS application_membership_member_type_check;
 ALTER TABLE application_membership
   ADD CONSTRAINT application_membership_member_type_check
   CHECK (member_type IN ('PRIMARY','HOUSEHOLD_BENEFICIARY','EMPLOYEE_SPONSORED'));
 
 ALTER TABLE application_membership DROP CONSTRAINT IF EXISTS application_membership_standing_check;
+UPDATE application_membership SET standing='ACTIVE' WHERE standing='CURRENT';
+UPDATE application_membership SET standing='GRACE' WHERE standing='PAST_DUE';
+UPDATE application_membership SET standing='TERMINATED' WHERE standing='ENDED';
 ALTER TABLE application_membership
   ADD CONSTRAINT application_membership_standing_check
   CHECK (standing IN ('INITIAL_FEE_DUE','ACTIVE','GRACE','RESTRICTED','SUSPENDED','TERMINATED'));
