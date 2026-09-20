@@ -1,12 +1,17 @@
-# Runtime projection failure isolated by UX rescan
+# Runtime projection diagnosis and repair
 
-The supplied preview screenshots show database-health success at the same time that Offers, Orders, Notifications and Operator queue projections fail. Database reachability therefore must not be treated as application-projection health.
+The projection outage was not a generic database-connectivity failure. Vercel runtime observability isolated 372 `/api/member-offers` failures in the prior 24 hours with `NeonDbError: column "min_order_quantity" does not exist`.
 
-Required follow-up diagnosis:
-1. Capture status/error codes for `/api/member-offers`, `/api/member-orders`, `/api/member-notifications`, and `/api/operator-orders` on the exact preview deployment.
-2. Separate 401/403 authorization failures from 5xx schema/query/runtime failures.
-3. Verify preview-session bearer propagation and governed employee-session propagation independently.
-4. Verify the preview database has all Wave 2 migrations expected by those projections.
-5. Do not replace fail-closed behavior with demo data or silent fallback.
+Root cause: the connected Food Club Neon database had not received durability migration `021_j16_j17_j20_launch_journeys.sql`, while `/api/member-offers` already selected `min_order_quantity`, `max_order_quantity`, and `campaign_capacity`.
 
-This branch improves the UX truthfulness but deliberately does not claim the runtime projection defect is repaired without deployment evidence.
+Repair executed 2026-09-20:
+- added the three missing `preview_member_offer` columns;
+- added the migration's positive/range/capacity checks;
+- created the additive `fulfillment_release_code` table and indexes from migration 021;
+- verified the three columns are queryable after migration.
+
+The member document now uses `member-shell.js`; operator/refund/fulfillment rendering is no longer loaded into the member shell. Preview member-session issuance no longer returns privileged operator tokens.
+
+Residual verification gate: exact-head CI and Vercel deployment must remain green. Member Orders and Notifications remain authorization-bound projections and must be tested with an admitted member credential; absence of an unauthenticated 5xx is not treated as proof of authenticated business correctness.
+
+No Production activation, live Paystack mode, live credentials, or live-money authority is granted by this repair.
