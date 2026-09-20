@@ -1,4 +1,4 @@
-export type OperatorRole = "SYSTEM_OWNER" | "BACKUP_SYSTEM_OWNER" | "BUSINESS_USER" | "WAREHOUSE_MANAGER" | "MARKETING_PROMOTIONS" | "DELIVERY";
+export type OperatorRole = "SYSTEM_OWNER" | "ADMIN" | "BUSINESS_USER" | "WAREHOUSE_MANAGER" | "MARKETING_PROMOTIONS" | "DELIVERY";
 
 export type AuthorityGrant = Readonly<{
   grantId: string;
@@ -16,9 +16,15 @@ export type AuthorityDecision = Readonly<{
   grantId?: string;
 }>;
 
+/**
+ * System Owner is the sole constitutional principal. Admin is appointed/revoked
+ * by System Owner and may administer bounded operator permissions, but cannot
+ * create or promote another System Owner. Ordinary operators receive only the
+ * domains/functions required for their work.
+ */
 export const ROLE_PERMISSION_CEILINGS: Readonly<Record<OperatorRole, readonly string[]>> = {
-  SYSTEM_OWNER: ["feature:manage", "operator:manage", "business:read", "warehouse:manage", "marketing:manage", "delivery:manage"],
-  BACKUP_SYSTEM_OWNER: ["feature:manage", "operator:manage", "business:read", "warehouse:manage", "marketing:manage", "delivery:manage"],
+  SYSTEM_OWNER: ["feature:manage", "admin:manage", "operator:manage", "business:read", "warehouse:manage", "marketing:manage", "delivery:manage"],
+  ADMIN: ["operator:manage", "business:read", "warehouse:manage", "marketing:manage", "delivery:manage"],
   BUSINESS_USER: ["business:read"],
   WAREHOUSE_MANAGER: ["business:read", "warehouse:manage"],
   MARKETING_PROMOTIONS: ["business:read", "marketing:manage"],
@@ -33,7 +39,6 @@ export function validateGrant(grant: AuthorityGrant): void {
   }
 }
 
-/** Execution-time authorization: possession of a role name never bypasses an active durable grant. */
 export function authorizeOperatorAction(input: Readonly<{
   participantId: string;
   permission: string;
@@ -48,43 +53,27 @@ export function authorizeOperatorAction(input: Readonly<{
   });
   if (active.length === 0) return { allowed: false, reason: "NO_ACTIVE_GRANT" };
   const grant = active.find(candidate => candidate.permissions.includes(input.permission));
-  return grant
-    ? { allowed: true, reason: "AUTHORIZED", grantId: grant.grantId }
-    : { allowed: false, reason: "PERMISSION_DENIED" };
+  return grant ? { allowed: true, reason: "AUTHORIZED", grantId: grant.grantId } : { allowed: false, reason: "PERMISSION_DENIED" };
 }
 
+/** System Owner continuity is mandatory; Admin never counts as an Owner substitute. */
 export function assertOwnerContinuity(input: Readonly<{
   grants: readonly AuthorityGrant[];
   revokingGrantId: string;
   now: string;
 }>): void {
-  const ownerRoles = new Set<OperatorRole>(["SYSTEM_OWNER", "BACKUP_SYSTEM_OWNER"]);
   const remaining = input.grants.filter(grant =>
     grant.grantId !== input.revokingGrantId &&
-    ownerRoles.has(grant.role) &&
+    grant.role === "SYSTEM_OWNER" &&
     (grant.revokedAt === undefined || Date.parse(grant.revokedAt) > Date.parse(input.now)),
   );
   if (remaining.length === 0) throw new Error("LAST_OWNER_PROTECTION");
 }
 
 export type FeatureState = "ENABLED" | "SUSPENDED";
-export type FeatureControl = Readonly<{
-  featureId: string;
-  state: FeatureState;
-  changedAt: string;
-  changedBy: string;
-  authorityGrantId: string;
-  reason: string;
-}>;
+export type FeatureControl = Readonly<{ featureId: string; state: FeatureState; changedAt: string; changedBy: string; authorityGrantId: string; reason: string }>;
 
-export function changeFeatureState(input: Readonly<{
-  featureId: string;
-  state: FeatureState;
-  reason: string;
-  actorId: string;
-  grants: readonly AuthorityGrant[];
-  now: string;
-}>): FeatureControl {
+export function changeFeatureState(input: Readonly<{ featureId: string; state: FeatureState; reason: string; actorId: string; grants: readonly AuthorityGrant[]; now: string }>): FeatureControl {
   const authority = authorizeOperatorAction({ participantId: input.actorId, permission: "feature:manage", grants: input.grants, now: input.now });
   if (!authority.allowed || !authority.grantId) throw new Error("FEATURE_CONTROL_UNAUTHORIZED");
   if (!input.reason.trim()) throw new Error("FEATURE_CONTROL_REASON_REQUIRED");
