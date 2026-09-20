@@ -1,0 +1,54 @@
+version: "1.1"
+status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
+as_of_utc: "2026-09-20"
+applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
+canonical_entry_truth:
+  guest_enrollment:
+    authentication_required: false
+    google_required: false
+    employment_agency_required: true
+    provisioning: AUTO_UNLESS_GOVERNED_MANUAL_REVIEW
+  activation:
+    ordinary_membership: CONFIRMED_ANNUAL_SUBSCRIPTION_SETTLEMENT
+    member_id: IMMUTABLE_SERVER_ISSUED
+  member_authentication:
+    primary: WFC_MEMBER_ID_PLUS_REGISTERED_CONTACT_CHALLENGE
+    session: SERVER_BACKED
+    google: OPTIONAL_EXPLICITLY_BOUND_PROVIDER
+    google_auto_binding: PROHIBITED
+external_service_control_plane:
+  principle: CONFIGURE_THEN_EXPLICITLY_ACTIVATE_FAIL_CLOSED
+  secret_storage: DEPLOYMENT_SECRET_STORE_ONLY
+  database_secret_storage: PROHIBITED
+  secret_readback: PROHIBITED
+  audit_metadata: POSTGRESQL
+  services:
+    payments:
+      initial_provider: PAYSTACK
+      activation_authority: SYSTEM_OWNER
+      activation_ceremony: AUTHORIZED_CONFIGURATION_PLUS_EXPLICIT_SETTINGS_ACTIVATION
+      additional_live_funds_gate: NONE
+    email:
+      initial_provider: MAILERLITE
+      activation_authority: ADMIN_OR_SYSTEM_OWNER
+    sms:
+      initial_provider: TWILIO
+      activation_authority: ADMIN_OR_SYSTEM_OWNER
+    google_login:
+      initial_provider: GOOGLE
+      activation_authority: SYSTEM_OWNER
+      role: OPTIONAL_MEMBER_LOGIN_PROVIDER_ONLY
+    database:
+      initial_provider: NEON
+      activation_authority: SYSTEM_OWNER
+    observability:
+      initial_provider: GENERIC
+      activation_authority: ADMIN_OR_SYSTEM_OWNER
+fail_closed_invariants:
+  - missing_credentials_means_not_active
+  - configured_does_not_mean_active
+  - secrets_are_never_returned_by_settings_api
+  - secrets_are_never_written_to_application_database
+  - production_enablement_does_not_implicitly_activate_external_services
+  - service_activation_is_audited
+  - operator_cannot_manage_system_integrations
