@@ -1,0 +1,45 @@
+version: "1.1"
+status: CANONICAL_POLICY_RECONCILIATION_ADDENDUM
+supersedes: policy-ratification-truth-matrix-reconciliation-2026-09-19.yaml
+as_of_utc: "2026-09-19"
+authority:
+  policy_register: "WorkersFoodClub Policy Ratification Register v1.1 (Q1-Q34)"
+  cb00_reconciliation: "CB-00 Policy Reconciliation v1.1"
+rule: "Policy closure is not implementation, runtime, legal, recovery, concurrency, idempotency, or launch proof."
+
+policy_reclassifications:
+  UC-01: {policy_status: CLOSED_BY_POLICY, authority: [PR-01, PR-03], implementation_status: OPEN}
+  UC-02: {policy_status: CLOSED_BY_POLICY, authority: [PR-02, PR-03, PR-05, PR-32, PR-33], implementation_status: OPEN}
+  UC-03: {policy_status: CLOSED_BY_POLICY, authority: [PR-12, PR-13, PR-14, PR-34], implementation_status: OPEN}
+  UC-04: {policy_status: CLOSED_BY_POLICY, authority: [PR-10, PR-11, PR-32, PR-33], implementation_status: OPEN}
+  UC-05: {policy_status: CLOSED_BY_POLICY_FOR_OPERATOR_AUTHORIZATION_MODEL, authority: [PR-04, PR-06, PR-07, PR-08, PR-09, PR-31], implementation_status: OPEN}
+  UC-06: {policy_status: CLOSED_BY_POLICY_FOR_OPERATOR_AUTHORIZATION_MODEL, authority: [PR-06, PR-07, PR-08, PR-09, PR-15, PR-31], implementation_status: OPEN}
+  UC-08: {policy_status: CLOSED_BY_POLICY, authority: [PR-15, PR-16, PR-17, PR-18], implementation_status: OPEN_P0}
+  UC-10: {policy_dependency_status: RESOLVED_BY_POLICY, authority: [PR-15, PR-16, PR-17, PR-18], implementation_status: OPEN_P0}
+  UC-11: {policy_status: WITHHELD_BY_POLICY, authority: [PR-19], initial_launch_requirement: NOT_REQUIRED_AND_NOT_AUTHORIZED}
+  UC-12: {policy_status: WITHHELD_BY_POLICY, authority: [PR-20], initial_launch_requirement: NOT_AUTHORIZED_FOR_INITIAL_LIVE_OPERATION}
+  TITLE_RISK_POLICY: {policy_status: CLOSED_BY_POLICY, authority: [PR-21, PR-22, PR-23], implementation_status: EVIDENCE_AND_EXTERNAL_REVIEW_REQUIRED}
+  REFUNDS_AND_CORRECTIONS: {policy_status: CLOSED_BY_POLICY, authority: [PR-24, PR-25, PR-26], implementation_status: OPEN_WHERE_NOT_PROVEN}
+  RECOVERY: {policy_status: CLOSED_BY_POLICY, authority: [PR-27], implementation_status: OPEN_P1, rpo: "<=1 hour", rto: "<=4 hours"}
+  AUTHENTICATION_AND_WORKFORCE: {policy_status: CLOSED_BY_POLICY, authority: [PR-01, PR-02, PR-04, PR-05, PR-06, PR-07, PR-08, PR-09, PR-31, PR-32, PR-33], implementation_status: OPEN_P1_UNTIL_RUNTIME_PROVEN}
+
+global_gap_reclassifications:
+  P0-GOV-CANON:
+    status: PARTIALLY_RESOLVED
+    resolved: ["Q1-Q34 ratified", "all 30 CB-00 invariants reconciled without conflict"]
+    remains_open: ["historical C0-C10 substantive source undiscovered", "recover or explicitly supersede through separately ratified Constitution v1.0"]
+  P1-DB-RECOVERY: {policy_status: CLOSED_BY_POLICY, implementation_evidence_status: OPEN, authority: PR-27}
+  P1-AUTH-RUNTIME-PROOF: {policy_status: CLOSED_BY_POLICY, implementation_evidence_status: OPEN}
+  P1-DECISIONS:
+    status: RESOLVED
+    evidence: ["Policy Ratification Register v1.1 Q1-Q34", "BLV2-DEC-024 supersedes BLV2-DEC-007", "BLV2-DEC-025 records final membership/household cleanup"]
+
+safety_boundary:
+  paystack_live_mode: WITHHELD
+  live_paystack_credentials: WITHHELD
+  live_funds: WITHHELD
+  production_payment_mutations: WITHHELD
+  production_refund_mutations: WITHHELD
+  production_fulfillment_mutations: WITHHELD
+  member_credit: WITHHELD
+  cagd_payroll_deduction: WITHHELD

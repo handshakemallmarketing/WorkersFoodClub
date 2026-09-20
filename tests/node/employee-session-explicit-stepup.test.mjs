@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import handler from '../../api/employee-session.js';
+function res(){const state={status:null,body:null};return{state,setHeader(){},status(code){state.status=code;return this;},json(body){state.body=body;return this;}};}
+test('ordinary member authentication cannot implicitly mint employee session',async()=>{const out=res();await handler({method:'POST',headers:{}},out,{env:{}});assert.equal(out.state.status,403);assert.equal(out.state.body.error,'EXPLICIT_EMPLOYEE_STEP_UP_REQUIRED');});
+test('wrong step-up intent fails closed',async()=>{const out=res();await handler({method:'POST',headers:{'x-employee-step-up-intent':'member-login'}},out,{env:{}});assert.equal(out.state.status,403);assert.equal(out.state.body.error,'EXPLICIT_EMPLOYEE_STEP_UP_REQUIRED');});

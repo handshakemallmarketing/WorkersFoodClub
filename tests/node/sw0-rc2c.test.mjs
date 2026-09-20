@@ -13,7 +13,7 @@ import {GovernedTransferEvaluator,GovernedTransferPolicyRegistry} from '../../di
 import {CanonicalRecordLog,RebuildableProjection,fulfillmentProjection,savingsProjection,snapshotDigest,assertFresh} from '../../dist/packages/projections/src/index.js';
 
 const pid=x=>asId(x),sid=x=>asId(x),oid=x=>asId(x),ofid=x=>asId(x),eid=x=>asId(x),cid=x=>asId(x),gid=x=>asId(x);
-const member={id:'membership:rc2c',participantId:pid('participant:member'),state:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('evidence:eligibility')]};
+const member={id:'membership:rc2c',participantId:pid('participant:member'),state:'ACTIVE',standing:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('evidence:eligibility')]};
 const spec=sid('spec:rice-5kg');
 const offer={id:ofid('offer:rc2c'),offerorId:pid('participant:food-club'),specificationId:spec,quantity:quantity(5,'kg'),memberPrice:money(45000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'hospital:korle-bu',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',priceEvidenceIds:[eid('evidence:price')],policyVersions:['pricing:v1']};
 const verifier={isAccepted:(commandId,eventId)=>commandId==='command:checkout-rc2c'&&eventId==='event:purchase-accepted-rc2c'};

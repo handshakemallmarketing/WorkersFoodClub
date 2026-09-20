@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+const sql=fs.readFileSync(new URL('../../packages/durability/sql/021_employee_membership_entitlement.sql',import.meta.url),'utf8');
+test('active employee sponsorship is a durable zero-fee entitlement',()=>{assert.match(sql,/EMPLOYEE_SPONSORED/);assert.match(sql,/annual_fee_minor bigint NOT NULL DEFAULT 0/);assert.match(sql,/CHECK \(annual_fee_minor=0\)/);});
+test('employment and membership remain distinct persisted state machines',()=>{assert.match(sql,/CREATE TABLE IF NOT EXISTS employee_employment/);assert.match(sql,/employment_record_id text NOT NULL REFERENCES employee_employment/);assert.match(sql,/membership_id text REFERENCES application_membership/);});
+test('entitlement lifecycle is explicit and auditable',()=>{assert.match(sql,/ELIGIBLE','GRANTED','ENDED/);assert.match(sql,/GRANTED' AND membership_id IS NOT NULL AND granted_at IS NOT NULL/);assert.match(sql,/ENDED' AND ended_at IS NOT NULL/);assert.match(sql,/employee_membership_entitlement_employment_uq/);});
+test('membership standing vocabulary is normalized without sponsorship-as-standing',()=>{assert.match(sql,/ACTIVE','GRACE','RESTRICTED','SUSPENDED','TERMINATED/);assert.doesNotMatch(sql,/standing IN \([^)]*EMPLOYEE_SPONSORED/);});

@@ -1,58 +1,59 @@
-version: 0.1
+version: 1.0
 owner: A2
 scope: [UC-01, UC-02, UC-03, UC-04]
-status: implementation_contract
-existing_lineage:
-  membership_states: [ACTIVE, SUSPENDED, ENDED]
-  governed_eligibility_required: true
-  authentication_identity_is_not_member_identity: true
+status: ratified_policy_aligned_contract
+authority: [WORKERSFOODCLUB_CONSTITUTION_V1, POLICY_RATIFICATION_REGISTER_v1.1]
+identity_and_access:
+  rules:
+    - guest_may_browse_only_non_member_surfaces_without_authentication
+    - membership_precedes_member_authentication
+    - unauthenticated_member_is_treated_as_guest_for_access
+    - member_area_requires_active_or_grace_membership_and_successful_member_authentication
+    - operator_area_requires_separate_employee_step_up_session_and_bounded_authority_grant
 member_application:
   states: [DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, WITHDRAWN]
-  required_core_fields:
-    - legal_name
-    - primary_email_or_phone
-    - worker_or_eligibility_class
-    - eligibility_evidence
-    - communication_consent
   rules:
-    - application_does_not_create_active_membership
-    - approval_requires_governed_eligibility_decision
+    - application_does_not_confer_membership_rights
+    - annual_membership_subscription_settlement_confers_membership_after_approval
     - duplicate_person_detection_must_not_silently_merge_people
-membership_activation:
+membership:
+  standing_states: [ELIGIBLE, ACTIVE, GRACE, RESTRICTED, SUSPENDED, TERMINATED]
   rules:
-    - canonical_member_identity_is_separate_from_oauth_identity
+    - invoice_state_is_not_membership_standing
     - one_participant_may_not_have_two_active_memberships
-    - activation_requires_approved_application_and_governed_eligibility
+    - grace_period_is_30_days_after_annual_subscription_becomes_past_due
+    - grace_preserves_member_access_subject_to_other_valid_restrictions
+    - restriction_after_grace_is_policy_driven_and_auditable
     - suspension_must_not_destroy_identity_or_history
-    - restoration_requires_current_authority_and_resolved_restriction_basis
+    - restoration_requires_authoritative_settlement_or_authorized_adjustment
+employee_sponsorship:
+  rules:
+    - workforce_state_and_membership_state_are_separate_state_machines
+    - active_employee_has_sponsored_membership_entitlement
+    - employment_termination_prevents_future_sponsored_renewal
+    - employment_termination_does_not_retroactively_cancel_an_already_sponsored_membership_period
 beneficiaries:
+  max_active_beneficiaries: 2
   states: [INVITED, ACCEPTED, ACTIVATED, REVOKED, EXPIRED]
   rules:
     - beneficiary_invitation_does_not_create_member_authority
     - activation_link_must_be_single_purpose_and_expiring
     - beneficiary_personal_information_is_supplied_or_confirmed_by_beneficiary
-    - sponsor_relationship_and_invitation_lineage_are_auditable
-    - slot_limit_is_policy_not_hardcoded_in_domain_truth
+    - sponsor_relationship_invitation_lineage_and_replacement_history_are_auditable
 membership_billing:
   invoice_states: [ISSUED, DUE, PARTIALLY_SETTLED, SETTLED, PAST_DUE, VOID]
-  standing_states: [CURRENT, PAST_DUE, RESTRICTED]
   rules:
     - invoice_is_an_economic_obligation_not_payment
-    - payment_intent_does_not_restore_good_standing
-    - restoration_requires_authoritative_settlement_or_authorized_adjustment
-    - restriction_must_be_policy_driven_and_auditable
-    - past_due_restriction_must_not_erase_existing_obligations_or_history
-consequential_policy_pending:
-  - membership_fee_amount
-  - billing_frequency
-  - grace_period_length
-  - beneficiary_slot_count
-  - restriction_scope_for_past_due_members
+    - payment_intent_does_not_restore_membership
+    - authoritative_settlement_or_authorized_adjustment_is_required_for_restoration
 falsification_required:
   - duplicate_application
   - duplicate_active_membership
+  - grace_boundary_minus_one_second_and_exact_expiry
   - forged_or_expired_beneficiary_activation
   - beneficiary_slot_race
   - payment_intent_without_settlement
   - settlement_replay
-  - suspend_restore_authority_revocation
+  - employee_termination_does_not_revoke_current_sponsored_period
+  - operator_step_up_revocation
+  - admin_cannot_create_system_owner

@@ -1,49 +1,45 @@
-# AUTH-MEMBERSHIP-001 — Member Admission Policy
+# AUTH-MEMBERSHIP-001 — Membership, Guest and Workforce Admission Policy
 
-**Status:** RATIFIED  
+**Status:** RATIFIED — REVISED  
 **Effective date:** 2026-09-19  
-**Owner decision:** A person cannot log in to the WorkersFoodClub Member application unless previously registered as a member.
+**Authority:** WorkersFoodClub Policy Ratification Register v1.1 (PR-01 through PR-14, PR-31 through PR-34)
 
-## Governing invariant
+## Governing invariants
+Membership eligibility is established by approval. Active membership rights require confirmed annual subscription settlement or a valid `EMPLOYEE_SPONSORED_MEMBERSHIP` entitlement. Authentication is required to exercise Member-area capabilities but never creates membership eligibility or rights.
 
-Authentication proves identity only. It does not create, imply, approve, activate, or confer membership.
+`Guest ≠ Membership-Eligible Applicant ≠ Active Member ≠ Employee ≠ Operator ≠ Admin ≠ System Owner`
 
-`Authenticated ≠ Registered ≠ Approved ≠ Active Member ≠ Employee ≠ Operator ≠ Admin ≠ System Owner`
+`Membership ≠ Authentication ≠ Workforce Authority`
 
-## Member admission rule
+## Guest/non-member access
+An unauthenticated person may access only the bounded Guest/non-member area. An Active Member who has not authenticated is treated as a Guest for application-access purposes. Guest access MUST NOT expose Member-only personal, economic, household, commitment, payment, fulfillment or workforce capabilities.
 
-A production identity may enter the Member application only when all of the following are true:
+## Membership acquisition
+A Guest/non-member may apply. Application alone confers no membership rights. Approval establishes eligibility only. For an ordinary applicant, confirmed settlement of the annual subscription activates membership rights. Payment initiation, unsolicited payment, or payment without required approval MUST NOT manufacture membership.
 
-1. The external identity has been successfully verified.
-2. Exactly one pre-existing ACTIVE `application_identity_binding` binds that issuer/subject to a WorkersFoodClub participant.
-3. That participant has the membership state/standing required by the requested member capability.
-4. Normal server-side scope and membership authorization succeeds.
+An ACTIVE employee may instead receive an auditable `EMPLOYEE_SPONSORED_MEMBERSHIP` entitlement. This activates ordinary membership rights without fake zero-value payment and does not create workforce authority.
 
-Sign-in MUST NOT create an identity binding, participant, membership, membership application, or authority grant.
+## Member-area admission
+Member-area access requires: authenticated external identity; exactly one valid ACTIVE identity binding to the correct participant; active membership rights and sufficient standing; and successful server-side authorization. Sign-in MUST NOT create participant, eligibility, membership rights, payment settlement, sponsorship entitlement, or authority grant.
 
-## Non-member behavior
+## Membership standing
+Ordinary lifecycle: `APPLIED -> APPROVED/ELIGIBLE -> ANNUAL_SUBSCRIPTION_SETTLED -> ACTIVE -> GRACE (30 days) -> RESTRICTED/SUSPENDED -> restored or TERMINATED`.
 
-A successfully authenticated identity without the required pre-existing member binding is denied Member application admission with `MEMBERSHIP_REQUIRED`.
+Confirmed qualifying settlement restores standing; payment initiation alone does not. Bounded access for payment, records, support and remediation remains available during economic restriction.
 
-The person may be routed only to the appropriate bounded public/pre-member journey:
-- no registration/application: `NON_MEMBER` → Register / Apply to Join;
-- submitted application: `APPLICATION_STATUS`;
-- approved but activation/fee incomplete: bounded activation/subscription journey;
-- suspended/past-due member: bounded remediation journey.
+## Employee-sponsored renewal and separation
+While workforce standing remains ACTIVE, `EMPLOYEE_SPONSORED_MEMBERSHIP` automatically renews for each annual membership period without generating a member-paid subscription obligation. Workforce suspension, revocation or termination stops future sponsorship renewal but does not retroactively cancel the already-sponsored membership period. Membership remains independently governed through the end of that period unless a separate legitimate membership suspension/termination rule applies.
 
-These states MUST NOT mount the ordinary active-member shell or grant member economic capabilities.
+## Household beneficiaries
+A Primary Member may nominate up to two individually identified beneficiaries. Beneficiaries do not independently pay the annual subscription, must satisfy applicable identity and age/service eligibility requirements, and may transact independently only within household/member constraints. Slots may not be sold, rented or commercially transferred. Replacement is subject to a versioned anti-abuse change limit under System Owner authority. Sponsor-standing economic restrictions propagate to beneficiary economic privileges while bounded records/support/remediation access remains available.
 
-## Workforce separation
+## Workforce separation and step-up
+Membership and workforce standing are separate state machines. Operator access requires a dedicated Employee/Operator area and additional workforce authentication/step-up. Member authentication alone never grants Operator access.
 
-Employee/operator/admin/system-owner authority is independently governed. No workforce authority is inferred from Google authentication or membership, and member admission is not a substitute for employee step-up. Workforce step-up is downstream of member admission: an employee/operator must have an ACTIVE/CURRENT membership before an employee session can be minted. A pre-provisioned authority invitation or grant does not bypass this member-first requirement.
+Authorization follows `Identity -> Persona -> Domain -> Function -> Action/Task -> Constraints`. Default is DENY. System Owner appoints/revokes Admins; Admins grant/revoke bounded Operator permissions within delegated authority; Operators perform only explicitly authorized functions. An Admin cannot create, appoint or promote a System Owner. Sensitive actions may additionally require elevated authentication, reason/evidence, thresholds and/or second approval.
 
 ## Required regression evidence
+Implementation must prove Guest isolation; eligibility-versus-active-rights separation; ordinary paid activation; employee-sponsored activation and renewal; workforce cessation without retroactive membership cancellation; beneficiary slot/identity/restriction rules; Member authentication without workforce escalation; dedicated workforce step-up; domain/function/action isolation; revocation; and direct server-side enforcement.
 
-- **J2-NONMEMBER-LOGIN:** new verified external identity + no pre-existing membership binding → HTTP 403 `MEMBERSHIP_REQUIRED`, Member shell denied, member APIs denied, registration/application offered, and no membership/binding is auto-created.
-- **J3-APPLICANT-LOGIN:** submitted applicant → HTTP 403 `MEMBERSHIP_REQUIRED`, bounded application-status route only.
-- **J5-REGISTERED-MEMBER-LOGIN:** pre-existing ACTIVE binding + ACTIVE/CURRENT membership → Member admission succeeds.
-- Direct member API calls remain independently fail-closed through application principal binding.
-
-## Change-control rule
-
-Any future relaxation of this policy requires an explicit owner-ratified policy change and corresponding server-side, client-side, and regression-test updates. UI-only changes cannot alter member admission authority.
+## Change control
+Any change requires explicit System Owner/designated Governance Authority ratification and synchronized policy, server-side, client-side, state-model/migration where applicable, and regression-evidence updates. UI-only changes cannot alter authority.
