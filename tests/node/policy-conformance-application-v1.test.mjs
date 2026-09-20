@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {resolveMemberAccess} from '../../lib/member-access-policy.js';
+const contract=fs.readFileSync(new URL('../../docs/business-logic-v2/a2-membership-contract.yaml',import.meta.url),'utf8');
+const hierarchy=fs.readFileSync(new URL('../../packages/durability/sql/015_employee_authority_hierarchy.sql',import.meta.url),'utf8');
+test('guest cannot obtain member area merely by possessing an identity session',()=>{assert.deepEqual(resolveMemberAccess({membershipStanding:null,authenticated:true}),{state:'GUEST',memberArea:false});});
+test('unauthenticated member is guest for access',()=>{assert.equal(resolveMemberAccess({membershipStanding:'ACTIVE',authenticated:false}).state,'GUEST');});
+test('active and 30-day grace members retain authenticated member access',()=>{assert.equal(resolveMemberAccess({membershipStanding:'ACTIVE',authenticated:true}).memberArea,true);assert.equal(resolveMemberAccess({membershipStanding:'GRACE',authenticated:true}).memberArea,true);});
+test('eligible applicant must settle membership before member area',()=>{assert.equal(resolveMemberAccess({membershipStanding:'ELIGIBLE',authenticated:true}).state,'MEMBERSHIP_PAYMENT_REQUIRED');});
+test('contract separates invoice delinquency from membership standing',()=>{assert.match(contract,/standing_states: \[ELIGIBLE, ACTIVE, GRACE, RESTRICTED, SUSPENDED, TERMINATED\]/);assert.match(contract,/invoice_states: \[ISSUED, DUE, PARTIALLY_SETTLED, SETTLED, PAST_DUE, VOID\]/);});
+test('ratified beneficiary cap and employee sponsorship semantics are explicit',()=>{assert.match(contract,/max_active_beneficiaries: 2/);assert.match(contract,/employment_termination_does_not_retroactively_cancel/);});
+test('operator access remains separately revocable step-up authority',()=>{assert.match(hierarchy,/independently revocable elevated/);assert.match(hierarchy,/operator:\*/);});
