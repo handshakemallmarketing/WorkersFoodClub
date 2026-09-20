@@ -7,7 +7,7 @@ const pid=x=>asId(x), sid=x=>asId(x), oid=x=>asId(x), ofid=x=>asId(x), eid=x=>as
 const verifier={isAccepted:(commandId,eventId)=>commandId==='command:checkout'&&eventId==='event:purchase-accepted'};
 const ledger=()=>new InMemoryDemandCommitmentLedger(verifier);
 
-const member={id:'membership:1',participantId:pid('participant:member'),state:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('evidence:eligibility')]};
+const member={id:'membership:1',participantId:pid('participant:member'),state:'ACTIVE',standing:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('evidence:eligibility')]};
 const offer={id:ofid('offer:rice'),offerorId:pid('participant:food-club'),specificationId:sid('spec:rice-5kg'),quantity:quantity(5,'kg'),memberPrice:money(45000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'hospital:korle-bu',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',priceEvidenceIds:[eid('evidence:price')],policyVersions:['pricing:v1']};
 const commitInput=(overrides={})=>({obligationId:oid('obligation:1'),participantId:member.participantId,membership:member,offer,quantity:quantity(5,'kg'),authorizedCommandId:cid('command:checkout'),authorizedEventId:'event:purchase-accepted',acceptedAt:'2026-09-07T10:00:00Z',policyVersions:['checkout:v1'],...overrides});
 
@@ -16,11 +16,11 @@ test('INV-003 forecast interest and request remain signals and do not create com
  assert.ok(l.getSignal('demand:forecast')); assert.equal(l.getCommitment(oid('obligation:1')),undefined);
 });
 
-test('INV-004 purchase obligation requires verifiably accepted command/event and active membership',async()=>{
+test('INV-004 purchase obligation requires verifiably accepted command/event and commerce-eligible membership',async()=>{
  const l=ledger();
  await assert.rejects(()=>l.commitPurchase(commitInput({authorizedEventId:''})),/AUTHORIZED_COMMITMENT_EVENT_REQUIRED/);
  await assert.rejects(()=>l.commitPurchase(commitInput({authorizedEventId:'event:forged'})),/AUTHORIZED_COMMITMENT_NOT_VERIFIED/);
- await assert.rejects(()=>l.commitPurchase(commitInput({membership:{...member,state:'SUSPENDED'}})),/PURCHASE_REQUIRES_ACTIVE_MEMBERSHIP/);
+ await assert.rejects(()=>l.commitPurchase(commitInput({membership:{...member,state:'SUSPENDED'}})),/PURCHASE_REQUIRES_COMMERCE_ELIGIBLE_MEMBERSHIP/);
  const record=await l.commitPurchase(commitInput());
  assert.equal(record.obligation.state,'OPEN'); assert.equal(record.obligation.specificationId,offer.specificationId);
 });

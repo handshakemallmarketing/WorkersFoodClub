@@ -21,7 +21,7 @@ function setup(){
 
 async function addObligation(demand,id,amount){
  const offer={id:off(`offer:${id}`),offerorId:club,specificationId:rice,quantity:quantity(amount,'kg'),memberPrice:money(BigInt(amount*1000),'GHS'),priceBasis:quantity(amount,'kg'),pickupPlace:'Pickup A',validFrom:'2026-09-09T00:00:00Z',validUntil:'2026-09-10T00:00:00Z',priceEvidenceIds:[eid(`e:price:${id}`)],policyVersions:['price-v1']};
- return demand.commitPurchase({obligationId:oid(id),participantId:member,membership:{id:'membership:1',participantId:member,state:'ACTIVE',establishedAt:'2026-09-09T00:00:00Z',eligibilityPolicyVersion:'v1',eligibilityEvidenceIds:[eid('e:elig')]},offer,quantity:quantity(amount,'kg'),authorizedCommandId:cmd(`command:${id}`),authorizedEventId:`event:${id}`,acceptedAt:at,policyVersions:['checkout-v1']});
+ return demand.commitPurchase({obligationId:oid(id),participantId:member,membership:{id:'membership:1',participantId:member,state:'ACTIVE',standing:'ACTIVE',establishedAt:'2026-09-09T00:00:00Z',eligibilityPolicyVersion:'v1',eligibilityEvidenceIds:[eid('e:elig')]},offer,quantity:quantity(amount,'kg'),authorizedCommandId:cmd(`command:${id}`),authorizedEventId:`event:${id}`,acceptedAt:at,policyVersions:['checkout-v1']});
 }
 
 test('SW1-08B fully allocated quantity cannot also be consumed by transform',async()=>{
