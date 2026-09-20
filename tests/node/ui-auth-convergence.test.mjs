@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+const index=fs.readFileSync(new URL('../../public/index.html',import.meta.url),'utf8');const employee=fs.readFileSync(new URL('../../public/employee.html',import.meta.url),'utf8');const api=fs.readFileSync(new URL('../../api/employee-session.js',import.meta.url),'utf8');
+test('member shell does not expose operator governance navigation',()=>{assert.doesNotMatch(index,/>Operations</);assert.doesNotMatch(index,/>Workforce & Authority</);assert.doesNotMatch(index,/>Release Controls</);assert.match(index,/Members authenticate here\. Employee access is a separate step\./);});
+test('employee access is a dedicated second authentication journey',()=>{assert.match(employee,/Employee verification/);assert.match(employee,/Member sign-in does not grant operator authority/);assert.match(employee,/employee-stepup-intent\.js/);});
+test('employee session mint requires explicit employee-access intent',()=>{assert.match(api,/x-employee-step-up-intent/);assert.match(api,/EXPLICIT_EMPLOYEE_STEP_UP_REQUIRED/);});
+test('member shell does not use SuperUser as an authority label',()=>assert.doesNotMatch(index,/SuperUser/));
