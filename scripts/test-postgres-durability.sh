@@ -224,5 +224,15 @@ active_race=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_specification WHER
 orphan_race=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_listing l LEFT JOIN catalog_specification s ON s.specification_id=l.specification_id AND s.version=l.specification_version WHERE l.specification_id='spec:race' AND s.specification_id IS NULL")
 [[ "$active_race" == "1" && "$orphan_race" == "0" ]] || { echo "J20 concurrent publication violated active-version or referential invariant" >&2; exit 1; }
 [[ "$race_a_status" == "0" || "$race_b_status" == "0" ]] || { echo "J20 concurrent publication made no forward progress" >&2; exit 1; }
+# Deferred invariant must reject a transaction that attempts to commit two active versions.
+if "${PSQL[@]}" <<'SQL' >/dev/null 2>&1
+BEGIN;
+INSERT INTO catalog_specification(specification_id,version,name,base_unit,category_id,active,created_by) VALUES('spec:guard',1,'Guard 1','kg','category:staples',true,'participant:operator');
+INSERT INTO catalog_specification(specification_id,version,name,base_unit,category_id,active,created_by) VALUES('spec:guard',2,'Guard 2','kg','category:staples',true,'participant:operator');
+COMMIT;
+SQL
+then echo "J20 deferred one-active invariant accepted two active versions" >&2; exit 1; fi
+guard_rows=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_specification WHERE specification_id='spec:guard'")
+[[ "$guard_rows" == "0" ]] || { echo "J20 deferred invariant failure did not roll back transaction" >&2; exit 1; }
 
 echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications, A2 membership/credit, A10 support and J20 catalog proof passed"
