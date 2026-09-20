@@ -20,7 +20,7 @@ const offer={id:off('offer:rice'),offerorId:club,specificationId:spec,quantity:q
 
 async function setup(){
  const demand=new InMemoryDemandCommitmentLedger({isAccepted:async()=>true});
- await demand.commitPurchase({obligationId,participantId:member,membership:{id:'membership:1',participantId:member,state:'ACTIVE',establishedAt:'2026-09-08T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('evidence:eligibility')]},offer,quantity:quantity(5,'kg'),authorizedCommandId:cid('command:checkout'),authorizedEventId:'event:checkout',acceptedAt:'2026-09-09T01:00:00Z',policyVersions:['checkout-v1']});
+ await demand.commitPurchase({obligationId,participantId:member,membership:{id:'membership:1',participantId:member,state:'ACTIVE',standing:'ACTIVE',establishedAt:'2026-09-08T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('evidence:eligibility')]},offer,quantity:quantity(5,'kg'),authorizedCommandId:cid('command:checkout'),authorizedEventId:'event:checkout',acceptedAt:'2026-09-09T01:00:00Z',policyVersions:['checkout-v1']});
  const inventory=new InMemoryInventoryLedger();const riceLot=lot('lot:pack');
  inventory.receiveLot({lot:{id:riceLot,specificationId:spec,quantity:quantity(5,'kg')},ownerId:club,custodianId:warehouse,placeId:'warehouse:A',receivedAt:'2026-09-09T01:05:00Z',receiptEvidenceIds:[eid('evidence:receipt')]});
  inventory.assessQuality({id:'quality:1',lotId:riceLot,state:'ACCEPTED',assessedAt:'2026-09-09T01:06:00Z',evidenceIds:[eid('evidence:quality')]});
