@@ -1,49 +1,97 @@
-# AUTH-MEMBERSHIP-001 — Member Admission Policy
+# AUTH-MEMBERSHIP-001 — Membership, Guest and Workforce Admission Policy
 
-**Status:** RATIFIED  
+**Status:** RATIFIED — REVISED  
 **Effective date:** 2026-09-19  
-**Owner decision:** A person cannot log in to the WorkersFoodClub Member application unless previously registered as a member.
+**Authority:** WorkersFoodClub Policy Ratification Register v1.0 (PR-01 through PR-05, PR-31, PR-32)
 
-## Governing invariant
+## Governing invariants
 
-Authentication proves identity only. It does not create, imply, approve, activate, or confer membership.
+Membership is established before Member-area authentication. Authentication is required to exercise Member-area capabilities but does not create membership.
 
-`Authenticated ≠ Registered ≠ Approved ≠ Active Member ≠ Employee ≠ Operator ≠ Admin ≠ System Owner`
+`Guest ≠ Member ≠ Employee ≠ Operator ≠ Admin ≠ System Owner`
 
-## Member admission rule
+`Membership ≠ Authentication ≠ Workforce Authority`
 
-A production identity may enter the Member application only when all of the following are true:
+A person may possess more than one status, but one status must not silently manufacture another.
 
-1. The external identity has been successfully verified.
-2. Exactly one pre-existing ACTIVE `application_identity_binding` binds that issuer/subject to a WorkersFoodClub participant.
-3. That participant has the membership state/standing required by the requested member capability.
-4. Normal server-side scope and membership authorization succeeds.
+## Guest/non-member access
 
-Sign-in MUST NOT create an identity binding, participant, membership, membership application, or authority grant.
+An unauthenticated person may access only the bounded Guest/non-member area. A Member who has not authenticated is treated as a Guest for application-access purposes.
 
-## Non-member behavior
+Guest capabilities may include public information and the bounded membership application/activation journey. Guest access MUST NOT expose Member-only personal, economic, household, commitment, payment, fulfillment or workforce capabilities.
 
-A successfully authenticated identity without the required pre-existing member binding is denied Member application admission with `MEMBERSHIP_REQUIRED`.
+## Membership acquisition
 
-The person may be routed only to the appropriate bounded public/pre-member journey:
-- no registration/application: `NON_MEMBER` → Register / Apply to Join;
-- submitted application: `APPLICATION_STATUS`;
-- approved but activation/fee incomplete: bounded activation/subscription journey;
-- suspended/past-due member: bounded remediation journey.
+A Guest/non-member may apply for membership. Application does not confer membership rights.
 
-These states MUST NOT mount the ordinary active-member shell or grant member economic capabilities.
+For an ordinary applicant, membership rights require:
+1. an approved membership application; and
+2. confirmed settlement of the required annual membership subscription.
 
-## Workforce separation
+Payment initiation, an unsolicited payment, or payment without the required approved application MUST NOT manufacture membership.
 
-Employee/operator/admin/system-owner authority is independently governed. No workforce authority is inferred from Google authentication or membership, and member admission is not a substitute for employee step-up. Workforce step-up is downstream of member admission: an employee/operator must have an ACTIVE/CURRENT membership before an employee session can be minted. A pre-provisioned authority invitation or grant does not bypass this member-first requirement.
+An ACTIVE employee may instead receive an auditable `EMPLOYEE_SPONSORED_MEMBERSHIP` entitlement for the applicable sponsorship period. This satisfies the annual subscription requirement without a fake zero-value payment. It creates ordinary membership rights only; it does not create workforce authority.
+
+## Member-area admission
+
+A Member may enter Member areas only when:
+1. the external identity is successfully authenticated;
+2. exactly one valid ACTIVE application identity binding resolves that issuer/subject to the correct participant;
+3. the participant has valid membership for the requested capability and sufficient membership standing; and
+4. normal server-side authorization succeeds.
+
+A Member who is not authenticated receives only Guest access posture.
+
+Sign-in MUST NOT create a participant, membership, membership application, membership approval, payment settlement, sponsorship entitlement, or authority grant.
+
+## Membership standing
+
+The initial annual-membership standing lifecycle is governed as:
+
+`ACTIVE -> GRACE (30 days) -> RESTRICTED/SUSPENDED -> restored or TERMINATED`
+
+Confirmed qualifying settlement restores standing according to policy. Payment initiation alone does not.
+
+Even when economic capabilities are restricted, bounded access necessary for payment, records, support and remediation must remain available.
+
+## Workforce separation and step-up
+
+Membership and workforce standing are separate state machines.
+
+An active employee receives free employer-sponsored membership, but employee status, membership, Operator authority and Admin authority remain independently evaluated.
+
+Operator access requires a dedicated Employee/Operator access area and additional workforce authentication/step-up. Member authentication alone never grants Operator access.
+
+Workforce authorization follows:
+
+`Identity -> Persona -> Domain -> Function -> Action/Task -> Constraints`
+
+Default is DENY. An Operator receives only explicit grants. Operator status does not imply access to every operational domain.
+
+Authority hierarchy:
+- System Owner appoints/revokes Admins.
+- Admins grant/revoke bounded operational permissions to Operators within delegated authority.
+- Operators perform only authorized domain functions/tasks/actions.
+- An Admin cannot create, appoint or promote a System Owner.
+
+Sensitive actions may additionally require elevated authentication, reason/evidence, configured thresholds and/or second approval.
 
 ## Required regression evidence
 
-- **J2-NONMEMBER-LOGIN:** new verified external identity + no pre-existing membership binding → HTTP 403 `MEMBERSHIP_REQUIRED`, Member shell denied, member APIs denied, registration/application offered, and no membership/binding is auto-created.
-- **J3-APPLICANT-LOGIN:** submitted applicant → HTTP 403 `MEMBERSHIP_REQUIRED`, bounded application-status route only.
-- **J5-REGISTERED-MEMBER-LOGIN:** pre-existing ACTIVE binding + ACTIVE/CURRENT membership → Member admission succeeds.
-- Direct member API calls remain independently fail-closed through application principal binding.
+At minimum, implementation must prove:
+- unauthenticated Guest can use only the bounded Guest/non-member section;
+- unauthenticated Member receives Guest posture and cannot access Member APIs/areas;
+- non-member cannot authenticate into Member areas and cannot acquire membership by authentication;
+- applicant without activated membership cannot access Member economic capabilities;
+- approved applicant + confirmed annual subscription settlement activates ordinary membership;
+- ACTIVE Member + successful authentication + valid binding/standing can enter Member areas;
+- Member authentication alone cannot enter Employee/Operator areas;
+- workforce step-up without an ACTIVE workforce grant fails closed;
+- Operator with one domain/function grant cannot access sibling domains/functions;
+- revoked/suspended workforce authority fails closed independently of membership state;
+- `EMPLOYEE_SPONSORED_MEMBERSHIP` activates ordinary membership without creating Operator/Admin authority;
+- direct Member and workforce API calls independently enforce server-side authorization.
 
-## Change-control rule
+## Change control
 
-Any future relaxation of this policy requires an explicit owner-ratified policy change and corresponding server-side, client-side, and regression-test updates. UI-only changes cannot alter member admission authority.
+Any change to these authority rules requires explicit System Owner/designated Governance Authority ratification and synchronized policy, server-side, client-side, migration/state-model where applicable, and regression-evidence updates. UI-only changes cannot alter authority.
