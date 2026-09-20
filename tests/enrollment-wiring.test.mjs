@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const join=fs.readFileSync(new URL('../public/join.html',import.meta.url),'utf8');
+const auth=fs.readFileSync(new URL('../public/member-auth.js',import.meta.url),'utf8');
+const health=fs.readFileSync(new URL('../api/db-health.js',import.meta.url),'utf8');
+const apply=fs.readFileSync(new URL('../api/membership-apply.js',import.meta.url),'utf8');
+const status=fs.readFileSync(new URL('../api/membership-status.js',import.meta.url),'utf8');
+test('preview can exercise real identity diagnostics without enabling live funds',()=>{assert.match(health,/environment === 'preview'/);assert.match(health,/applicationAccessEnabled/);assert.match(health,/liveFundsAuthorized: false/)});
+test('Join is self-service and has no Google/OIDC dependency',()=>{assert.match(join,/\/api\/membership-apply/);assert.match(join,/governmentEmployer/);assert.match(join,/self-service/i);assert.doesNotMatch(join,/accounts\.google\.com|gsi\/client|Authorization:'Bearer/)});
+test('enrollment API has no identity-provider verifier and supports AUTO or MANUAL review',()=>{assert.doesNotMatch(apply,/verifyProductionOidcRequest|application_identity_binding/);assert.match(apply,/MEMBERSHIP_APPLICATION_REVIEW_MODE/);assert.match(apply,/AUTO/);assert.match(apply,/MANUAL/);assert.match(apply,/governmentEmployer/)});
+test('AUTO application provisions no login identity authority',()=>{assert.match(apply,/application_membership/);assert.match(apply,/membership_subscription_invoice/);assert.doesNotMatch(apply,/INSERT INTO application_identity_binding/)});
+test('member sign-in remains separate from enrollment and synthetic preview bypass is absent',()=>{assert.match(auth,/\/api\/identity-subject/);assert.match(auth,/\/api\/membership-status/);assert.doesNotMatch(auth,/previewToken|Enter member preview/)});
+test('member identity ambiguity fails closed',()=>{assert.match(status,/IDENTITY_BINDING_AMBIGUOUS/)});

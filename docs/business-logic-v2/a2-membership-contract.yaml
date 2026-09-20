@@ -1,21 +1,34 @@
-version: 1.0
+version: 1.1
 owner: A2
 scope: [UC-01, UC-02, UC-03, UC-04]
 status: ratified_policy_aligned_contract
 authority: [WORKERSFOODCLUB_CONSTITUTION_V1, POLICY_RATIFICATION_REGISTER_v1.1]
 identity_and_access:
   rules:
-    - guest_may_browse_only_non_member_surfaces_without_authentication
+    - guest_may_browse_non_member_surfaces_and_submit_membership_application_without_authentication
+    - enrollment_must_not_require_google_oidc_or_other_identity_provider
     - membership_precedes_member_authentication
+    - google_is_a_member_login_option_only
+    - member_login_identity_binding_is_explicit_post_enrollment_and_must_bind_to_pre_existing_member_information
+    - google_authentication_must_not_create_application_membership_activation_or_automatic_binding
     - unauthenticated_member_is_treated_as_guest_for_access
-    - member_area_requires_active_or_grace_membership_and_successful_member_authentication
+    - member_area_requires_active_or_grace_membership_valid_identity_binding_and_successful_member_authentication
     - operator_area_requires_separate_employee_step_up_session_and_bounded_authority_grant
 member_application:
   states: [DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, WITHDRAWN]
   rules:
+    - application_is_guest_accessible_without_login
     - application_does_not_confer_membership_rights
+    - applicant_contact_information_is_not_an_identity_provider_binding
     - annual_membership_subscription_settlement_confers_membership_after_approval
     - duplicate_person_detection_must_not_silently_merge_people
+member_identity_binding:
+  rules:
+    - binding_occurs_separately_from_enrollment
+    - binding_requires_pre_existing_authoritative_member_information
+    - binding_is_explicit_unique_auditable_and_fail_closed_on_ambiguity
+    - email_match_alone_is_not_identity_proof
+    - successful_google_login_without_valid_binding_has_no_member_authority
 membership:
   standing_states: [ELIGIBLE, ACTIVE, GRACE, RESTRICTED, SUSPENDED, TERMINATED]
   rules:
@@ -47,8 +60,12 @@ membership_billing:
     - payment_intent_does_not_restore_membership
     - authoritative_settlement_or_authorized_adjustment_is_required_for_restoration
 falsification_required:
+  - unauthenticated_guest_can_submit_application
+  - enrollment_contains_no_google_or_oidc_gate
+  - google_login_cannot_create_or_auto_bind_membership
   - duplicate_application
   - duplicate_active_membership
+  - ambiguous_member_binding_fails_closed
   - grace_boundary_minus_one_second_and_exact_expiry
   - forged_or_expired_beneficiary_activation
   - beneficiary_slot_race
