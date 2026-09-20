@@ -1,7 +1,7 @@
 # AUTH-MEMBERSHIP-001 — Membership, Guest and Workforce Admission Policy
 
 **Status:** RATIFIED — REVISED  
-**Effective date:** 2026-09-19  
+**Effective date:** 2026-09-20  
 **Authority:** WorkersFoodClub Policy Ratification Register v1.1 (PR-01 through PR-14, PR-31 through PR-34)
 
 ## Governing invariants
@@ -9,18 +9,24 @@ Membership eligibility is established by approval. Active membership rights requ
 
 `Guest ≠ Membership-Eligible Applicant ≠ Active Member ≠ Employee ≠ Operator ≠ Admin ≠ System Owner`
 
-`Membership ≠ Authentication ≠ Workforce Authority`
+`Enrollment ≠ Identity-provider authentication ≠ Membership ≠ Member login ≠ Workforce Authority`
 
-## Guest/non-member access
-An unauthenticated person may access only the bounded Guest/non-member area. An Active Member who has not authenticated is treated as a Guest for application-access purposes. Guest access MUST NOT expose Member-only personal, economic, household, commitment, payment, fulfillment or workforce capabilities.
+## Guest/non-member access and enrollment
+An unauthenticated person may access the bounded Guest/non-member area and submit a membership application. **Enrollment MUST NOT require Google, OIDC, or any other login/identity-provider authentication.** The enrollment form collects the applicant information required to review and contact the applicant. Application submission alone confers no membership rights.
+
+Google authentication is only a supported **Member login option**. It may be used only after the member's authoritative WorkersFoodClub member information is eligible to be bound, and the member completes the governed binding process. A Google profile, Google token, email match, or successful Google authentication must never create an application, approve an application, create membership, activate membership, or silently bind itself to a member record.
+
+An Active Member who has not authenticated is treated as a Guest for application-access purposes. Guest access MUST NOT expose Member-only personal, economic, household, commitment, payment, fulfillment or workforce capabilities.
 
 ## Membership acquisition
-A Guest/non-member may apply. Application alone confers no membership rights. Approval establishes eligibility only. For an ordinary applicant, confirmed settlement of the annual subscription activates membership rights. Payment initiation, unsolicited payment, or payment without required approval MUST NOT manufacture membership.
+A Guest/non-member may apply without authentication. Application alone confers no membership rights. Approval establishes eligibility only. For an ordinary applicant, confirmed settlement of the annual subscription activates membership rights. Payment initiation, unsolicited payment, or payment without required approval MUST NOT manufacture membership.
 
 An ACTIVE employee may instead receive an auditable `EMPLOYEE_SPONSORED_MEMBERSHIP` entitlement. This activates ordinary membership rights without fake zero-value payment and does not create workforce authority.
 
-## Member-area admission
-Member-area access requires: authenticated external identity; exactly one valid ACTIVE identity binding to the correct participant; active membership rights and sufficient standing; and successful server-side authorization. Sign-in MUST NOT create participant, eligibility, membership rights, payment settlement, sponsorship entitlement, or authority grant.
+## Member identity binding and admission
+Member identity binding is a distinct post-enrollment security ceremony. The system must bind a supported login identity to the correct pre-existing member/participant using governed member information and verification controls. Binding must be explicit, auditable, unique, replay-safe, and fail closed on ambiguity. Email similarity alone is not proof of membership identity.
+
+Member-area access requires: authenticated supported login identity; exactly one valid ACTIVE identity binding to the correct participant; active membership rights and sufficient standing; and successful server-side authorization. Google/OIDC is one login mechanism, not membership authority. Sign-in MUST NOT create participant, eligibility, membership rights, payment settlement, sponsorship entitlement, or authority grant.
 
 ## Membership standing
 Ordinary lifecycle: `APPLIED -> APPROVED/ELIGIBLE -> ANNUAL_SUBSCRIPTION_SETTLED -> ACTIVE -> GRACE (30 days) -> RESTRICTED/SUSPENDED -> restored or TERMINATED`.
@@ -39,7 +45,7 @@ Membership and workforce standing are separate state machines. Operator access r
 Authorization follows `Identity -> Persona -> Domain -> Function -> Action/Task -> Constraints`. Default is DENY. System Owner appoints/revokes Admins; Admins grant/revoke bounded Operator permissions within delegated authority; Operators perform only explicitly authorized functions. An Admin cannot create, appoint or promote a System Owner. Sensitive actions may additionally require elevated authentication, reason/evidence, thresholds and/or second approval.
 
 ## Required regression evidence
-Implementation must prove Guest isolation; eligibility-versus-active-rights separation; ordinary paid activation; employee-sponsored activation and renewal; workforce cessation without retroactive membership cancellation; beneficiary slot/identity/restriction rules; Member authentication without workforce escalation; dedicated workforce step-up; domain/function/action isolation; revocation; and direct server-side enforcement.
+Implementation must prove unauthenticated Guest enrollment; absence of Google/OIDC dependencies from enrollment UI/API/schema authority; application-rights isolation; approval/eligibility separation; ordinary paid activation; explicit post-enrollment member identity binding; Google login unable to manufacture or auto-bind membership; employee-sponsored activation and renewal; beneficiary rules; Member authentication without workforce escalation; dedicated workforce step-up; revocation; and direct server-side enforcement.
 
 ## Change control
 Any change requires explicit System Owner/designated Governance Authority ratification and synchronized policy, server-side, client-side, state-model/migration where applicable, and regression-evidence updates. UI-only changes cannot alter authority.
