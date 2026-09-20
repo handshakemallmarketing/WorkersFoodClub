@@ -190,10 +190,28 @@ then echo "J20 duplicate SKU unexpectedly succeeded" >&2; exit 1; fi
 active_version=$("${PSQL[@]}" -Atc "SELECT version FROM catalog_specification WHERE specification_id='spec:rice' AND active=true")
 v2_count=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_specification WHERE specification_id='spec:rice' AND version=2")
 [[ "$active_version" == "1" && "$v2_count" == "0" ]] || { echo "J20 failed publication leaked partial state" >&2; exit 1; }
-"${PSQL[@]}" -c "UPDATE catalog_listing SET active=false,updated_by='participant:operator',updated_at=now() WHERE listing_id='listing:rice'" >/dev/null
+"${PSQL[@]}" <<'SQL'
+WITH prior AS (SELECT * FROM catalog_listing WHERE listing_id='listing:rice' AND active=true),
+changed AS (UPDATE catalog_listing SET active=false,updated_by='participant:operator',updated_at=now() WHERE listing_id='listing:rice' AND active=true RETURNING *),
+audited AS (INSERT INTO catalog_audit_event(event_id,entity_type,entity_id,action,actor_id,before_state,after_state) SELECT 'catalog:event:deactivate','LISTING',changed.listing_id,'DEACTIVATE','participant:operator',to_jsonb(prior),to_jsonb(changed) FROM changed JOIN prior USING(listing_id))
+SELECT listing_id FROM changed;
+SQL
 inactive=$("${PSQL[@]}" -Atc "SELECT active FROM catalog_listing WHERE listing_id='listing:rice'")
 [[ "$inactive" == "f" ]] || { echo "J20 listing soft deactivation failed" >&2; exit 1; }
 audit_count=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_audit_event WHERE entity_id='listing:rice'")
-[[ "$audit_count" == "1" ]] || { echo "J20 audit lineage missing" >&2; exit 1; }
+[[ "$audit_count" == "2" ]] || { echo "J20 mutation audit lineage missing" >&2; exit 1; }
+# Race two publications for one specification; constraints must leave exactly one active version and no orphan listing.
+"${PSQL[@]}" -c "INSERT INTO catalog_category(category_id,name,active,created_by,updated_by) VALUES('category:race','Race',true,'participant:operator','participant:operator')" >/dev/null
+race_sql(){ local v="$1" sku="$2" lid="$3"; "${PSQL[@]}" -c "WITH candidate AS MATERIALIZED (SELECT category_id FROM catalog_category WHERE category_id='category:race' AND active=true AND $v > COALESCE((SELECT max(version) FROM catalog_specification WHERE specification_id='spec:race'),0)), deactivated AS (UPDATE catalog_specification SET active=false WHERE specification_id='spec:race' AND active=true AND EXISTS(SELECT 1 FROM candidate) RETURNING 1), spec AS (INSERT INTO catalog_specification(specification_id,version,name,base_unit,category_id,active,created_by) SELECT 'spec:race',$v,'Race','kg',category_id,true,'participant:operator' FROM candidate RETURNING *), listing AS (INSERT INTO catalog_listing(listing_id,sku,specification_id,specification_version,display_name,active,created_by,updated_by) SELECT '$lid','$sku','spec:race',$v,'Race $v',true,'participant:operator','participant:operator' FROM spec RETURNING *) SELECT count(*) FROM listing" >/dev/null; }
+set +e
+race_sql 1 RACE-1 listing:race:1 & race_a=$!
+race_sql 2 RACE-2 listing:race:2 & race_b=$!
+wait "$race_a"; race_a_status=$?
+wait "$race_b"; race_b_status=$?
+set -e
+active_race=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_specification WHERE specification_id='spec:race' AND active=true")
+orphan_race=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_listing l LEFT JOIN catalog_specification s ON s.specification_id=l.specification_id AND s.version=l.specification_version WHERE l.specification_id='spec:race' AND s.specification_id IS NULL")
+[[ "$active_race" == "1" && "$orphan_race" == "0" ]] || { echo "J20 concurrent publication violated active-version or referential invariant" >&2; exit 1; }
+[[ "$race_a_status" == "0" || "$race_b_status" == "0" ]] || { echo "J20 concurrent publication made no forward progress" >&2; exit 1; }
 
 echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications, A2 membership/credit, A10 support and J20 catalog proof passed"
