@@ -3,6 +3,7 @@
   "buildCommand": "pnpm add -w --lockfile=false @neondatabase/serverless@1.1.0 && pnpm run build",
   "rewrites": [
     { "source": "/employee", "destination": "/employee.html" },
+    { "source": "/join", "destination": "/join.html" },
     { "source": "/apply", "destination": "/join.html" },
     { "source": "/activate", "destination": "/activate.html" },
     { "source": "/household", "destination": "/household.html" },
