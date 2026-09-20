@@ -1,4 +1,5 @@
-import { requirePreviewApiAuth } from '../lib/preview-api-auth.js';
+import { requireApplicationAuth } from '../lib/application-auth.js';
+import { FULFILLMENT_CAPABLE_OPERATORS } from '../lib/operator-tiers.js';
 import {
   canonicalRuntimeMetadata,
   durableId,
@@ -8,18 +9,17 @@ import {
 
 const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OBLIGATION_ID_RE=/^(?:preview:obligation:|wfc:obligation:)[0-9a-f-]{36}$/i;
-const OPERATOR_ID='preview:operator:001';
 const PREVIEW_PICKUP_PLACE='preview:pickup:001';
 
 export default async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
  if(process.env.VERCEL_ENV==='production')return res.status(403).json({ok:false,error:'PREVIEW_FULFILLMENT_DISABLED_IN_PRODUCTION'});
 
-  const principal = requirePreviewApiAuth(
+  const principal = await requireApplicationAuth(
     req,
     res,
     'operator:fulfillment.manage',
-    OPERATOR_ID,
+    FULFILLMENT_CAPABLE_OPERATORS,
   );
   if (!principal) return;
 
@@ -55,5 +55,17 @@ export default async function handler(req,res){
    SELECT f.fulfillment_id,f.obligation_id,f.state,f.ready_event_id,f.ready_at FROM f JOIN cmd ON true JOIN ev ON ev.event_id=f.ready_event_id`;
   if(!rows[0])return res.status(409).json({ok:false,error:'OBLIGATION_NOT_READYABLE'});
   return res.status(201).json({ok:true,fulfillment:{fulfillmentId:String(rows[0].fulfillment_id),obligationId:String(rows[0].obligation_id),state:String(rows[0].state),readyEventId:String(rows[0].ready_event_id),readyAt:String(rows[0].ready_at),idempotent:false}});
- }catch(error){console.error('Fulfillment ready failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'FULFILLMENT_READY_FAILED'});}
+ }catch(error){
+  if(error?.code==='23505'){
+   try{
+    const {neon}=await import('@neondatabase/serverless');const sql=neon(connectionString);
+    const prior=await sql`SELECT * FROM preview_fulfillment WHERE obligation_id=${obligationId} OR ready_request_id=${requestId} LIMIT 1`;
+    if(prior[0]){
+     if(String(prior[0].obligation_id)!==obligationId)return res.status(409).json({ok:false,error:'FULFILLMENT_REQUEST_REBOUND'});
+     return res.status(200).json({ok:true,fulfillment:{fulfillmentId:String(prior[0].fulfillment_id),obligationId:String(prior[0].obligation_id),state:String(prior[0].state),readyEventId:String(prior[0].ready_event_id),idempotent:true}});
+    }
+   }catch{}
+  }
+  console.error('Fulfillment ready failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'FULFILLMENT_READY_FAILED'});
+ }
 }

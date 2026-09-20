@@ -1,13 +1,13 @@
 import { requireApplicationAuth } from '../lib/application-auth.js';
+import { FINANCE_CAPABLE_OPERATORS } from '../lib/operator-tiers.js';
 import { canonicalRuntimeMetadata, durableId, runtimeEnvironment, runtimeOwnerToken } from '../lib/durable-runtime-semantics.js';
 const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OBLIGATION_ID_RE=/^(?:preview:obligation:|wfc:obligation:)[0-9a-f-]{36}$/i;
-const PREVIEW_OPERATOR_ID='preview:operator:001';
 function serialize(r,idempotent=false){return {remedyId:String(r.remedy_id),obligationId:String(r.obligation_id),sourceExceptionId:String(r.source_exception_id),kind:String(r.kind),quantity:Number(r.quantity),unit:String(r.unit),amountMinor:Number(r.amount_minor),currency:String(r.currency),status:String(r.status),authorizeEventId:String(r.authorize_event_id),authorizedAt:String(r.authorized_at),idempotent};}
 export default async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
  if(process.env.VERCEL_ENV==='production')return res.status(403).json({ok:false,error:'PREVIEW_REFUND_DISABLED_IN_PRODUCTION'});
- const principal=await requireApplicationAuth(req,res,'operator:refund.authorize',PREVIEW_OPERATOR_ID);if(!principal)return;
+ const principal=await requireApplicationAuth(req,res,'operator:refund.authorize',FINANCE_CAPABLE_OPERATORS);if(!principal)return;
  const runtime=canonicalRuntimeMetadata({principal,environment:runtimeEnvironment()});const ownerToken=runtimeOwnerToken(runtime.environment);
  const connectionString=process.env.DATABASE_URL;if(!connectionString)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
  const obligationId=typeof req.body?.obligationId==='string'?req.body.obligationId:'';const requestId=typeof req.body?.requestId==='string'?req.body.requestId:'';

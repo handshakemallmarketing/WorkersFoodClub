@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { requireApplicationAuth } from '../lib/application-auth.js';
+import { FINANCE_CAPABLE_OPERATORS } from '../lib/operator-tiers.js';
 import { canonicalRuntimeMetadata, durableId, runtimeEnvironment, runtimeOwnerToken } from '../lib/durable-runtime-semantics.js';
 const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OBLIGATION_ID_RE=/^(?:preview:obligation:|wfc:obligation:)[0-9a-f-]{36}$/i;
-const PREVIEW_OPERATOR_ID='preview:operator:001';
 
 function serialize(r,idempotent=false){return {remedyId:String(r.remedy_id),obligationId:String(r.obligation_id),sourceExceptionId:String(r.source_exception_id),kind:String(r.kind),quantity:Number(r.quantity),unit:String(r.unit),amountMinor:Number(r.amount_minor),currency:String(r.currency),status:String(r.status),completionEventId:r.completion_event_id?String(r.completion_event_id):null,provider:r.provider?String(r.provider):null,providerReference:r.provider_reference?String(r.provider_reference):null,completedAt:r.completed_at?String(r.completed_at):null,idempotent};}
 
@@ -15,7 +15,7 @@ export default async function handler(req,res){
    req,
    res,
    'operator:refund.complete',
-   PREVIEW_OPERATOR_ID,
+   FINANCE_CAPABLE_OPERATORS,
  );
  if(!principal)return;
  const runtime=canonicalRuntimeMetadata({principal,environment:runtimeEnvironment()});

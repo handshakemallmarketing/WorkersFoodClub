@@ -5,16 +5,18 @@ import {asId} from '../../dist/packages/kernel/src/index.js';
 import {InMemoryAuthorityStore,AuthorityEvaluator} from '../../dist/packages/authority/src/index.js';
 import {GovernedTransferPolicyRegistry,GovernedTransferEvaluator} from '../../dist/packages/transfer/src/index.js';
 
-const draft=fs.readFileSync(new URL('../../docs/policies/GH-PILOT-TITLE-RISK-v1.md',import.meta.url),'utf8');
+const policy=fs.readFileSync(new URL('../../docs/policies/GH-PILOT-TITLE-RISK-v1.md',import.meta.url),'utf8');
 const pid=x=>asId(x);const eid=x=>asId(x);const gid=x=>asId(x);
 
-test('RC2-LEGAL-001 draft is explicitly non-ratified and cannot masquerade as production evidence',()=>{
- assert.match(draft,/Status: DRAFT — NOT RATIFIED/);
- assert.match(draft,/does not authorize production release/i);
- assert.match(draft,/partial.*quantity/i);
+test('RC2-LEGAL-001 owner-ratified policy remains explicitly production-gated',()=>{
+ assert.match(policy,/Status: OWNER-RATIFIED — GOVERNANCE\/LEGAL EVIDENCE PENDING/);
+ assert.match(policy,/System Owner has ratified the business-policy content/i);
+ assert.match(policy,/not.*production release.*authorized/i);
+ assert.match(policy,/Partial acceptance transfers only accepted quantity/i);
+ assert.match(policy,/Ghana legal review.*external evidence/i);
 });
 
-test('GH pilot proposed binding keeps payment, settlement and handover from manufacturing transfer',()=>{
+test('GH pilot ratified binding keeps payment, settlement and handover from manufacturing transfer',()=>{
  const s=new InMemoryAuthorityStore();
  s.put({id:gid('grant:gh-pilot-transfer'),grantorId:pid('participant:founder'),actorId:pid('participant:board'),actions:['RatifyTransferPolicy'],targetPrefix:'GH-PILOT-TITLE-RISK',validFrom:'2026-09-01T00:00:00Z'});
  const r=new GovernedTransferPolicyRegistry(new AuthorityEvaluator(s),()=> '2026-09-11T15:00:00Z');
@@ -27,10 +29,10 @@ test('GH pilot proposed binding keeps payment, settlement and handover from manu
  assert.equal(after.titleTransferred,true);assert.equal(after.riskTransferred,true);assert.equal(after.titleEventId,'acceptance:1');assert.equal(after.riskEventId,'acceptance:1');
 });
 
-test('quantity-aware semantics are required for partial-quantity production decisions while ratification remains blocked',()=>{
- assert.match(draft,/transfer evaluator now exposes an additive quantity-aware path/i);
- assert.match(draft,/Partial acceptance therefore transfers only the accepted quantity/i);
- assert.match(draft,/legacy boolean evaluator.*MUST NOT be used as the production source of truth for partial-quantity title\/risk decisions/i);
- assert.match(draft,/quantity-aware transfer semantics remain green under conformance and integrated pilot evidence/i);
- assert.match(draft,/Status: DRAFT — NOT RATIFIED/);
+test('quantity-aware semantics remain mandatory after owner ratification while production gates stay closed',()=>{
+ assert.match(policy,/Matching trigger quantities accumulate monotonically/i);
+ assert.match(policy,/Partial acceptance transfers only accepted quantity/i);
+ assert.match(policy,/legacy boolean evaluator.*MUST NOT be used as the production source of truth for partial-quantity(?: title\/risk)? decisions/i);
+ assert.match(policy,/green quantity-aware conformance\/integrated evidence/i);
+ assert.match(policy,/Owner ratification does not by itself authorize production release or live-money\/fulfillment mutations/i);
 });

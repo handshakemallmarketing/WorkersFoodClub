@@ -77,6 +77,8 @@ export interface QuantityTransferEvaluation extends TransferEvaluation {
 
 const validTime=(v:string)=>!Number.isNaN(Date.parse(v));
 const at=(v:string)=>new Date(v).getTime();
+/** Absorbs floating-point summation noise (e.g. repeated 0.1kg increments) without masking real over-transfer. */
+const QUANTITY_EPSILON=1e-9;
 
 export function transferEventFromAcceptance(input:AcceptanceTransferSource):QuantityTransferEvent|undefined{
   if(!input.id.trim()||!input.obligationId.trim()||!validTime(input.acceptedAt)||input.evidenceIds.length===0) throw new Error('TRANSFER_ACCEPTANCE_SOURCE_INVALID');
@@ -175,9 +177,10 @@ export class GovernedTransferEvaluator {
         if(!e.quantity||!Number.isFinite(e.quantity.amount)||e.quantity.amount<=0) throw new Error('TRANSFER_TRIGGER_QUANTITY_REQUIRED');
         if(e.quantity.unit!==input.totalQuantity.unit) throw new Error('TRANSFER_QUANTITY_UNIT_MISMATCH');
         amount+=e.quantity.amount;
-        if(amount>input.totalQuantity.amount) throw new Error('TRANSFER_QUANTITY_EXCEEDS_TOTAL');
+        if(amount-input.totalQuantity.amount>QUANTITY_EPSILON) throw new Error('TRANSFER_QUANTITY_EXCEEDS_TOTAL');
         eventIds.push(e.id);
       }
+      if(Math.abs(amount-input.totalQuantity.amount)<=QUANTITY_EPSILON) amount=input.totalQuantity.amount;
       return {quantity:Object.freeze({amount,unit:input.totalQuantity.unit}),eventIds:Object.freeze(eventIds)};
     };
     const title=accumulate(policy.title);const risk=accumulate(policy.risk);
