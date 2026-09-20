@@ -59,7 +59,7 @@ test('INV-004 commitment verifies a real ACCEPTED command and resulting event',a
  bus.register({action:'AcceptMemberPurchase',handle:()=>['event:purchase-accepted']});
  const command={commandId:cid('command:checkout'),idempotencyKey:'idem:checkout',actorId:actor,action:'AcceptMemberPurchase',authorityGrantIds:[g],evidenceIds:[],policyVersions:['checkout:v1'],requestedAt:'2026-09-07T10:00:00Z',correlationId:'corr:checkout',payload:{}};
  assert.equal((await bus.execute(command)).status,'ACCEPTED');
- const member={id:'membership:1',participantId:actor,state:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('ev:member')]};
+ const member={id:'membership:1',participantId:actor,state:'ACTIVE',standing:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('ev:member')]};
  const offer={id:ofid('offer:rice'),offerorId:pid('club'),specificationId:sid('spec:rice'),quantity:quantity(5,'kg'),memberPrice:money(5000n,'GHS'),priceBasis:quantity(5,'kg'),pickupPlace:'pickup:1',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T00:00:00Z',priceEvidenceIds:[eid('ev:price')],policyVersions:['price:v1']};
  const ledger=new InMemoryDemandCommitmentLedger(registry);
  const record=await ledger.commitPurchase({obligationId:oid('obligation:verified'),participantId:actor,membership:member,offer,quantity:quantity(5,'kg'),authorizedCommandId:command.commandId,authorizedEventId:'event:purchase-accepted',acceptedAt:'2026-09-07T10:00:01Z',policyVersions:['checkout:v1']});
