@@ -1,4 +1,4 @@
-version: "1.1"
+version: "1.2"
 status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
 as_of_utc: "2026-09-20"
 applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
@@ -17,16 +17,22 @@ canonical_entry_truth:
     google: OPTIONAL_EXPLICITLY_BOUND_PROVIDER
     google_auto_binding: PROHIBITED
 external_service_control_plane:
-  principle: CONFIGURE_THEN_EXPLICITLY_ACTIVATE_FAIL_CLOSED
+  principle: CONFIGURE_TEST_EXPLICITLY_ACTIVATE_FAIL_CLOSED
+  authority_source: AUTHORITATIVE_EMPLOYEE_SESSION_PLUS_APPLICATION_AUTHORITY_GRANT
   secret_storage: DEPLOYMENT_SECRET_STORE_ONLY
   database_secret_storage: PROHIBITED
   secret_readback: PROHIBITED
   audit_metadata: POSTGRESQL
+  lifecycle:
+    SAVE: WRITES_OR_ROTATES_SECRET_AND_RESETS_TEST_STATE
+    TEST: VERIFIES_CURRENT_STORED_CONFIGURATION_WITHOUT_SECRET_READBACK_TO_BROWSER
+    ACTIVATE: REQUIRES_SUCCESSFUL_TEST_AND_DOES_NOT_REQUIRE_CREDENTIAL_REENTRY
+    DISABLE: STOPS_RUNTIME_USE_WITHOUT_EXPOSING_SECRET
   services:
     payments:
       initial_provider: PAYSTACK
       activation_authority: SYSTEM_OWNER
-      activation_ceremony: AUTHORIZED_CONFIGURATION_PLUS_EXPLICIT_SETTINGS_ACTIVATION
+      activation_ceremony: SUCCESSFULLY_TESTED_AUTHORIZED_CONFIGURATION_PLUS_EXPLICIT_SETTINGS_ACTIVATION
       additional_live_funds_gate: NONE
     email:
       initial_provider: MAILERLITE
@@ -38,17 +44,25 @@ external_service_control_plane:
       initial_provider: GOOGLE
       activation_authority: SYSTEM_OWNER
       role: OPTIONAL_MEMBER_LOGIN_PROVIDER_ONLY
-    database:
-      initial_provider: NEON
-      activation_authority: SYSTEM_OWNER
     observability:
       initial_provider: GENERIC
       activation_authority: ADMIN_OR_SYSTEM_OWNER
+bootstrap_control_plane:
+  database:
+    initial_provider: NEON
+    secret: DATABASE_URL
+    activation_authority: SYSTEM_OWNER
+    management: DEPLOYMENT_CONTROL_PLANE_ONLY
+    reason: SETTINGS_RUNTIME_AND_AUTHORITY_AUDIT_DEPEND_ON_DATABASE_AND_CANNOT_SELF_BOOTSTRAP_OR_SAFELY_ROTATE_ITS_OWN_DATABASE_SECRET
 fail_closed_invariants:
   - missing_credentials_means_not_active
   - configured_does_not_mean_active
+  - successful_connectivity_test_is_required_before_activation
+  - credential_rotation_resets_test_state_and_deactivates_service_until_retested_and_reactivated
+  - activation_never_requires_secret_reentry
   - secrets_are_never_returned_by_settings_api
   - secrets_are_never_written_to_application_database
   - production_enablement_does_not_implicitly_activate_external_services
-  - service_activation_is_audited
+  - service_save_test_activate_disable_events_are_audited
   - operator_cannot_manage_system_integrations
+  - system_owner_authority_is_derived_from_authority_owner_grant_not_client_claim
