@@ -190,6 +190,17 @@ then echo "J20 duplicate SKU unexpectedly succeeded" >&2; exit 1; fi
 active_version=$("${PSQL[@]}" -Atc "SELECT version FROM catalog_specification WHERE specification_id='spec:rice' AND active=true")
 v2_count=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_specification WHERE specification_id='spec:rice' AND version=2")
 [[ "$active_version" == "1" && "$v2_count" == "0" ]] || { echo "J20 failed publication leaked partial state" >&2; exit 1; }
+# A valid specification revision may preserve the canonical listing identity/SKU.
+"${PSQL[@]}" <<'SQL'
+WITH candidate AS MATERIALIZED (SELECT category_id FROM catalog_category WHERE category_id='category:staples' AND active=true AND 2 > COALESCE((SELECT max(version) FROM catalog_specification WHERE specification_id='spec:rice'),0)),
+prior_listing AS MATERIALIZED (SELECT * FROM catalog_listing WHERE listing_id='listing:rice'),
+deactivated AS (UPDATE catalog_specification SET active=false WHERE specification_id='spec:rice' AND active=true AND EXISTS(SELECT 1 FROM candidate) RETURNING *),
+spec AS (INSERT INTO catalog_specification(specification_id,version,name,base_unit,category_id,active,created_by) SELECT 'spec:rice',2,'Rice revised','kg',category_id,true,'participant:operator' FROM candidate RETURNING *),
+listing AS (INSERT INTO catalog_listing(listing_id,sku,specification_id,specification_version,display_name,active,created_by,updated_by) SELECT 'listing:rice','RICE-5KG','spec:rice',2,'Rice 5 kg revised',true,'participant:operator','participant:operator' FROM spec ON CONFLICT(listing_id) DO UPDATE SET sku=EXCLUDED.sku,specification_id=EXCLUDED.specification_id,specification_version=EXCLUDED.specification_version,display_name=EXCLUDED.display_name,active=true,updated_by='participant:operator',updated_at=now() RETURNING *)
+SELECT listing_id FROM listing;
+SQL
+revision=$("${PSQL[@]}" -Atc "SELECT specification_version||':'||sku FROM catalog_listing WHERE listing_id='listing:rice'")
+[[ "$revision" == "2:RICE-5KG" ]] || { echo "J20 specification revision did not preserve listing identity" >&2; exit 1; }
 "${PSQL[@]}" <<'SQL'
 WITH prior AS (SELECT * FROM catalog_listing WHERE listing_id='listing:rice' AND active=true),
 changed AS (UPDATE catalog_listing SET active=false,updated_by='participant:operator',updated_at=now() WHERE listing_id='listing:rice' AND active=true RETURNING *),
