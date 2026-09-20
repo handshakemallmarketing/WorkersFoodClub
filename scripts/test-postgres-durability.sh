@@ -17,6 +17,7 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/012_membership_business_logic_v2.sql
 "${PSQL[@]}" -f packages/durability/sql/013_membership_shopping_credit_accounting.sql
 "${PSQL[@]}" -f packages/durability/sql/014_wave2_support_case.sql
+"${PSQL[@]}" -f packages/durability/sql/027_catalog_administration_v1.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -163,4 +164,36 @@ if "${PSQL[@]}" -c "INSERT INTO communication_outbox(id,dedupe_key,event_id,memb
 claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
 [[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
 
-echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications, A2 membership/credit and A10 support lifecycle proof passed"
+# J20 durable catalog: atomic publication, version monotonicity, soft lifecycle and audit lineage.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO catalog_category(category_id,name,active,created_by,updated_by) VALUES('category:staples','Staples',true,'participant:operator','participant:operator');
+WITH candidate AS MATERIALIZED (SELECT category_id FROM catalog_category WHERE category_id='category:staples' AND active=true AND 1 > COALESCE((SELECT max(version) FROM catalog_specification WHERE specification_id='spec:rice'),0)),
+deactivated AS (UPDATE catalog_specification SET active=false WHERE specification_id='spec:rice' AND active=true AND EXISTS(SELECT 1 FROM candidate) RETURNING specification_id),
+spec AS (INSERT INTO catalog_specification(specification_id,version,name,base_unit,category_id,active,created_by) SELECT 'spec:rice',1,'Rice','kg',category_id,true,'participant:operator' FROM candidate RETURNING *),
+listing AS (INSERT INTO catalog_listing(listing_id,sku,specification_id,specification_version,display_name,active,created_by,updated_by) SELECT 'listing:rice','RICE-5KG','spec:rice',1,'Rice 5 kg',true,'participant:operator','participant:operator' FROM spec RETURNING *)
+INSERT INTO catalog_audit_event(event_id,entity_type,entity_id,action,actor_id,after_state) SELECT 'catalog:event:initial','LISTING',listing_id,'CREATE','participant:operator',to_jsonb(listing) FROM listing;
+SQL
+catalog_state=$("${PSQL[@]}" -Atc "SELECT l.sku||':'||s.version||':'||s.active FROM catalog_listing l JOIN catalog_specification s ON s.specification_id=l.specification_id AND s.version=l.specification_version WHERE l.listing_id='listing:rice'")
+[[ "$catalog_state" == "RICE-5KG:1:true" ]] || { echo "J20 catalog publication did not persist" >&2; exit 1; }
+# A duplicate/stale publication must not deactivate the current specification.
+"${PSQL[@]}" -c "WITH candidate AS MATERIALIZED (SELECT category_id FROM catalog_category WHERE category_id='category:staples' AND active=true AND 1 > COALESCE((SELECT max(version) FROM catalog_specification WHERE specification_id='spec:rice'),0)), deactivated AS (UPDATE catalog_specification SET active=false WHERE specification_id='spec:rice' AND active=true AND EXISTS(SELECT 1 FROM candidate) RETURNING 1), spec AS (INSERT INTO catalog_specification(specification_id,version,name,base_unit,category_id,active,created_by) SELECT 'spec:rice',1,'Bad','kg',category_id,true,'participant:operator' FROM candidate RETURNING 1) SELECT count(*) FROM spec" >/dev/null
+active_version=$("${PSQL[@]}" -Atc "SELECT version FROM catalog_specification WHERE specification_id='spec:rice' AND active=true")
+[[ "$active_version" == "1" ]] || { echo "J20 stale publication damaged active specification" >&2; exit 1; }
+# A failed listing insert in the same data-modifying CTE statement must roll back specification supersession.
+if "${PSQL[@]}" <<'SQL' >/dev/null 2>&1
+WITH candidate AS MATERIALIZED (SELECT category_id FROM catalog_category WHERE category_id='category:staples' AND active=true AND 2 > COALESCE((SELECT max(version) FROM catalog_specification WHERE specification_id='spec:rice'),0)),
+deactivated AS (UPDATE catalog_specification SET active=false WHERE specification_id='spec:rice' AND active=true AND EXISTS(SELECT 1 FROM candidate) RETURNING 1),
+spec AS (INSERT INTO catalog_specification(specification_id,version,name,base_unit,category_id,active,created_by) SELECT 'spec:rice',2,'Rice v2','kg',category_id,true,'participant:operator' FROM candidate RETURNING *),
+listing AS (INSERT INTO catalog_listing(listing_id,sku,specification_id,specification_version,display_name,active,created_by,updated_by) SELECT 'listing:duplicate','RICE-5KG','spec:rice',2,'Duplicate SKU',true,'participant:operator','participant:operator' FROM spec RETURNING *) SELECT * FROM listing;
+SQL
+then echo "J20 duplicate SKU unexpectedly succeeded" >&2; exit 1; fi
+active_version=$("${PSQL[@]}" -Atc "SELECT version FROM catalog_specification WHERE specification_id='spec:rice' AND active=true")
+v2_count=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_specification WHERE specification_id='spec:rice' AND version=2")
+[[ "$active_version" == "1" && "$v2_count" == "0" ]] || { echo "J20 failed publication leaked partial state" >&2; exit 1; }
+"${PSQL[@]}" -c "UPDATE catalog_listing SET active=false,updated_by='participant:operator',updated_at=now() WHERE listing_id='listing:rice'" >/dev/null
+inactive=$("${PSQL[@]}" -Atc "SELECT active FROM catalog_listing WHERE listing_id='listing:rice'")
+[[ "$inactive" == "f" ]] || { echo "J20 listing soft deactivation failed" >&2; exit 1; }
+audit_count=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_audit_event WHERE entity_id='listing:rice'")
+[[ "$audit_count" == "1" ]] || { echo "J20 audit lineage missing" >&2; exit 1; }
+
+echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications, A2 membership/credit, A10 support and J20 catalog proof passed"
