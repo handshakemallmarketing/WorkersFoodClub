@@ -9,19 +9,18 @@
 -- describing a universal 30% demand-qualification threshold as "Owner-ratified" and
 -- describing preserved already-paid member value as "shopping credit" are superseded
 -- by WorkersFoodClub Policy Ratification Register v1.1, specifically PR-15 and PR-19,
--- and by this migration. The 30% value retained below is only a compatibility default
--- for existing offers that do not yet carry an explicit threshold; it is not a
--- constitutional or universal policy. Likewise, member_prepaid_balance_ledger records
--- member-owned already-paid/refundable value and does not authorize lending or member
--- credit. Historical migration 022 terminology MUST NOT be interpreted as current
--- owner-ratified policy.
+-- and by this migration. Existing offers are backfilled to 30% solely to preserve their
+-- pre-ratification behavior. Future offers MUST explicitly declare their governed
+-- demand_qualification_bps; there is no database or runtime universal default.
+-- Likewise, member_prepaid_balance_ledger records member-owned already-paid/refundable
+-- value and does not authorize lending or member credit. Historical migration 022
+-- terminology MUST NOT be interpreted as current owner-ratified policy.
 
 ALTER TABLE application_membership DROP CONSTRAINT IF EXISTS application_membership_standing_check;
 ALTER TABLE application_membership
   ADD COLUMN IF NOT EXISTS grace_started_at timestamptz,
   ADD COLUMN IF NOT EXISTS grace_ends_at timestamptz;
 
--- Replace the inline standing CHECK created by migration 019 regardless of its generated name.
 DO $$
 DECLARE r record;
 BEGIN
@@ -40,14 +39,20 @@ ALTER TABLE application_membership
   ADD CONSTRAINT application_membership_grace_window_check
   CHECK ((standing<>'GRACE') OR (grace_started_at IS NOT NULL AND grace_ends_at=grace_started_at+interval '30 days'));
 
+-- Preserve existing offers at their historical behavior, then require every future
+-- offer to state the governed qualification threshold explicitly.
 ALTER TABLE preview_member_offer
-  ADD COLUMN IF NOT EXISTS demand_qualification_bps integer NOT NULL DEFAULT 3000
-    CHECK (demand_qualification_bps BETWEEN 1 AND 10000);
+  ADD COLUMN IF NOT EXISTS demand_qualification_bps integer;
+UPDATE preview_member_offer SET demand_qualification_bps=3000 WHERE demand_qualification_bps IS NULL;
+ALTER TABLE preview_member_offer ALTER COLUMN demand_qualification_bps DROP DEFAULT;
+ALTER TABLE preview_member_offer ALTER COLUMN demand_qualification_bps SET NOT NULL;
+ALTER TABLE preview_member_offer DROP CONSTRAINT IF EXISTS preview_member_offer_demand_qualification_bps_check;
+ALTER TABLE preview_member_offer
+  ADD CONSTRAINT preview_member_offer_demand_qualification_bps_check
+  CHECK (demand_qualification_bps BETWEEN 1 AND 10000);
 COMMENT ON COLUMN preview_member_offer.demand_qualification_bps IS
-  'Versioned offer-specific minimum commitment/qualification threshold. 3000 is a migration compatibility default, not a constitutional universal threshold.';
+  'Required versioned offer-specific minimum commitment/qualification threshold. Existing pre-ratification offers were compatibility-backfilled to 3000; future offers must explicitly declare a value.';
 
--- Rename the pre-launch ledger to state its actual economic character. This is
--- paid member value held as a liability, not lending/credit authority.
 ALTER TABLE IF EXISTS member_shopping_credit_ledger RENAME TO member_prepaid_balance_ledger;
 ALTER TABLE IF EXISTS member_prepaid_balance_ledger RENAME COLUMN credit_entry_id TO balance_entry_id;
 DROP INDEX IF EXISTS member_shopping_credit_participant_state_idx;
