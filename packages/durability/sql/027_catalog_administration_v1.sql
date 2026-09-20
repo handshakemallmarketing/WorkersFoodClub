@@ -19,7 +19,16 @@ CREATE TABLE IF NOT EXISTS catalog_specification (
  created_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(specification_id,version)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS catalog_specification_one_active_version_uq ON catalog_specification(specification_id) WHERE active;
+CREATE INDEX IF NOT EXISTS catalog_specification_active_lookup_idx ON catalog_specification(specification_id,version DESC) WHERE active;
+CREATE OR REPLACE FUNCTION catalog_one_active_specification_guard() RETURNS trigger LANGUAGE plpgsql AS $
+BEGIN
+ IF NEW.active AND EXISTS (SELECT 1 FROM catalog_specification s WHERE s.specification_id=NEW.specification_id AND s.active AND (s.specification_id,s.version)<>(NEW.specification_id,NEW.version)) THEN
+  RAISE EXCEPTION 'CATALOG_MULTIPLE_ACTIVE_SPECIFICATION' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $;
+DROP TRIGGER IF EXISTS catalog_one_active_specification_guard_trg ON catalog_specification;
+CREATE CONSTRAINT TRIGGER catalog_one_active_specification_guard_trg AFTER INSERT OR UPDATE OF active ON catalog_specification DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION catalog_one_active_specification_guard();
 CREATE TABLE IF NOT EXISTS catalog_listing (
  listing_id text PRIMARY KEY,
  sku text NOT NULL UNIQUE CHECK(length(trim(sku))>0),
