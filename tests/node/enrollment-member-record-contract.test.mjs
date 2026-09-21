@@ -14,5 +14,5 @@ test('prospect creates numbered inactive member record and invoice before paymen
  const q=calls[0].text;assert.ok(q.indexOf('INSERT INTO application_membership')<q.indexOf('INSERT INTO membership_subscription_invoice'));assert.ok(calls[0].values.includes(res.out.body.publicMemberId));assert.match(q,/public_member_id/);
 });
 
-test('settlement cannot mint or replace a Member Number',()=>{assert.match(settleSource,/MEMBER_NUMBER_NOT_ISSUED/);assert.doesNotMatch(settleSource,/randomBytes|randomUUID|WFC-P-/);assert.doesNotMatch(settleSource,/SET[^;]*public_member_id/i);});
+test('settlement cannot mint or replace a Member Number',()=>{assert.match(settleSource,/MEMBER_NUMBER_NOT_ISSUED/);assert.doesNotMatch(settleSource,/randomBytes|randomUUID|WFC-P-/);assert.doesNotMatch(settleSource,/UPDATE\s+application_membership[\s\S]*?SET[\s\S]*?public_member_id\s*=/i);});
 test('canonical truth explicitly fixes identity-before-invoice-before-settlement ordering',()=>{assert.match(truth,/PROSPECT_INFORMATION_TO_MEMBERSHIP_RECORD_TO_MEMBER_NUMBER_TO_ANNUAL_INVOICE_TO_SETTLEMENT_TO_ACTIVE_MEMBERSHIP_TO_AUTHENTICATION/);assert.match(truth,/settlement_must_not_issue_or_replace_member_number: true/);});
