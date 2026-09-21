@@ -1,37 +1,45 @@
-import { randomUUID } from 'node:crypto';
 import { requireApplicationAuth } from '../lib/application-auth.js';
-import { canonicalRuntimeMetadata, durableId, runtimeEnvironment, runtimeOwnerToken } from '../lib/durable-runtime-semantics.js';
-import { requiredMinor, paymentDeadline, qualificationState } from '../lib/qualified-demand-policy.js';
-const PREVIEW_PARTICIPANT_ID='preview:member:001';
-const REQUEST_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
-const OBLIGATION_ID_RE=/^(?:preview:obligation:|wfc:obligation:)[0-9a-f-]{36}$/i;
-function serialize(row,idempotent=false){return{paymentId:String(row.payment_id),requestId:String(row.request_id),obligationId:String(row.obligation_id),provider:String(row.provider),providerReference:String(row.provider_reference),amountMinor:Number(row.amount_minor),currency:String(row.currency),status:String(row.status),evidenceId:String(row.evidence_id),canonicalEventId:String(row.canonical_event_id),economicTreatment:String(row.economic_treatment),observedAt:String(row.observed_at),idempotent};}
-async function readExisting(sql,requestId){const rows=await sql`SELECT payment_id,request_id,obligation_id,provider,provider_reference,amount_minor,currency,status,evidence_id,canonical_event_id,economic_treatment,observed_at FROM preview_sandbox_payment WHERE request_id=${requestId} LIMIT 1`;return rows?.[0]??null;}
-export default async function handler(req,res){
- if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
- if(process.env.VERCEL_ENV==='production')return res.status(403).json({ok:false,error:'SANDBOX_PAYMENT_DISABLED_IN_PRODUCTION'});
- const principal=await requireApplicationAuth(req,res,'member:payment.execute',PREVIEW_PARTICIPANT_ID);if(!principal)return;
- const runtime=canonicalRuntimeMetadata({principal,environment:runtimeEnvironment()}),ownerToken=runtimeOwnerToken(runtime.environment);
- const cs=process.env.DATABASE_URL;if(!cs)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
- const obligationId=typeof req.body?.obligationId==='string'?req.body.obligationId:'',requestId=typeof req.body?.requestId==='string'?req.body.requestId:'';
- if(!OBLIGATION_ID_RE.test(obligationId))return res.status(400).json({ok:false,error:'OBLIGATION_ID_INVALID'});if(!REQUEST_ID_RE.test(requestId))return res.status(400).json({ok:false,error:'REQUEST_ID_INVALID'});
- const requested=req.body?.amountMinor==null?null:Number(req.body.amountMinor);if(requested!=null&&(!Number.isInteger(requested)||requested<=0))return res.status(400).json({ok:false,error:'PAYMENT_AMOUNT_INVALID'});
- try{
-  const {neon}=await import('@neondatabase/serverless');const sql=neon(cs,{fetchOptions:{signal:AbortSignal.timeout(5000)}});const existing=await readExisting(sql,requestId);
-  if(existing){if(String(existing.obligation_id)!==obligationId)return res.status(409).json({ok:false,error:'PAYMENT_REQUEST_REBOUND'});return res.status(200).json({ok:true,payment:serialize(existing,true)});}
-  const obligations=await sql`SELECT c.obligation_id,c.participant_id,c.committed_price_minor,c.currency,c.state,c.qualification_state,o.delivery_at,o.full_payment_discount_bps,o.discount_deadline_at,o.demand_qualification_bps::int AS demand_qualification_bps,COALESCE((SELECT sum(p.amount_minor) FROM preview_sandbox_payment p WHERE p.obligation_id=c.obligation_id AND p.status='CONFIRMED'),0)::bigint AS paid_minor FROM preview_member_commitment c JOIN preview_member_offer o ON o.offer_id=c.offer_id WHERE c.obligation_id=${obligationId} AND c.participant_id=${runtime.actorId} AND c.state='OPEN' LIMIT 1`;
-  if(!obligations[0])return res.status(409).json({ok:false,error:'OBLIGATION_NOT_PAYABLE'});const o=obligations[0],now=new Date();
-  const demandPoolBps=Number(o.demand_qualification_bps);if(!Number.isInteger(demandPoolBps)||demandPoolBps<1||demandPoolBps>10000)return res.status(409).json({ok:false,error:'OFFER_QUALIFICATION_POLICY_MISSING'});
-  const base=Number(o.committed_price_minor),paid=Number(o.paid_minor),discountActive=o.discount_deadline_at&&now<=new Date(o.discount_deadline_at),discountBps=discountActive?Number(o.full_payment_discount_bps||0):0;
-  const fullDue=Math.ceil(base*(10000-discountBps)/10000),remaining=Math.max(0,fullDue-paid);if(remaining<=0)return res.status(409).json({ok:false,error:'OBLIGATION_ALREADY_FULLY_PAID'});
-  const amount=requested==null?remaining:requested;if(amount>remaining)return res.status(409).json({ok:false,error:'PAYMENT_EXCEEDS_BALANCE',remainingMinor:remaining});
-  const paymentId=durableId('payment'),providerReference=`sandbox-ref:${randomUUID()}`,evidenceId=`evidence:payment:${randomUUID()}`,eventId=durableId('event'),commandId=durableId('command');
-  const rows=await sql`INSERT INTO preview_sandbox_payment(payment_id,request_id,obligation_id,provider,provider_reference,amount_minor,currency,status,evidence_id,canonical_event_id,provider_raw_status,provider_status_mapping_version,observed_at,economic_treatment,recorded_at) VALUES(${paymentId},${requestId},${obligationId},'SANDBOX_MOMO',${providerReference},${amount},${String(o.currency)},'CONFIRMED',${evidenceId},${eventId},'CONFIRMED','sandbox-terminal-v2',now(),'RESTRICTED_MEMBER_PREPAYMENT',now()) RETURNING *`;
-  const cumulative=paid+amount,state=qualificationState({totalMinor:base,paidMinor:cumulative,demandPoolBps}),qualifiedAt=state!=='UNQUALIFIED',fullyPaid=state==='FULLY_PAID',deadline=o.delivery_at?paymentDeadline(o.delivery_at).toISOString():null;
-  await sql`UPDATE preview_member_commitment SET qualification_state=${state},qualified_at=CASE WHEN ${qualifiedAt} THEN COALESCE(qualified_at,now()) ELSE qualified_at END,fully_paid_at=CASE WHEN ${fullyPaid} THEN COALESCE(fully_paid_at,now()) ELSE fully_paid_at END,payment_deadline_at=COALESCE(payment_deadline_at,${deadline}) WHERE obligation_id=${obligationId}`;
-  await sql`INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,result_json,created_at,updated_at) VALUES(${requestId},${commandId},'COMMITTED',${ownerToken},now(),1,${JSON.stringify({status:'CONFIRMED',obligationId,paymentId,eventIds:[eventId]})}::jsonb,now(),now())`;
-  await sql`UPDATE aggregate_version SET version=version+1 WHERE aggregate_id=${obligationId}`;
-  await sql`INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at) SELECT ${eventId},${obligationId},version,'PAYMENT_CONFIRMED',${JSON.stringify({actorId:runtime.actorId,participantId:runtime.actorId,environment:runtime.environment,amountMinor:amount,cumulativePaidMinor:cumulative,qualificationState:state,economicTreatment:'RESTRICTED_MEMBER_PREPAYMENT'})}::jsonb,now() FROM aggregate_version WHERE aggregate_id=${obligationId}`;
-  const created=rows[0];res.setHeader('Cache-Control','no-store');return res.status(201).json({ok:true,payment:serialize(created,false),cumulativePaidMinor:cumulative,qualificationState:state,demandQualificationBps:demandPoolBps,fullPaymentDueMinor:fullDue});
- }catch(error){if(error?.code==='23505'){try{const {neon}=await import('@neondatabase/serverless');const sql=neon(cs);const existing=await readExisting(sql,requestId);if(existing&&String(existing.obligation_id)===obligationId)return res.status(200).json({ok:true,payment:serialize(existing,true)});}catch{}}console.error('Sandbox payment failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'SANDBOX_PAYMENT_FAILED'});}
+
+const PREVIEW_PARTICIPANT_ID = 'preview:member:001';
+
+/**
+ * UC-08 payment qualification is ratified as offer-specific through
+ * demand_qualification_bps, but the current PostgreSQL write sequence is not
+ * transactionally atomic. Keep the mutation unavailable until payment,
+ * qualification, command, aggregate-version, and event persistence share one
+ * serializable transaction with replay repair and concurrency proof.
+ */
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+  }
+
+  if (process.env.VERCEL_ENV === 'production') {
+    return res.status(403).json({
+      ok: false,
+      error: 'SANDBOX_PAYMENT_DISABLED_IN_PRODUCTION',
+    });
+  }
+
+  if (process.env.VERCEL_ENV !== 'preview') {
+    return res.status(403).json({
+      ok: false,
+      error: 'SANDBOX_PAYMENT_REQUIRES_PREVIEW',
+    });
+  }
+
+  const principal = await requireApplicationAuth(
+    req,
+    res,
+    'member:payment.execute',
+    PREVIEW_PARTICIPANT_ID,
+  );
+  if (!principal) return;
+
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(503).json({
+    ok: false,
+    error: 'PREVIEW_PAYMENT_ATOMICITY_NOT_CERTIFIED',
+  });
 }
