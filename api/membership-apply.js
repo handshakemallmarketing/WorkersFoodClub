@@ -1,15 +1,18 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { requireProductionApplicationAccess } from '../lib/production-access-policy.js';
 
 function requireApplicationAccess(env){if((env.VERCEL_ENV||'unknown')==='preview')return{ok:true};return requireProductionApplicationAccess(env);}
 const clean=(v,max)=>typeof v==='string'&&v.trim()?v.trim().slice(0,max):null;
 const emailOk=v=>!v||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 function reviewMode(env){return String(env.MEMBERSHIP_APPLICATION_REVIEW_MODE||'AUTO').toUpperCase()==='MANUAL'?'MANUAL':'AUTO';}
+function newPrimaryMemberId(){return `WFC-P-${randomBytes(6).toString('hex').toUpperCase()}`;}
 
 /**
  * Self-service guest enrollment. No identity-provider authentication is required.
- * AUTO (default): submission provisions an INACTIVE membership and annual invoice immediately;
- * settlement remains the activation boundary. MANUAL: application waits for optional governed review.
+ * AUTO (default): submission provisions an INACTIVE membership with its immutable server-issued
+ * Member Number, then creates the annual subscription invoice against that numbered membership.
+ * Settlement activates the already-numbered membership; it does not issue the Member Number.
+ * MANUAL: application waits for optional governed review.
  * Neither path creates a login identity binding or member-area authority.
  */
 export default async function handler(req,res,options={}){
@@ -30,15 +33,15 @@ export default async function handler(req,res,options={}){
    await sql`INSERT INTO membership_application(application_id,issuer,subject,full_name,email,phone,government_employer,applicant_reference,contact_note,review_mode,review_status) VALUES (${applicationId},NULL,NULL,${fullName},${email},${phone},${governmentEmployer},${applicantReference},${contactNote},'MANUAL','PENDING')`;
    res.setHeader('Cache-Control','no-store');return res.status(201).json({ok:true,applicationId,applicantReference,state:'SUBMITTED',reviewRequired:true,membershipProvisioned:false});
   }
-  const participantId=`participant:${randomUUID()}`,membershipId=`membership:${randomUUID()}`,invoiceId=`subscription-invoice:${randomUUID()}`,subscriptionYear=new Date(nowIso).getUTCFullYear(),dueAt=new Date(Date.parse(nowIso)+14*86400000).toISOString();
+  const participantId=`participant:${randomUUID()}`,membershipId=`membership:${randomUUID()}`,publicMemberId=newPrimaryMemberId(),invoiceId=`subscription-invoice:${randomUUID()}`,subscriptionYear=new Date(nowIso).getUTCFullYear(),dueAt=new Date(Date.parse(nowIso)+14*86400000).toISOString();
   const rows=await sql`WITH app AS (
     INSERT INTO membership_application(application_id,issuer,subject,full_name,email,phone,government_employer,applicant_reference,contact_note,state,review_mode,review_status)
     VALUES (${applicationId},NULL,NULL,${fullName},${email},${phone},${governmentEmployer},${applicantReference},${contactNote},'APPROVED','AUTO','NOT_REQUIRED') RETURNING application_id
   ), participant AS (
     INSERT INTO application_participant(participant_id,kind,state) SELECT ${participantId},'PERSON','ACTIVE' FROM app RETURNING participant_id
   ), membership AS (
-    INSERT INTO application_membership(membership_id,participant_id,state,member_type,standing,established_at,eligibility_policy_version,eligibility_evidence_ids)
-    SELECT ${membershipId},participant_id,'INACTIVE','PRIMARY','INITIAL_FEE_DUE',${nowIso},'self-service-membership-v1',ARRAY[${applicationId}] FROM participant RETURNING membership_id
+    INSERT INTO application_membership(membership_id,participant_id,state,member_type,standing,established_at,eligibility_policy_version,eligibility_evidence_ids,public_member_id)
+    SELECT ${membershipId},participant_id,'INACTIVE','PRIMARY','INITIAL_FEE_DUE',${nowIso},'self-service-membership-v2',ARRAY[${applicationId}],${publicMemberId} FROM participant RETURNING membership_id,public_member_id
   ), invoice AS (
     INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
     SELECT ${invoiceId},membership_id,${subscriptionYear},${annualFeeMinor},'GHS','OPEN',${dueAt} FROM membership RETURNING invoice_id
@@ -46,6 +49,6 @@ export default async function handler(req,res,options={}){
     UPDATE membership_application SET resulting_membership_id=${membershipId} WHERE application_id=${applicationId} AND EXISTS(SELECT 1 FROM invoice) RETURNING application_id
   ) SELECT application_id FROM linked`;
   if(rows.length!==1)throw new Error('SELF_SERVICE_PROVISION_FAILED');
-  res.setHeader('Cache-Control','no-store');return res.status(201).json({ok:true,applicationId,applicantReference,state:'APPROVED',reviewRequired:false,membershipProvisioned:true,membershipId,membershipState:'INACTIVE',standing:'INITIAL_FEE_DUE',invoiceId,dueAt,loginIdentityBound:false});
+  res.setHeader('Cache-Control','no-store');return res.status(201).json({ok:true,applicationId,applicantReference,state:'APPROVED',reviewRequired:false,membershipProvisioned:true,membershipId,publicMemberId,membershipState:'INACTIVE',standing:'INITIAL_FEE_DUE',invoiceId,invoiceAmountMinor:annualFeeMinor,invoiceCurrency:'GHS',dueAt,loginIdentityBound:false});
  }catch(error){console.error('Membership application submission failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'MEMBERSHIP_APPLY_FAILED'});}
 }
