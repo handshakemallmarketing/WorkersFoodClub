@@ -134,8 +134,11 @@ for(const [key,value] of Object.entries(stable))assert.ok(value!==null&&value!==
 assert.equal(stable.state,'FULFILLED');
 assert.equal(stable.remedyStatus,'COMPLETED');
 
+const withheldPayment=await post('/api/pay-sandbox',{obligationId:'not-an-obligation',requestId:randomUUID()},memberToken);
+assert.equal(withheldPayment.status,503,'payment must remain unavailable before payload processing');
+assert.equal(withheldPayment.body?.error,'PREVIEW_PAYMENT_ATOMICITY_NOT_CERTIFIED');
+
 const mutationPaths=[
-  ['/api/pay-sandbox',memberToken],
   ['/api/fulfillment-ready',fulfillmentToken],
   ['/api/accept-fulfillment',memberToken],
   ['/api/authorize-refund',financeToken],
@@ -150,8 +153,8 @@ const badReq=await post('/api/complete-refund',{obligationId,requestId:'not-a-uu
 assert.equal(badReq.status,400);
 assert.equal(badReq.body?.error,'REQUEST_ID_INVALID');
 
-const payReplay=await post('/api/pay-sandbox',{obligationId,requestId:randomUUID()},memberToken);
-assert.equal(payReplay.status,200);assert.equal(payReplay.body?.payment?.idempotent,true);assert.equal(payReplay.body?.payment?.canonicalEventId,stable.paymentEventId);
+const payAttempt=await post('/api/pay-sandbox',{obligationId,requestId:randomUUID()},memberToken);
+assert.equal(payAttempt.status,503);assert.equal(payAttempt.body?.error,'PREVIEW_PAYMENT_ATOMICITY_NOT_CERTIFIED');
 
 const readyReplay=await post('/api/fulfillment-ready',{obligationId,requestId:randomUUID()},fulfillmentToken);
 assert.equal(readyReplay.status,200);assert.equal(readyReplay.body?.fulfillment?.idempotent,true);assert.equal(readyReplay.body?.fulfillment?.readyEventId,stable.readyEventId);assert.equal(readyReplay.body?.fulfillment?.state,stable.fulfillmentState);
@@ -223,7 +226,7 @@ console.log(JSON.stringify({
   runtimeCommitSha:build.commitSha,
   databaseTarget:{algorithm:databaseTarget.body.algorithm,hostSha256:databaseTarget.body.hostSha256},
   obligationId,
-  attacks:['deployment-protection-without-oidc','missing-survey-auth','wrong-role-survey','missing-support-auth','wrong-role-support','wrong-role-support-transition','malformed-obligation','malformed-request-id','payment-replay','fulfillment-ready-replay','acceptance-regression','refund-authorization-replay','refund-completion-replay','unknown-refund-target','survey-replay','survey-rebound','support-replay','support-rebound','support-transition-replay','support-transition-rebound','support-transition-stale-version'],
+  attacks:['deployment-protection-without-oidc','missing-survey-auth','wrong-role-survey','missing-support-auth','wrong-role-support','wrong-role-support-transition','payment-withheld-before-payload','malformed-obligation','malformed-request-id','fulfillment-ready-replay','acceptance-regression','refund-authorization-replay','refund-completion-replay','unknown-refund-target','survey-replay','survey-rebound','support-replay','support-rebound','support-transition-replay','support-transition-rebound','support-transition-stale-version'],
   uc14:{surveyResponseId:surveyCreated.body.survey.surveyResponseId,economicClassification:surveyCreated.body.survey.economicClassification},
   uc28:{caseId:supportCreated.body.case.caseId,transitionId:transitionCreated.body.transition.transition_id},
   stable
