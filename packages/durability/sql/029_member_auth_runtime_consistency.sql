@@ -1,5 +1,6 @@
 -- Member-native authentication/runtime consistency.
--- Canonical flow: numbered membership -> settlement -> ACTIVE -> verified contact challenge -> server session.
+-- Canonical enrollment flow: numbered membership -> annual invoice -> verified contact challenge/server session -> settlement -> ACTIVE rights.
+-- Authentication proves identity and is intentionally available while standing=INITIAL_FEE_DUE; authorization remains denied until settlement activates membership.
 
 CREATE TABLE IF NOT EXISTS member_auth_challenge (
   challenge_id text PRIMARY KEY,
@@ -13,9 +14,7 @@ CREATE TABLE IF NOT EXISTS member_auth_challenge (
   created_at timestamptz NOT NULL DEFAULT now(),
   used_at timestamptz
 );
-CREATE INDEX IF NOT EXISTS member_auth_challenge_membership_idx
-  ON member_auth_challenge(membership_id,created_at DESC);
-
+CREATE INDEX IF NOT EXISTS member_auth_challenge_membership_idx ON member_auth_challenge(membership_id,created_at DESC);
 CREATE TABLE IF NOT EXISTS member_session (
   session_id text PRIMARY KEY,
   membership_id text NOT NULL REFERENCES application_membership(membership_id) ON DELETE CASCADE,
@@ -25,17 +24,12 @@ CREATE TABLE IF NOT EXISTS member_session (
   expires_at timestamptz NOT NULL,
   revoked_at timestamptz
 );
-CREATE INDEX IF NOT EXISTS member_session_membership_idx
-  ON member_session(membership_id,state,expires_at);
-
+CREATE INDEX IF NOT EXISTS member_session_membership_idx ON member_session(membership_id,state,expires_at);
 ALTER TABLE application_membership ADD COLUMN IF NOT EXISTS grace_started_at timestamptz;
 ALTER TABLE application_membership ADD COLUMN IF NOT EXISTS grace_ends_at timestamptz;
 ALTER TABLE application_membership DROP CONSTRAINT IF EXISTS application_membership_standing_check;
-ALTER TABLE application_membership ADD CONSTRAINT application_membership_standing_check
-  CHECK (standing IN ('INITIAL_FEE_DUE','ACTIVE','GRACE','RESTRICTED','SUSPENDED','ENDED'));
+ALTER TABLE application_membership ADD CONSTRAINT application_membership_standing_check CHECK (standing IN ('INITIAL_FEE_DUE','ACTIVE','GRACE','RESTRICTED','SUSPENDED','ENDED'));
 ALTER TABLE application_membership DROP CONSTRAINT IF EXISTS application_membership_grace_window_check;
-ALTER TABLE application_membership ADD CONSTRAINT application_membership_grace_window_check
-  CHECK (standing <> 'GRACE' OR (grace_started_at IS NOT NULL AND grace_ends_at = grace_started_at + interval '30 days'));
-
-COMMENT ON TABLE member_auth_challenge IS 'First-party WFC member verification challenge; Google/OIDC is optional and not required.';
-COMMENT ON TABLE member_session IS 'Server-backed WFC member session; membership lifecycle remains authoritative for access.';
+ALTER TABLE application_membership ADD CONSTRAINT application_membership_grace_window_check CHECK (standing <> 'GRACE' OR (grace_started_at IS NOT NULL AND grace_ends_at = grace_started_at + interval '30 days'));
+COMMENT ON TABLE member_auth_challenge IS 'First-party WFC identity verification challenge; valid for numbered INITIAL_FEE_DUE memberships before settlement and ACTIVE/GRACE memberships thereafter.';
+COMMENT ON TABLE member_session IS 'Server-backed WFC identity session. A session may exist before settlement; membership standing independently controls member-area authorization.';
