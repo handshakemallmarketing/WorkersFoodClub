@@ -49,12 +49,55 @@ CREATE TABLE IF NOT EXISTS catalog_audit_event (
 );
 CREATE INDEX IF NOT EXISTS catalog_audit_entity_idx ON catalog_audit_event(entity_type,entity_id,occurred_at DESC);
 
-CREATE OR REPLACE FUNCTION catalog_specification_active_chain_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION catalog_mutate_category(
+ p_category_id text,
+ p_name text,
+ p_active boolean,
+ p_actor_id text,
+ p_event_id text,
+ p_require_active boolean DEFAULT false
+) RETURNS TABLE(category_id text,name text,active boolean) LANGUAGE plpgsql AS $$
+#variable_conflict use_column
+DECLARE
+ v_prior catalog_category%ROWTYPE;
+ v_changed catalog_category%ROWTYPE;
 BEGIN
- IF NEW.active AND NOT EXISTS (
-  SELECT 1 FROM catalog_category c WHERE c.category_id=NEW.category_id AND c.active
- ) THEN
-  RAISE EXCEPTION 'CATALOG_SPECIFICATION_CATEGORY_NOT_ACTIVE' USING ERRCODE='23514';
+ -- Publication takes the same stable lock before reading the category. Taking
+ -- it before the UPDATE gives the mutation a post-wait READ COMMITTED snapshot.
+ PERFORM pg_advisory_xact_lock(hashtextextended('catalog-category:'||p_category_id,0));
+ SELECT * INTO v_prior FROM catalog_category c
+ WHERE c.category_id=p_category_id
+ FOR UPDATE;
+ IF NOT FOUND OR (p_require_active AND NOT v_prior.active) THEN RETURN; END IF;
+ UPDATE catalog_category c SET
+  name=COALESCE(NULLIF(p_name,''),c.name),
+  active=COALESCE(p_active,c.active),
+  updated_by=p_actor_id,
+  updated_at=now()
+ WHERE c.category_id=p_category_id
+ RETURNING c.* INTO v_changed;
+ INSERT INTO catalog_audit_event(event_id,entity_type,entity_id,action,actor_id,before_state,after_state)
+ VALUES(p_event_id,'CATEGORY',p_category_id,
+  CASE WHEN v_changed.active AND NOT v_prior.active THEN 'REACTIVATE'
+       WHEN NOT v_changed.active AND v_prior.active THEN 'DEACTIVATE'
+       ELSE 'UPDATE' END,
+  p_actor_id,to_jsonb(v_prior),to_jsonb(v_changed));
+ RETURN QUERY SELECT v_changed.category_id,v_changed.name,v_changed.active;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION catalog_specification_active_chain_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+ v_category_active boolean;
+BEGIN
+ IF NEW.active THEN
+  SELECT c.active INTO v_category_active
+  FROM catalog_category c
+  WHERE c.category_id=NEW.category_id
+  FOR SHARE;
+  IF NOT FOUND OR NOT v_category_active THEN
+   RAISE EXCEPTION 'CATALOG_SPECIFICATION_CATEGORY_NOT_ACTIVE' USING ERRCODE='23514';
+  END IF;
  END IF;
  IF TG_OP='UPDATE' AND OLD.active AND NOT NEW.active AND EXISTS (
   SELECT 1 FROM catalog_listing l
@@ -71,17 +114,27 @@ BEFORE INSERT OR UPDATE OF active,category_id,specification_id,version ON catalo
 FOR EACH ROW EXECUTE FUNCTION catalog_specification_active_chain_guard();
 
 CREATE OR REPLACE FUNCTION catalog_listing_active_chain_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+ v_category_id text;
+ v_category_active boolean;
 BEGIN
- IF NEW.active AND NOT EXISTS (
-  SELECT 1
+ IF NEW.active THEN
+  SELECT s.category_id INTO v_category_id
   FROM catalog_specification s
-  JOIN catalog_category c ON c.category_id=s.category_id
   WHERE s.specification_id=NEW.specification_id
     AND s.version=NEW.specification_version
     AND s.active
-    AND c.active
- ) THEN
-  RAISE EXCEPTION 'CATALOG_LISTING_SOURCE_NOT_ACTIVE' USING ERRCODE='23514';
+  FOR SHARE;
+  IF NOT FOUND THEN
+   RAISE EXCEPTION 'CATALOG_LISTING_SOURCE_NOT_ACTIVE' USING ERRCODE='23514';
+  END IF;
+  SELECT c.active INTO v_category_active
+  FROM catalog_category c
+  WHERE c.category_id=v_category_id
+  FOR SHARE;
+  IF NOT FOUND OR NOT v_category_active THEN
+   RAISE EXCEPTION 'CATALOG_LISTING_SOURCE_NOT_ACTIVE' USING ERRCODE='23514';
+  END IF;
  END IF;
  RETURN NEW;
 END;
@@ -139,6 +192,9 @@ DECLARE
 BEGIN
  -- A stable per-specification transaction lock closes concurrent publication write skew.
  PERFORM pg_advisory_xact_lock(hashtextextended(p_specification_id,0));
+ -- Category mutation uses this same lock before its UPDATE snapshot, so a
+ -- publication and deactivation cannot both commit across READ COMMITTED.
+ PERFORM pg_advisory_xact_lock(hashtextextended('catalog-category:'||p_category_id,0));
 
  SELECT c.active INTO v_category_active
  FROM catalog_category c
