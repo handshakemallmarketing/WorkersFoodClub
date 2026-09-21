@@ -3,6 +3,7 @@ import { requireProductionApplicationAccess } from '../lib/production-access-pol
 import { createMemberChallengeDelivery } from '../lib/member-auth-challenge-delivery.js';
 const sha=v=>createHash('sha256').update(String(v)).digest('hex');
 function access(env){if((env.VERCEL_ENV||'unknown')==='preview')return{ok:true};return requireProductionApplicationAccess(env);}
+function challengeCode(env,options){if(options.code!==undefined)return String(options.code);const preview=(env.VERCEL_ENV||'')==='preview',fixed=String(env.MEMBER_AUTH_PREVIEW_FIXED_OTP||'').trim();if(preview&&/^\d{6}$/.test(fixed))return fixed;return String(randomInt(100000,1000000));}
 export default async function handler(req,res,options={}){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
  const env=options.env||process.env,a=access(env);if(!a.ok)return res.status(a.status).json({ok:false,error:a.error});
@@ -14,7 +15,7 @@ export default async function handler(req,res,options={}){
   const authEligible=(state==='INACTIVE'&&standing==='INITIAL_FEE_DUE')||(state==='ACTIVE'&&['ACTIVE','GRACE'].includes(standing));if(!authEligible)return res.status(404).json({ok:false,error:'MEMBER_NOT_ELIGIBLE'});
   const destination=channel==='EMAIL'?member.email:member.phone;if(!destination)return res.status(409).json({ok:false,error:'VERIFICATION_CHANNEL_UNAVAILABLE'});
   const recent=await sql`SELECT count(*)::int AS count FROM member_auth_challenge WHERE membership_id=${String(member.membership_id)} AND created_at > now()-interval '15 minutes'`;if(Number(recent[0]?.count||0)>=5)return res.status(429).json({ok:false,error:'CHALLENGE_RATE_LIMITED'});
-  const code=String(options.code||randomInt(100000,1000000)),challengeId=`challenge:${randomBytes(16).toString('hex')}`,expiresAt=new Date((options.now??Date.now())+10*60*1000).toISOString();
+  const code=challengeCode(env,options),challengeId=`challenge:${randomBytes(16).toString('hex')}`,expiresAt=new Date((options.now??Date.now())+10*60*1000).toISOString();
   await sql`INSERT INTO member_auth_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at) VALUES(${challengeId},${String(member.membership_id)},${channel},${sha(String(destination).trim().toLowerCase())},${sha(code)},'OPEN',${expiresAt})`;
   const previewExpose=(env.VERCEL_ENV||'')==='preview'&&env.MEMBER_AUTH_PREVIEW_EXPOSE_CODE==='true';
   try{const deliver=options.deliverChallenge||(previewExpose?null:createMemberChallengeDelivery({sql,env,fetchImpl:options.fetchImpl||fetch}));if(deliver)await deliver({channel,destination,code,memberId});else if(!previewExpose)throw Object.assign(new Error('CHALLENGE_DELIVERY_NOT_CONFIGURED'),{code:'CHALLENGE_DELIVERY_NOT_CONFIGURED'});}catch(deliveryError){await sql`UPDATE member_auth_challenge SET state='REVOKED' WHERE challenge_id=${challengeId} AND state='OPEN'`;console.error('Member challenge delivery failed',{channel,code:deliveryError?.code,message:deliveryError?.message});return res.status(503).json({ok:false,error:'CHALLENGE_DELIVERY_FAILED',failureCode:String(deliveryError?.code||'CHALLENGE_DELIVERY_FAILED')});}
