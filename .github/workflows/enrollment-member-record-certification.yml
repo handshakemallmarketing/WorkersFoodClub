@@ -3,11 +3,16 @@ on:
   pull_request:
     paths:
       - 'api/membership-apply.js'
+      - 'api/membership-renewal-invoice.js'
       - 'api/membership-subscription-settle.js'
+      - 'lib/membership-annual-invoice.js'
       - 'tests/node/sw1-membership-apply.test.mjs'
+      - 'tests/node/membership-annual-invoice.test.mjs'
       - 'tests/node/membership-subscription-settle.test.mjs'
       - 'tests/node/enrollment-member-record-contract.test.mjs'
       - 'public/join.html'
+      - 'docs/business-logic-v2/a2-membership-contract.yaml'
+      - 'docs/policies/AUTH-MEMBERSHIP-001-member-admission.md'
       - 'docs/business-logic-v2/master-truth-matrix-amendment-external-services-2026-09-20.yaml'
 jobs:
   enrollment-contract:
@@ -22,4 +27,4 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: node --test tests/node/sw1-membership-apply.test.mjs tests/node/membership-subscription-settle.test.mjs tests/node/enrollment-member-record-contract.test.mjs
+      - run: node --test tests/node/sw1-membership-apply.test.mjs tests/node/membership-annual-invoice.test.mjs tests/node/membership-subscription-settle.test.mjs tests/node/enrollment-member-record-contract.test.mjs
