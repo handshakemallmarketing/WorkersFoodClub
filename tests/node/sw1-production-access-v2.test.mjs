@@ -10,6 +10,8 @@ const audience = 'workers-food-club-production';
 const jwksUri = 'https://example.invalid/jwks';
 const now = Date.UTC(2026, 8, 14, 20, 0, 0);
 const nowSeconds = Math.floor(now / 1000);
+const authorizedSha = 'e67bf163db4bf87317766b1c58da84ea076de76f';
+const unauthorizedSha = '1d01dfbffc9ee8eb977f925278d384dde2a9c3c0';
 
 function fixture(kid = 'fixture-key') {
   const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -28,12 +30,55 @@ function claims(overrides = {}) {
 }
 const config = { issuer, audience, jwksUri };
 
-test('Production access switch is fail-closed unless explicitly true', () => {
+test('Production access fails closed unless the switch and exact authorized runtime SHA agree', () => {
   assert.equal(productionApplicationAccessEnabled({}), false);
   assert.equal(productionApplicationAccessEnabled({ PRODUCTION_APPLICATION_ACCESS_ENABLED: 'false' }), false);
   assert.equal(productionApplicationAccessEnabled({ PRODUCTION_APPLICATION_ACCESS_ENABLED: 'TRUE' }), false);
   assert.deepEqual(requireProductionApplicationAccess({}), { ok: false, status: 503, error: 'PRODUCTION_APPLICATION_ACCESS_DISABLED' });
-  assert.deepEqual(requireProductionApplicationAccess({ PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true' }), { ok: true });
+
+  assert.equal(productionApplicationAccessEnabled({ PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true', VERCEL_ENV: 'preview' }), true);
+
+  const enabledWithoutSha = { PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true', VERCEL: '1', VERCEL_ENV: 'production' };
+  assert.equal(productionApplicationAccessEnabled(enabledWithoutSha), false);
+  assert.deepEqual(requireProductionApplicationAccess(enabledWithoutSha), {
+    ok: false,
+    status: 503,
+    error: 'PRODUCTION_APPLICATION_ACCESS_SHA_UNVERIFIED',
+  });
+
+  const malformedAuthorization = {
+    PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
+    VERCEL: '1',
+    VERCEL_ENV: 'production',
+    PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: 'main',
+    VERCEL_GIT_COMMIT_SHA: authorizedSha,
+  };
+  assert.equal(productionApplicationAccessEnabled(malformedAuthorization), false);
+  assert.equal(requireProductionApplicationAccess(malformedAuthorization).error, 'PRODUCTION_APPLICATION_ACCESS_SHA_UNVERIFIED');
+
+  const mismatchedRelease = {
+    PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
+    VERCEL: '1',
+    VERCEL_ENV: 'production',
+    PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: authorizedSha,
+    VERCEL_GIT_COMMIT_SHA: unauthorizedSha,
+  };
+  assert.equal(productionApplicationAccessEnabled(mismatchedRelease), false);
+  assert.deepEqual(requireProductionApplicationAccess(mismatchedRelease), {
+    ok: false,
+    status: 503,
+    error: 'PRODUCTION_APPLICATION_ACCESS_SHA_UNAUTHORIZED',
+  });
+
+  const exactAuthorizedRelease = {
+    PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
+    VERCEL: '1',
+    VERCEL_ENV: 'production',
+    PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: authorizedSha,
+    VERCEL_GIT_COMMIT_SHA: authorizedSha,
+  };
+  assert.equal(productionApplicationAccessEnabled(exactAuthorizedRelease), true);
+  assert.deepEqual(requireProductionApplicationAccess(exactAuthorizedRelease), { ok: true });
 });
 
 test('Production OIDC configuration remains HTTPS and complete', () => {

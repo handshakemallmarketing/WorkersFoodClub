@@ -192,7 +192,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=origin-os --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true)"
+          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope=origin-os --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true --env PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA="$ACTIVATION_SHA")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Authorized Production deployment: $url"
           echo "Canonical Production alias under test: $PRODUCTION_BASE_URL"
@@ -297,25 +297,34 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
+          payload="$(jq -cn --arg sha "$ACTIVATION_SHA" '[
+            {"key":"PRODUCTION_APPLICATION_ACCESS_ENABLED","value":"true","type":"plain","target":["production"],"comment":"Persistent Production application access explicitly authorized and runtime-falsified"},
+            {"key":"PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA","value":$sha,"type":"plain","target":["production"],"comment":"Exact governed Production application-access candidate SHA"}
+          ]')"
           response="$(curl --silent --show-error --fail-with-body \
             --request POST \
             --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true" \
             --header "Authorization: Bearer ${VERCEL_TOKEN}" \
             --header 'Content-Type: application/json' \
-            --data '[{"key":"PRODUCTION_APPLICATION_ACCESS_ENABLED","value":"true","type":"plain","target":["production"],"comment":"Persistent Production application access explicitly authorized and runtime-falsified"}]')"
+            --data "$payload")"
           test -n "$response"
-          echo 'Persisted project-level Production application-access switch as true after successful runtime falsification.'
+          echo 'Persisted project-level Production application-access switch and exact governed SHA.'
 
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=origin-os >/dev/null
           python - <<'PY'
-          import pathlib, re, sys
+          import os, pathlib, re, sys
           path = pathlib.Path('.vercel/.env.production.local')
           text = path.read_text(encoding='utf-8') if path.exists() else ''
-          match = re.search(r'^PRODUCTION_APPLICATION_ACCESS_ENABLED=(.*)$', text, re.MULTILINE)
-          if not match or match.group(1).strip().strip('"\'') != 'true':
+          enabled = re.search(r'^PRODUCTION_APPLICATION_ACCESS_ENABLED=(.*)$', text, re.MULTILINE)
+          authorized_sha = re.search(r'^PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA=(.*)$', text, re.MULTILINE)
+          if not enabled or enabled.group(1).strip().strip('"\'') != 'true':
               print('Persistent Production application-access switch could not be independently re-read as true.', file=sys.stderr)
               sys.exit(1)
-          print('Persistent Production application-access switch independently re-read as true.')
+          expected_sha = os.environ['ACTIVATION_SHA']
+          if not authorized_sha or authorized_sha.group(1).strip().strip('"\'') != expected_sha:
+              print('Persistent Production application-access authorized SHA did not match the governed candidate.', file=sys.stderr)
+              sys.exit(1)
+          print('Persistent Production application-access switch and exact authorized SHA independently re-read.')
           PY
 
       - name: Roll back immediately if post-activation or persistence verification failed
