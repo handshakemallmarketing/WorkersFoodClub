@@ -1,4 +1,4 @@
-version: "1.9"
+version: "1.10"
 status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
 as_of_utc: "2026-09-21"
 applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
@@ -7,6 +7,8 @@ canonical_entry_truth:
     authentication_required_to_submit_application: false
     google_required: false
     employment_agency_required: true
+    ux_entry_mode: FORM_FIRST_SELF_SERVICE
+    ux_intro_copy_authority: POLICY_SEMANTICS_NOT_LEGACY_LITERAL_COPY
     provisioning: AUTO_UNLESS_GOVERNED_MANUAL_REVIEW
     canonical_sequence: PROSPECT_INFORMATION_TO_MEMBERSHIP_RECORD_TO_MEMBER_NUMBER_TO_ANNUAL_INVOICE_TO_AUTHENTICATION_TO_SETTLEMENT_TO_ACTIVE_MEMBERSHIP
     membership_creation_dependency_on_fee_configuration: NONE
@@ -104,6 +106,8 @@ bootstrap_control_plane:
     activation_authority: SYSTEM_OWNER
     management: DEPLOYMENT_CONTROL_PLANE_ONLY
 fail_closed_invariants:
+  - guest_enrollment_is_form_first_self_service_and_does_not_require_google_or_prior_authentication
+  - ui_conformance_asserts_canonical_enrollment_semantics_not_obsolete_literal_intro_copy
   - unsupported_http_methods_are_rejected_before_authentication_or_database_work
   - newly_issued_member_numbers_are_exactly_12_ascii_decimal_digits_without_prefix_or_separator
   - membership_identity_creation_does_not_depend_on_subscription_fee_configuration
@@ -117,7 +121,7 @@ fail_closed_invariants:
   - sms_otp_delivery_is_provider_neutral_and_never_hard_codes_twilio_as_domain_authority
   - sms_otp_requires_active_successfully_tested_service_configuration
   - failed_sms_delivery_revokes_the_new_challenge
-  - transactional_email_otp_fails_closed_until_a_transactional_email_adapter_is configured
+  - transactional_email_otp_fails_closed_until_a_transactional_email_adapter_is_configured
   - missing_credentials_means_not_active
   - saved_credentials_are_pending_until_exact_generation_is_observed_in_running_deployment
   - connectivity_test_cannot_run_against_stale_or_pre_rotation_credentials
