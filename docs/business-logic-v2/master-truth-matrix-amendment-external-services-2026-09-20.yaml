@@ -1,0 +1,81 @@
+version: "1.4"
+status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
+as_of_utc: "2026-09-20"
+applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
+canonical_entry_truth:
+  guest_enrollment:
+    authentication_required: false
+    google_required: false
+    employment_agency_required: true
+    provisioning: AUTO_UNLESS_GOVERNED_MANUAL_REVIEW
+  activation:
+    ordinary_membership: CONFIRMED_ANNUAL_SUBSCRIPTION_SETTLEMENT
+    member_id: IMMUTABLE_SERVER_ISSUED
+  member_authentication:
+    primary: WFC_MEMBER_ID_PLUS_REGISTERED_CONTACT_CHALLENGE
+    session: SERVER_BACKED
+    google: OPTIONAL_EXPLICITLY_BOUND_PROVIDER
+    google_auto_binding: PROHIBITED
+external_service_control_plane:
+  principle: CONFIGURE_DEPLOY_TEST_EXPLICITLY_ACTIVATE_FAIL_CLOSED
+  delegated_management_capability: workforce:settings.manage
+  owner_capability: authority:owner
+  authority_source: AUTHORITATIVE_EMPLOYEE_SESSION_PLUS_APPLICATION_AUTHORITY_GRANT
+  synthetic_admin_role: PROHIBITED
+  secret_storage: DEPLOYMENT_SECRET_STORE_ONLY
+  database_secret_storage: PROHIBITED
+  secret_readback: PROHIBITED
+  audit_metadata: POSTGRESQL
+  lifecycle:
+    SAVE: WRITES_OR_ROTATES_SECRET_AND_ENTERS_CONFIGURED_PENDING_DEPLOYMENT
+    DEPLOY: RUNNING_DEPLOYMENT_MUST_CONTAIN_EXACT_SAVED_CREDENTIAL_GENERATION
+    TEST_PASS: CONFIGURED_AND_ELIGIBLE_FOR_EXPLICIT_ACTIVATION
+    TEST_FAIL: ERROR_AND_NOT_ACTIVE
+    ACTIVATE: REQUIRES_SUCCESSFUL_TEST_AND_DOES_NOT_REQUIRE_CREDENTIAL_REENTRY
+    DISABLE: DISABLED_AND_RESETS_TEST_STATE_REQUIRING_RETEST_BEFORE_REACTIVATION
+  services:
+    payments:
+      initial_provider: PAYSTACK
+      activation_authority: SYSTEM_OWNER
+      activation_ceremony: SUCCESSFULLY_DEPLOYED_AND_TESTED_AUTHORIZED_CONFIGURATION_PLUS_EXPLICIT_SETTINGS_ACTIVATION
+      additional_global_live_funds_gate: NONE
+      bounded_transaction_authority: PRESERVED
+      distinction: SERVICE_ACTIVATION_ENABLES_PROVIDER_AVAILABILITY_BUT_DOES_NOT_BYPASS_EXISTING_PER_TRANSACTION_AUTHORITY_WATCHDOG_IDEMPOTENCY_OR_RECONCILIATION_CONTROLS
+    email:
+      initial_provider: MAILERLITE
+      activation_authority: SETTINGS_MANAGE_CAPABILITY_OR_SYSTEM_OWNER
+    sms:
+      initial_provider: TWILIO
+      activation_authority: SETTINGS_MANAGE_CAPABILITY_OR_SYSTEM_OWNER
+    google_login:
+      initial_provider: GOOGLE
+      activation_authority: SYSTEM_OWNER
+      role: OPTIONAL_MEMBER_LOGIN_PROVIDER_ONLY
+    observability:
+      initial_provider: GENERIC
+      activation_authority: SETTINGS_MANAGE_CAPABILITY_OR_SYSTEM_OWNER
+bootstrap_control_plane:
+  database:
+    initial_provider: NEON
+    secret: DATABASE_URL
+    activation_authority: SYSTEM_OWNER
+    management: DEPLOYMENT_CONTROL_PLANE_ONLY
+    reason: SETTINGS_RUNTIME_AND_AUTHORITY_AUDIT_DEPEND_ON_DATABASE_AND_CANNOT_SELF_BOOTSTRAP_OR_SAFELY_ROTATE_ITS_OWN_DATABASE_SECRET
+fail_closed_invariants:
+  - unsupported_http_methods_are_rejected_before_authentication_or_database_work
+  - missing_credentials_means_not_active
+  - saved_credentials_are_pending_until_exact_generation_is_observed_in_running_deployment
+  - connectivity_test_cannot_run_against_stale_or_pre_rotation_credentials
+  - configured_does_not_mean_active
+  - successful_connectivity_test_is_required_before_activation
+  - failed_connectivity_test_forces_error_and_removes_active_state
+  - disable_resets_test_state_and_requires_retest_before_reactivation
+  - credential_rotation_resets_test_state_and_deactivates_service_until_redeployed_retested_and_reactivated
+  - activation_never_requires_secret_reentry
+  - secrets_are_never_returned_by_settings_api
+  - secrets_are_never_written_to_application_database
+  - production_enablement_does_not_implicitly_activate_external_services
+  - service_save_test_activate_disable_events_are_audited
+  - actors_without_settings_manage_or_owner_capability_cannot_manage_integrations
+  - system_owner_authority_is_derived_from_authority_owner_grant_not_client_claim
+  - payment_service_activation_never_bypasses_bounded_transaction_authority
