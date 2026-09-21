@@ -1,15 +1,11 @@
-import { randomBytes } from 'node:crypto';
 import { requireProductionApplicationAccess } from '../lib/production-access-policy.js';
-
-function newPrimaryMemberId(){return `WFC-P-${randomBytes(6).toString('hex').toUpperCase()}`;}
 
 /**
  * Provider-confirmed subscription settlement boundary.
- * Authentication-provider identity is deliberately irrelevant here: economic settlement activates
- * the membership identified by the governed invoice. Google/OIDC binding is an optional later login ceremony.
- * This endpoint MUST only be invoked by the trusted settlement/payment evidence path, never directly as
- * applicant proof. `options.authorizeSettlement` is injectable for tests; production requires the configured
- * internal settlement authority token.
+ * Enrollment has already issued the immutable Member Number and the invoice is against that membership.
+ * Settlement activates the already-numbered membership; it never creates or replaces a Member Number.
+ * Authentication-provider identity is deliberately irrelevant here. Google/OIDC binding is an optional later login ceremony.
+ * This endpoint MUST only be invoked by the trusted settlement/payment evidence path, never directly as applicant proof.
  */
 export default async function handler(req,res,options={}){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
@@ -23,18 +19,20 @@ export default async function handler(req,res,options={}){
   const invoices=await sql`SELECT i.invoice_id,i.membership_id,i.state,i.settlement_evidence_id,m.participant_id,m.state AS membership_state,m.standing,m.member_type,m.public_member_id FROM membership_subscription_invoice i JOIN application_membership m ON m.membership_id=i.membership_id WHERE i.invoice_id=${invoiceId} LIMIT 1`;
   if(invoices.length!==1)return res.status(404).json({ok:false,error:'SUBSCRIPTION_INVOICE_NOT_FOUND'});const invoice=invoices[0],participantId=String(invoice.participant_id),membershipId=String(invoice.membership_id);
   if(String(invoice.member_type)!=='PRIMARY')return res.status(409).json({ok:false,error:'PRIMARY_SUBSCRIPTION_REQUIRED'});
-  if(String(invoice.state)==='PAID'){if(String(invoice.settlement_evidence_id)!==evidenceId)return res.status(409).json({ok:false,error:'INVOICE_ALREADY_SETTLED_DIFFERENT_EVIDENCE'});if(!invoice.public_member_id)return res.status(409).json({ok:false,error:'ACTIVE_MEMBER_ID_MISSING'});res.setHeader('Cache-Control','no-store');return res.status(200).json({ok:true,idempotent:true,invoiceId,membershipId,publicMemberId:String(invoice.public_member_id),membershipState:'ACTIVE',standing:'ACTIVE'});}
+  if(!invoice.public_member_id)return res.status(409).json({ok:false,error:'MEMBER_NUMBER_NOT_ISSUED'});
+  const publicMemberId=String(invoice.public_member_id);
+  if(String(invoice.state)==='PAID'){if(String(invoice.settlement_evidence_id)!==evidenceId)return res.status(409).json({ok:false,error:'INVOICE_ALREADY_SETTLED_DIFFERENT_EVIDENCE'});res.setHeader('Cache-Control','no-store');return res.status(200).json({ok:true,idempotent:true,invoiceId,membershipId,publicMemberId,membershipState:'ACTIVE',standing:'ACTIVE'});}
   if(String(invoice.state)!=='OPEN')return res.status(409).json({ok:false,error:'SUBSCRIPTION_INVOICE_NOT_OPEN'});const activatable=['INACTIVE','SUSPENDED'].includes(String(invoice.membership_state))||(String(invoice.membership_state)==='ACTIVE'&&String(invoice.standing)==='INITIAL_FEE_DUE');if(!activatable)return res.status(409).json({ok:false,error:'MEMBERSHIP_NOT_ACTIVATABLE'});
-  const nowIso=new Date(options.now??Date.now()).toISOString(),publicMemberId=invoice.public_member_id?String(invoice.public_member_id):newPrimaryMemberId(),auditId=`audit:subscription:${evidenceId}`,requestId=req.headers?.['x-request-id']||null;
+  const nowIso=new Date(options.now??Date.now()).toISOString(),auditId=`audit:subscription:${evidenceId}`,requestId=req.headers?.['x-request-id']||null;
   const transitioned=await sql`WITH settled_invoice AS (
    UPDATE membership_subscription_invoice SET state='PAID',paid_at=${nowIso},settlement_evidence_id=${evidenceId} WHERE invoice_id=${invoiceId} AND membership_id=${membershipId} AND state='OPEN' RETURNING invoice_id,membership_id
   ), activated_membership AS (
-   UPDATE application_membership m SET state='ACTIVE',standing='ACTIVE',public_member_id=COALESCE(m.public_member_id,${publicMemberId}),activated_at=COALESCE(m.activated_at,${nowIso}),suspended_at=NULL FROM settled_invoice s WHERE m.membership_id=s.membership_id AND m.participant_id=${participantId} AND m.member_type='PRIMARY' AND (m.state IN ('INACTIVE','SUSPENDED') OR (m.state='ACTIVE' AND m.standing='INITIAL_FEE_DUE')) RETURNING m.membership_id,m.public_member_id
+   UPDATE application_membership m SET state='ACTIVE',standing='ACTIVE',activated_at=COALESCE(m.activated_at,${nowIso}),suspended_at=NULL FROM settled_invoice s WHERE m.membership_id=s.membership_id AND m.participant_id=${participantId} AND m.member_type='PRIMARY' AND m.public_member_id=${publicMemberId} AND (m.state IN ('INACTIVE','SUSPENDED') OR (m.state='ACTIVE' AND m.standing='INITIAL_FEE_DUE')) RETURNING m.membership_id,m.public_member_id
   ), audit_event AS (
    INSERT INTO application_access_audit(audit_id,participant_id,membership_id,event_type,state,outcome,request_id,occurred_at) SELECT ${auditId},${participantId},m.membership_id,'MEMBERSHIP_SUBSCRIPTION_SETTLED','ACTIVE','TRANSITION',${requestId},${nowIso} FROM activated_membership m ON CONFLICT (audit_id) DO NOTHING RETURNING audit_id
   ), invariant_guard AS (
    SELECT CASE WHEN (SELECT count(*) FROM settled_invoice)=1 AND (SELECT count(*) FROM activated_membership)=1 AND (SELECT count(*) FROM audit_event)=1 THEN 1 ELSE 1/0 END AS ok
   ) SELECT m.membership_id,m.public_member_id,g.ok FROM activated_membership m CROSS JOIN invariant_guard g`;
-  if(transitioned.length!==1||!transitioned[0].public_member_id||Number(transitioned[0].ok)!==1)return res.status(409).json({ok:false,error:'SUBSCRIPTION_SETTLEMENT_ATOMIC_RACE'});res.setHeader('Cache-Control','no-store');return res.status(200).json({ok:true,idempotent:false,invoiceId,membershipId:String(transitioned[0].membership_id),publicMemberId:String(transitioned[0].public_member_id),membershipState:'ACTIVE',standing:'ACTIVE',loginIdentityBound:false});
+  if(transitioned.length!==1||String(transitioned[0].public_member_id)!==publicMemberId||Number(transitioned[0].ok)!==1)return res.status(409).json({ok:false,error:'SUBSCRIPTION_SETTLEMENT_ATOMIC_RACE'});res.setHeader('Cache-Control','no-store');return res.status(200).json({ok:true,idempotent:false,invoiceId,membershipId:String(transitioned[0].membership_id),publicMemberId,membershipState:'ACTIVE',standing:'ACTIVE',loginIdentityBound:false});
  }catch(error){console.error('Membership subscription settlement failed',{name:error?.name,code:error?.code,message:error?.message});return res.status(503).json({ok:false,error:'SUBSCRIPTION_SETTLEMENT_FAILED'});}
 }
