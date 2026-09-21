@@ -11,6 +11,13 @@ Ordinary membership enrollment is self-service. Administrative approval is optio
 
 `Enrollment ≠ Membership Identity ≠ Annual Invoice ≠ Authentication ≠ Settlement/Activation ≠ Workforce Authority`
 
+## Member Number identity and machine-readable credential
+The Member Number is an immutable, server-issued public membership identifier. For all newly issued memberships it MUST consist of exactly 12 ASCII decimal digits (`0-9`) with no alphabetic prefix, membership-type prefix, hyphen, space or other separator. Member type remains authoritative database/domain state and MUST NOT be encoded into the Member Number.
+
+The raw Member Number is the canonical payload for a scannable Code 128 barcode and QR code. Neither representation may embed name, email, phone, employer, standing, payment state, authority, or other sensitive/domain data. A scan supplies only the Member Number; the server resolves the membership and current authorization state. A barcode or QR code is therefore an identifier, not proof of authentication or membership rights.
+
+Already-issued legacy Member Numbers are immutable and MUST NOT be rewritten merely to adopt the new format. New issuance follows the numeric format. Collision handling remains fail closed through authoritative uniqueness constraints; a collision must never overwrite or alias another membership.
+
 ## Guest/non-member access and self-service enrollment
 An unauthenticated Guest may submit a membership application directly. Enrollment MUST NOT require Google, OIDC, or another identity provider. The application collects authoritative enrollment/contact information, including government ministry, department, agency or employer. Application submission itself creates no Member-area authority.
 
@@ -53,7 +60,7 @@ A Primary Member may nominate up to two individually identified beneficiaries. B
 Membership and workforce standing are separate state machines. Operator access requires a dedicated Employee/Operator area and additional workforce authentication/step-up. Member authentication alone never grants Operator access. System Owner appoints/revokes Admins; Admins grant/revoke bounded Operator permissions; an Admin cannot create a System Owner.
 
 ## Required regression evidence
-Implementation must prove self-service unauthenticated enrollment; employer persistence; Member Number issuance before billing; membership survival when billing configuration fails; first-year invoice generation; one invoice per membership/year under replay and race; authentication of `INACTIVE/INITIAL_FEE_DUE` numbered members before settlement; authenticated-unpaid resolution to `MEMBERSHIP_PAYMENT_REQUIRED` with Member-area denial; settlement only after the governed authentication boundary in the member journey; settlement-gated activation/restoration; renewal invoice generation against the unchanged Member Number; no Google/OIDC dependency; 30-day grace; workforce separation; and direct server-side enforcement.
+Implementation must prove self-service unauthenticated enrollment; employer persistence; exactly-12-digit new Member Number issuance before billing; absence of prefixes/separators in new Member Numbers; machine-readable payload equivalence; membership survival when billing configuration fails; first-year invoice generation; one invoice per membership/year under replay and race; authentication of `INACTIVE/INITIAL_FEE_DUE` numbered members before settlement; authenticated-unpaid resolution to `MEMBERSHIP_PAYMENT_REQUIRED` with Member-area denial; settlement only after the governed authentication boundary in the member journey; settlement-gated activation/restoration; renewal invoice generation against the unchanged Member Number; no Google/OIDC dependency; 30-day grace; workforce separation; and direct server-side enforcement.
 
 ## Change control
 Any change requires synchronized policy, server-side, client-side, state-model/migration where applicable, Truth Matrix, and regression-evidence updates. UI-only changes cannot alter authority.
