@@ -1,4 +1,4 @@
-version: "1.10"
+version: "1.11"
 status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
 as_of_utc: "2026-09-21"
 applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
@@ -89,6 +89,10 @@ external_service_control_plane:
       authentication_dependency: PROVIDER_NEUTRAL_SMS_OTP_INTERFACE
       activation_authority: SETTINGS_MANAGE_CAPABILITY_OR_SYSTEM_OWNER
       delivery_precondition: SERVICE_ACTIVE_AND_LAST_TEST_PASSED
+      recipient_format: E164
+      default_local_country_code: GHANA_233_CONFIGURABLE_BY_MEMBER_PHONE_DEFAULT_COUNTRY_CODE
+      malformed_or_ambiguous_recipient_effect: FAIL_CLOSED
+      provider_delivery_success: HTTP_SUCCESS_PLUS_PROVIDER_LEVEL_ACCEPTANCE_WHERE_PROVIDER_RETURNS_RECIPIENT_STATUS
       provider_secret_storage: DEPLOYMENT_SECRET_STORE_ONLY
       failed_delivery_effect: REVOKE_CREATED_CHALLENGE_AND_FAIL_CLOSED
       provider_switching: REQUIRES_SAVE_DEPLOY_TEST_ACTIVATE_FOR_SELECTED_CREDENTIAL_GENERATION
@@ -120,6 +124,9 @@ fail_closed_invariants:
   - confirmed_settlement_not_authentication_is_the_ordinary_activation_boundary
   - sms_otp_delivery_is_provider_neutral_and_never_hard_codes_twilio_as_domain_authority
   - sms_otp_requires_active_successfully_tested_service_configuration
+  - sms_otp_recipient_is_normalized_to_e164_before_provider_delivery
+  - ambiguous_or_invalid_sms_recipient_fails_closed_instead_of_guessing
+  - provider_http_success_is_not_delivery_success_when_provider_level_recipient_status_rejects_the_message
   - failed_sms_delivery_revokes_the_new_challenge
   - transactional_email_otp_fails_closed_until_a_transactional_email_adapter_is_configured
   - missing_credentials_means_not_active
