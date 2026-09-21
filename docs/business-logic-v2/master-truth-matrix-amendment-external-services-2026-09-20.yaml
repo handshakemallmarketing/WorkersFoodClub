@@ -1,4 +1,4 @@
-version: "1.8"
+version: "1.9"
 status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
 as_of_utc: "2026-09-21"
 applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
@@ -53,17 +53,6 @@ canonical_entry_truth:
     authentication_may_create_membership: false
     authentication_may_settle_invoice: false
     authentication_may_activate_membership: false
-  activation:
-    ordinary_membership: CONFIRMED_ANNUAL_SUBSCRIPTION_SETTLEMENT_AFTER_GOVERNED_MEMBER_AUTHENTICATION
-    settlement_effect: ACTIVATE_OR_RESTORE_EXISTING_NUMBERED_MEMBERSHIP_AS_POLICY_ALLOWS
-    settlement_must_not_issue_or_replace_member_number: true
-    authentication_without_settlement_confers_active_rights: false
-  expiry_and_renewal:
-    expiry_destroys_membership_identity: false
-    expiry_changes_member_number: false
-    renewal_invoice_targets_existing_numbered_membership: true
-    renewal_settlement_restores_existing_membership: true
-    renewal_authentication_precedes_member_initiated_settlement: true
 external_service_control_plane:
   principle: CONFIGURE_DEPLOY_TEST_EXPLICITLY_ACTIVATE_FAIL_CLOSED
   delegated_management_capability: workforce:settings.manage
@@ -88,13 +77,19 @@ external_service_control_plane:
       activation_ceremony: SUCCESSFULLY_DEPLOYED_AND_TESTED_AUTHORIZED_CONFIGURATION_PLUS_EXPLICIT_SETTINGS_ACTIVATION
       additional_global_live_funds_gate: NONE
       bounded_transaction_authority: PRESERVED
-      distinction: SERVICE_ACTIVATION_ENABLES_PROVIDER_AVAILABILITY_BUT_DOES_NOT_BYPASS_EXISTING_PER_TRANSACTION_AUTHORITY_WATCHDOG_IDEMPOTENCY_OR_RECONCILIATION_CONTROLS
     email:
       initial_provider: MAILERLITE
       activation_authority: SETTINGS_MANAGE_CAPABILITY_OR_SYSTEM_OWNER
+      transactional_member_otp_delivery: UNSUPPORTED_UNTIL_TRANSACTIONAL_EMAIL_ADAPTER_EXISTS
     sms:
-      initial_provider: TWILIO
+      provider_selection: SETTINGS_REGISTRY_DRIVEN
+      supported_providers: [TWILIO, HUBTEL, AFRICASTALKING, ARKESEL]
+      authentication_dependency: PROVIDER_NEUTRAL_SMS_OTP_INTERFACE
       activation_authority: SETTINGS_MANAGE_CAPABILITY_OR_SYSTEM_OWNER
+      delivery_precondition: SERVICE_ACTIVE_AND_LAST_TEST_PASSED
+      provider_secret_storage: DEPLOYMENT_SECRET_STORE_ONLY
+      failed_delivery_effect: REVOKE_CREATED_CHALLENGE_AND_FAIL_CLOSED
+      provider_switching: REQUIRES_SAVE_DEPLOY_TEST_ACTIVATE_FOR_SELECTED_CREDENTIAL_GENERATION
     google_login:
       initial_provider: GOOGLE
       activation_authority: SYSTEM_OWNER
@@ -108,12 +103,9 @@ bootstrap_control_plane:
     secret: DATABASE_URL
     activation_authority: SYSTEM_OWNER
     management: DEPLOYMENT_CONTROL_PLANE_ONLY
-    reason: SETTINGS_RUNTIME_AND_AUTHORITY_AUDIT_DEPEND_ON_DATABASE_AND_CANNOT_SELF_BOOTSTRAP_OR_SAFELY_ROTATE_ITS_OWN_DATABASE_SECRET
 fail_closed_invariants:
   - unsupported_http_methods_are_rejected_before_authentication_or_database_work
   - newly_issued_member_numbers_are_exactly_12_ascii_decimal_digits_without_prefix_or_separator
-  - barcode_and_qr_credentials_encode_only_the_raw_member_number_and_resolve_authority_server_side
-  - existing_issued_member_numbers_are_never_rewritten_by_format_migration
   - membership_identity_creation_does_not_depend_on_subscription_fee_configuration
   - successful_new_member_application_triggers_billing_only_after_numbered_membership_exists
   - invoice_generation_failure_never_erases_or_replaces_membership_identity
@@ -121,9 +113,11 @@ fail_closed_invariants:
   - initial_fee_due_numbered_membership_is_authentication_eligible_before_settlement
   - authenticated_initial_fee_due_member_resolves_to_payment_required_without_member_area_authority
   - authentication_never_creates_membership_settles_invoice_or_activates_membership
-  - governed_member_authentication_precedes_member_initiated_annual_subscription_settlement
   - confirmed_settlement_not_authentication_is_the_ordinary_activation_boundary
-  - expiry_and_renewal_never_replace_member_number
+  - sms_otp_delivery_is_provider_neutral_and_never_hard_codes_twilio_as_domain_authority
+  - sms_otp_requires_active_successfully_tested_service_configuration
+  - failed_sms_delivery_revokes_the_new_challenge
+  - transactional_email_otp_fails_closed_until_a_transactional_email_adapter_is configured
   - missing_credentials_means_not_active
   - saved_credentials_are_pending_until_exact_generation_is_observed_in_running_deployment
   - connectivity_test_cannot_run_against_stale_or_pre_rotation_credentials
