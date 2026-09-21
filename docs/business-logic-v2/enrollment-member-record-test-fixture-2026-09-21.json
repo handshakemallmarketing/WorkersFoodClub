@@ -1,0 +1,15 @@
+{
+  "purpose": "non-production enrollment certification fixture",
+  "fullName": "Test Member 20260921",
+  "governmentEmployer": "Ministry of Education",
+  "email": "test.member.20260921@example.com",
+  "phone": "+233200000001",
+  "annualMembershipFeeMinor": 12000,
+  "currency": "GHS",
+  "expectedBeforePayment": {
+    "membershipState": "INACTIVE",
+    "standing": "INITIAL_FEE_DUE",
+    "publicMemberIdPattern": "^WFC-P-[0-9A-F]{12}$",
+    "invoiceState": "OPEN"
+  }
+}
