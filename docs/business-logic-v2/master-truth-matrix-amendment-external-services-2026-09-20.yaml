@@ -1,4 +1,4 @@
-version: "1.7"
+version: "1.8"
 status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
 as_of_utc: "2026-09-21"
 applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
@@ -16,6 +16,16 @@ canonical_entry_truth:
     issuance: DURING_MEMBERSHIP_RECORD_PROVISIONING_BEFORE_ANNUAL_INVOICE
     authority: SERVER_ONLY
     immutable: true
+    new_issuance_format: EXACTLY_12_ASCII_DECIMAL_DIGITS
+    prefix: NONE
+    separators: NONE
+    sensitive_information_encoded: NONE
+    machine_readable_credential:
+      barcode: CODE_128_COMPATIBLE_RAW_MEMBER_NUMBER
+      qr: RAW_MEMBER_NUMBER
+      authoritative_lookup: SERVER_SIDE
+      encoded_personal_or_membership_status_data: PROHIBITED
+    legacy_already_issued_member_numbers: PRESERVE_IMMUTABLY
     active_rights_conferred_by_issuance: false
     authentication_eligibility_conferred_after_invoice: true
     invoice_linkage: INVOICE_REFERENCES_NUMBERED_MEMBERSHIP
@@ -101,6 +111,9 @@ bootstrap_control_plane:
     reason: SETTINGS_RUNTIME_AND_AUTHORITY_AUDIT_DEPEND_ON_DATABASE_AND_CANNOT_SELF_BOOTSTRAP_OR_SAFELY_ROTATE_ITS_OWN_DATABASE_SECRET
 fail_closed_invariants:
   - unsupported_http_methods_are_rejected_before_authentication_or_database_work
+  - newly_issued_member_numbers_are_exactly_12_ascii_decimal_digits_without_prefix_or_separator
+  - barcode_and_qr_credentials_encode_only_the_raw_member_number_and_resolve_authority_server_side
+  - existing_issued_member_numbers_are_never_rewritten_by_format_migration
   - membership_identity_creation_does_not_depend_on_subscription_fee_configuration
   - successful_new_member_application_triggers_billing_only_after_numbered_membership_exists
   - invoice_generation_failure_never_erases_or_replaces_membership_identity
