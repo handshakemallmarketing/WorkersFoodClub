@@ -1,0 +1,21 @@
+name: enrollment-member-record-certification
+on:
+  pull_request:
+    paths:
+      - 'api/membership-apply.js'
+      - 'api/membership-subscription-settle.js'
+      - 'tests/node/sw1-membership-apply.test.mjs'
+      - 'tests/node/membership-subscription-settle.test.mjs'
+      - 'tests/node/enrollment-member-record-contract.test.mjs'
+      - 'public/join.html'
+      - 'docs/business-logic-v2/master-truth-matrix-amendment-external-services-2026-09-20.yaml'
+jobs:
+  enrollment-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: node --test tests/node/sw1-membership-apply.test.mjs tests/node/membership-subscription-settle.test.mjs tests/node/enrollment-member-record-contract.test.mjs
