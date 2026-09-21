@@ -8,6 +8,7 @@ on:
       - 'lib/application-principal-binding.js'
       - 'tests/node/sw1-production-access-v2.test.mjs'
       - '.github/workflows/production-access-v2-*.yml'
+      - '.github/workflows/production-application-access-activation.yml'
       - 'docs/sw1/SW1-PRODUCTION-ACCESS-V2-PERSISTENT-GATE.md'
       - 'docs/traceability/SW1-production-access-v2-*'
   push:
@@ -34,6 +35,7 @@ jobs:
           recovery=.github/workflows/production-access-v2-recovery.yml
           containment=.github/workflows/production-access-v2-containment.yml
           guard=.github/workflows/production-access-v2-recovery-guard.yml
+          activation=.github/workflows/production-application-access-activation.yml
           ! grep -q 'RC3_PRODUCTION_MEMBER_TOKEN' "$recovery"
           ! grep -q 'RC3_PRODUCTION_OPERATOR_TOKEN' "$recovery"
           ! grep -q -- '--env PRODUCTION_APPLICATION_ACCESS_ENABLED=true' "$recovery"
@@ -51,6 +53,10 @@ jobs:
           grep -q "workflows: \['Production Access v2 recovery'\]" "$guard"
           grep -q "conclusion != 'success'" "$guard"
           grep -q 'PRODUCTION_APPLICATION_ACCESS_ENABLED.*false' "$guard"
+          grep -q "grant.get('candidateSha') == os.environ\['ACTIVATION_SHA'\]" "$activation"
+          grep -q 'PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA' "$activation"
+          grep -q -- '--arg sha "$ACTIVATION_SHA"' "$activation"
+          grep -q -- '--env PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA="$ACTIVATION_SHA"' "$activation"
       - name: Prove canonical Vercel binding is consistent
         shell: bash
         run: |
