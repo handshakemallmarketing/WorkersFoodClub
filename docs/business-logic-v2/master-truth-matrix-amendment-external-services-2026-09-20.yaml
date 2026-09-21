@@ -1,6 +1,6 @@
-version: "1.4"
+version: "1.5"
 status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
-as_of_utc: "2026-09-20"
+as_of_utc: "2026-09-21"
 applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
 canonical_entry_truth:
   guest_enrollment:
@@ -8,9 +8,17 @@ canonical_entry_truth:
     google_required: false
     employment_agency_required: true
     provisioning: AUTO_UNLESS_GOVERNED_MANUAL_REVIEW
+    canonical_sequence: PROSPECT_INFORMATION_TO_MEMBERSHIP_RECORD_TO_MEMBER_NUMBER_TO_ANNUAL_INVOICE_TO_SETTLEMENT_TO_ACTIVE_MEMBERSHIP_TO_AUTHENTICATION
+  member_number:
+    issuance: DURING_MEMBERSHIP_RECORD_PROVISIONING_BEFORE_ANNUAL_INVOICE
+    authority: SERVER_ONLY
+    immutable: true
+    active_rights_conferred_by_issuance: false
+    invoice_linkage: INVOICE_REFERENCES_NUMBERED_MEMBERSHIP
   activation:
     ordinary_membership: CONFIRMED_ANNUAL_SUBSCRIPTION_SETTLEMENT
-    member_id: IMMUTABLE_SERVER_ISSUED
+    settlement_effect: ACTIVATE_EXISTING_NUMBERED_MEMBERSHIP
+    settlement_must_not_issue_or_replace_member_number: true
   member_authentication:
     primary: WFC_MEMBER_ID_PLUS_REGISTERED_CONTACT_CHALLENGE
     session: SERVER_BACKED
