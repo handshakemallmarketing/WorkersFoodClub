@@ -52,6 +52,38 @@ if "${PSQL[@]}" -c "INSERT INTO catalog_specification(specification_id,version,n
  echo 'J20 unique active-version invariant accepted a second active version' >&2; exit 1
 fi
 
+# A listing activation holds a share lock on its source specification. A concurrent
+# attempt to deactivate that specification must wait and then fail, rather than
+# committing an active listing -> inactive specification chain.
+race_listing="listing:j20:chain:$suffix"; race_spec="spec:j20:chain:$suffix"
+"${PSQL[@]}" -c "SELECT * FROM catalog_publish_specification_and_listing('$race_listing','$sku-CHAIN','$race_spec',1,'Chain','Chain','unit','$category','$actor','event:listing:chain:$suffix','event:spec:chain:$suffix','event:supersede:chain:$suffix'); UPDATE catalog_listing SET active=false WHERE listing_id='$race_listing'" >/dev/null
+set +e
+"${PSQL[@]}" -c "BEGIN; UPDATE catalog_listing SET active=true WHERE listing_id='$race_listing'; SELECT pg_sleep(2); COMMIT" >/tmp/j20-chain-listing-"$suffix".log 2>&1 & p1=$!
+sleep 0.3
+"${PSQL[@]}" -c "UPDATE catalog_specification SET active=false WHERE specification_id='$race_spec' AND version=1" >/tmp/j20-chain-spec-"$suffix".log 2>&1 & p2=$!
+wait "$p1"; s1=$?
+wait "$p2"; s2=$?
+set -e
+rm -f /tmp/j20-chain-listing-"$suffix".log /tmp/j20-chain-spec-"$suffix".log
+[[ "$s1" == 0 && "$s2" != 0 ]] || { echo "J20 listing/specification race did not preserve the active chain; statuses=$s1,$s2" >&2; exit 1; }
+
+# Publication and governed category mutation take the same stable advisory
+# lock before their state-changing snapshots. A concurrent deactivation must
+# wait and then fail after seeing the published active specification.
+race_category="category:j20:chain:$suffix"; race_category_spec="spec:j20:category-chain:$suffix"
+"${PSQL[@]}" -c "INSERT INTO catalog_category(category_id,name,active,created_by,updated_by) VALUES('$race_category','J20 chain category $suffix',true,'$actor','$actor')" >/dev/null
+set +e
+"${PSQL[@]}" -c "BEGIN; SELECT * FROM catalog_publish_specification_and_listing('listing:j20:category-chain:$suffix','$sku-CATEGORY-CHAIN','$race_category_spec',1,'Category chain','Category chain','unit','$race_category','$actor','event:listing:category-chain:$suffix','event:spec:category-chain:$suffix','event:supersede:category-chain:$suffix'); SELECT pg_sleep(2); COMMIT" >/tmp/j20-chain-category-spec-"$suffix".log 2>&1 & p1=$!
+sleep 0.3
+"${PSQL[@]}" -c "SELECT * FROM catalog_mutate_category('$race_category',NULL,false,'$actor','event:category:chain:$suffix',true)" >/tmp/j20-chain-category-"$suffix".log 2>&1 & p2=$!
+wait "$p1"; s1=$?
+wait "$p2"; s2=$?
+set -e
+rm -f /tmp/j20-chain-category-spec-"$suffix".log /tmp/j20-chain-category-"$suffix".log
+[[ "$s1" == 0 && "$s2" != 0 ]] || { echo "J20 specification/category race did not preserve the active chain; statuses=$s1,$s2" >&2; exit 1; }
+chain=$("${PSQL[@]}" -Atc "SELECT l.active||':'||s.active||':'||c.active FROM catalog_listing l JOIN catalog_specification s ON (s.specification_id,s.version)=(l.specification_id,l.specification_version) JOIN catalog_category c ON c.category_id=s.category_id WHERE l.listing_id='listing:j20:category-chain:$suffix'")
+[[ "$chain" == "true:true:true" ]] || { echo "J20 publication/category race left an invalid chain: $chain" >&2; exit 1; }
+
 audit=$("${PSQL[@]}" -Atc "SELECT count(*) FROM catalog_audit_event WHERE actor_id='$actor' AND entity_id IN ('$listing','$spec:3')")
 [[ "$audit" -ge 2 ]] || { echo 'J20 publication audit lineage missing' >&2; exit 1; }
-echo 'J20 PostgreSQL serialization, identity, active-chain, normalization and audit invariants passed'
+echo 'J20 PostgreSQL serialization, identity, cross-table race, active-chain, normalization and audit invariants passed'
