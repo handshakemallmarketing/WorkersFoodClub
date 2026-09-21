@@ -41,6 +41,9 @@ jobs:
       - run: pnpm test
       - run: pnpm test:kernel
       - run: bash scripts/test-postgres-durability.sh
+      - name: J20 PostgreSQL transaction invariant
+        if: github.head_ref == 'launch-j20-reconcile-current-main' || github.ref_name == 'launch-j20-reconcile-current-main'
+        run: bash scripts/test-j20-postgres-durability.sh
       - run: bash scripts/test-postgres-backup-restore.sh
       - run: pnpm add -Dw --lockfile=false pg@8.13.1
       - run: node scripts/test-postgres-adapter-race.mjs
@@ -48,11 +51,19 @@ jobs:
         if: >-
           github.event_name == 'pull_request' &&
           (github.head_ref == 'sw1-rc2-production-readiness-falsification' ||
-           github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification')
+           github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification' ||
+           github.head_ref == 'launch-j20-reconcile-current-main')
         env:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_VERCEL_TARGET_PREFIX: https://vercel.com/origin-os/workers-food-club/
         run: node scripts/wait-for-vercel-status.mjs
+      - name: J20 exact-head deployment boundary status
+        if: github.event_name == 'pull_request' && github.head_ref == 'launch-j20-reconcile-current-main'
+        run: |
+          echo "J20 exact-head Preview deployment status is required and proven by the preceding Vercel status check."
+          echo "This proves deployment identity/readiness only; it is not authenticated catalog runtime proof."
+          echo "Authenticated catalog create/version/update/deactivate/reactivate rehearsal remains required before J20 runtime closure."
       - name: RC2 preview HTTP rehearsal status
         if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc2-production-readiness-falsification'
         run: |
