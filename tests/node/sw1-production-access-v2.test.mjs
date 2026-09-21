@@ -36,7 +36,9 @@ test('Production access fails closed unless the switch and exact authorized runt
   assert.equal(productionApplicationAccessEnabled({ PRODUCTION_APPLICATION_ACCESS_ENABLED: 'TRUE' }), false);
   assert.deepEqual(requireProductionApplicationAccess({}), { ok: false, status: 503, error: 'PRODUCTION_APPLICATION_ACCESS_DISABLED' });
 
-  const enabledWithoutSha = { PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true' };
+  assert.equal(productionApplicationAccessEnabled({ PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true', VERCEL_ENV: 'preview' }), true);
+
+  const enabledWithoutSha = { PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true', VERCEL_ENV: 'production' };
   assert.equal(productionApplicationAccessEnabled(enabledWithoutSha), false);
   assert.deepEqual(requireProductionApplicationAccess(enabledWithoutSha), {
     ok: false,
@@ -46,6 +48,7 @@ test('Production access fails closed unless the switch and exact authorized runt
 
   const malformedAuthorization = {
     PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
+    VERCEL_ENV: 'production',
     PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: 'main',
     VERCEL_GIT_COMMIT_SHA: authorizedSha,
   };
@@ -54,6 +57,7 @@ test('Production access fails closed unless the switch and exact authorized runt
 
   const mismatchedRelease = {
     PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
+    VERCEL_ENV: 'production',
     PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: authorizedSha,
     VERCEL_GIT_COMMIT_SHA: unauthorizedSha,
   };
@@ -66,6 +70,7 @@ test('Production access fails closed unless the switch and exact authorized runt
 
   const exactAuthorizedRelease = {
     PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
+    VERCEL_ENV: 'production',
     PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: authorizedSha,
     VERCEL_GIT_COMMIT_SHA: authorizedSha,
   };
