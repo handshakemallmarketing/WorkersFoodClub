@@ -127,6 +127,7 @@ CREATE OR REPLACE FUNCTION catalog_publish_specification_and_listing(
  specification_id text,
  specification_version integer
 ) LANGUAGE plpgsql AS $$
+#variable_conflict use_column
 DECLARE
  v_category_active boolean;
  v_latest_version integer;
