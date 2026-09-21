@@ -1,4 +1,4 @@
-version: 1.1
+version: 1.2
 owner: A2
 scope: [UC-01, UC-02, UC-03, UC-04]
 status: ratified_policy_aligned_contract
@@ -20,7 +20,10 @@ member_application:
     - application_is_guest_accessible_without_login
     - application_does_not_confer_membership_rights
     - applicant_contact_information_is_not_an_identity_provider_binding
-    - annual_membership_subscription_settlement_confers_membership_after_approval
+    - successful_application_creates_or_provisions_the_membership_record_and_server_issued_member_number_before_billing
+    - successful_application_triggers_first_annual_subscription_invoice_against_the_existing_numbered_membership
+    - invoice_creation_failure_must_not_erase_or_replace_a_successfully_created_membership_identity
+    - annual_membership_subscription_settlement_confers_ordinary_membership_rights
     - duplicate_person_detection_must_not_silently_merge_people
 member_identity_binding:
   rules:
@@ -30,14 +33,15 @@ member_identity_binding:
     - email_match_alone_is_not_identity_proof
     - successful_google_login_without_valid_binding_has_no_member_authority
 membership:
-  standing_states: [ELIGIBLE, ACTIVE, GRACE, RESTRICTED, SUSPENDED, TERMINATED]
+  standing_states: [INITIAL_FEE_DUE, ACTIVE, GRACE, RESTRICTED, SUSPENDED, ENDED]
   rules:
     - invoice_state_is_not_membership_standing
     - one_participant_may_not_have_two_active_memberships
+    - member_number_is_immutable_across_initial_billing_expiry_renewal_and_restoration
     - grace_period_is_30_days_after_annual_subscription_becomes_past_due
     - grace_preserves_member_access_subject_to_other_valid_restrictions
     - restriction_after_grace_is_policy_driven_and_auditable
-    - suspension_must_not_destroy_identity_or_history
+    - suspension_or_expiry_must_not_destroy_identity_or_history
     - restoration_requires_authoritative_settlement_or_authorized_adjustment
 employee_sponsorship:
   rules:
@@ -57,11 +61,23 @@ membership_billing:
   invoice_states: [ISSUED, DUE, PARTIALLY_SETTLED, SETTLED, PAST_DUE, VOID]
   rules:
     - invoice_is_an_economic_obligation_not_payment
-    - payment_intent_does_not_restore_membership
-    - authoritative_settlement_or_authorized_adjustment_is_required_for_restoration
+    - billing_is_downstream_of_membership_identity_and_must_never_mint_replace_or_mutate_member_number
+    - successful_new_member_application_triggers_one_first_year_annual_subscription_invoice_against_the_numbered_membership
+    - membership_expiry_or_renewal_due_condition_triggers_one_annual_renewal_invoice_against_the_same_numbered_membership
+    - first_year_and_renewal_billing_use_the_same_authoritative_invoice_service_and_rules
+    - invoice_generation_is_idempotent_per_membership_and_subscription_year
+    - at_most_one_authoritative_annual_invoice_exists_per_membership_and_subscription_year
+    - retry_replay_or_concurrent_generation_must_not_create_duplicate_authoritative_invoices
+    - payment_intent_does_not_activate_or_restore_membership
+    - authoritative_settlement_or_authorized_adjustment_is_required_for_activation_or_restoration
 falsification_required:
   - unauthenticated_guest_can_submit_application
   - enrollment_contains_no_google_or_oidc_gate
+  - successful_application_creates_numbered_membership_without_requiring_fee_configuration
+  - successful_application_triggers_first_year_invoice_after_membership_creation
+  - invoice_failure_preserves_numbered_membership_and_exposes_billing_pending_or_error_state
+  - expiry_triggers_renewal_invoice_without_changing_member_number
+  - duplicate_invoice_generation_is_idempotent_under_retry_and_race
   - google_login_cannot_create_or_auto_bind_membership
   - duplicate_application
   - duplicate_active_membership

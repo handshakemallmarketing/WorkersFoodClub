@@ -1,21 +1,69 @@
-version: "1.4"
+version: "1.8"
 status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
-as_of_utc: "2026-09-20"
+as_of_utc: "2026-09-21"
 applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
 canonical_entry_truth:
   guest_enrollment:
-    authentication_required: false
+    authentication_required_to_submit_application: false
     google_required: false
     employment_agency_required: true
     provisioning: AUTO_UNLESS_GOVERNED_MANUAL_REVIEW
-  activation:
-    ordinary_membership: CONFIRMED_ANNUAL_SUBSCRIPTION_SETTLEMENT
-    member_id: IMMUTABLE_SERVER_ISSUED
+    canonical_sequence: PROSPECT_INFORMATION_TO_MEMBERSHIP_RECORD_TO_MEMBER_NUMBER_TO_ANNUAL_INVOICE_TO_AUTHENTICATION_TO_SETTLEMENT_TO_ACTIVE_MEMBERSHIP
+    membership_creation_dependency_on_fee_configuration: NONE
+    successful_application_billing_effect: TRIGGER_FIRST_ANNUAL_SUBSCRIPTION_INVOICE_AFTER_NUMBERED_MEMBERSHIP_EXISTS
+    invoice_failure_effect: PRESERVE_MEMBERSHIP_IDENTITY_AND_SURFACE_BILLING_PENDING_OR_ERROR
+  member_number:
+    issuance: DURING_MEMBERSHIP_RECORD_PROVISIONING_BEFORE_ANNUAL_INVOICE
+    authority: SERVER_ONLY
+    immutable: true
+    new_issuance_format: EXACTLY_12_ASCII_DECIMAL_DIGITS
+    prefix: NONE
+    separators: NONE
+    sensitive_information_encoded: NONE
+    machine_readable_credential:
+      barcode: CODE_128_COMPATIBLE_RAW_MEMBER_NUMBER
+      qr: RAW_MEMBER_NUMBER
+      authoritative_lookup: SERVER_SIDE
+      encoded_personal_or_membership_status_data: PROHIBITED
+    legacy_already_issued_member_numbers: PRESERVE_IMMUTABLY
+    active_rights_conferred_by_issuance: false
+    authentication_eligibility_conferred_after_invoice: true
+    invoice_linkage: INVOICE_REFERENCES_NUMBERED_MEMBERSHIP
+    preserved_across: [INITIAL_BILLING, AUTHENTICATION, SETTLEMENT, EXPIRY, RENEWAL, RESTORATION]
+  annual_subscription_billing:
+    authoritative_invoice_service: ONE_SHARED_SERVICE_FOR_INITIAL_AND_RENEWAL_BILLING
+    initial_invoice_trigger: SUCCESSFUL_NEW_MEMBER_APPLICATION_AFTER_MEMBERSHIP_AND_MEMBER_NUMBER_CREATION
+    renewal_invoice_trigger: MEMBERSHIP_EXPIRY_OR_CANONICAL_RENEWAL_DUE_CONDITION
+    renewal_identity: EXISTING_MEMBERSHIP_AND_EXISTING_MEMBER_NUMBER
+    idempotency_key: MEMBERSHIP_PLUS_SUBSCRIPTION_YEAR
+    authoritative_invoice_cardinality: AT_MOST_ONE_PER_MEMBERSHIP_PER_SUBSCRIPTION_YEAR
+    retry_and_race_behavior: MUST_NOT_CREATE_DUPLICATE_AUTHORITATIVE_INVOICES
+    invoice_is_membership_identity_authority: false
+    invoice_may_mutate_member_number: false
   member_authentication:
+    lifecycle_position_initial_membership: AFTER_MEMBER_NUMBER_AND_ANNUAL_INVOICE_BEFORE_SETTLEMENT
+    purpose: VERIFY_IDENTITY_NOT_GRANT_MEMBERSHIP_RIGHTS
+    initial_fee_due_authentication_allowed: true
+    initial_fee_due_authenticated_access_state: MEMBERSHIP_PAYMENT_REQUIRED
+    initial_fee_due_member_area_access: false
     primary: WFC_MEMBER_ID_PLUS_REGISTERED_CONTACT_CHALLENGE
     session: SERVER_BACKED
     google: OPTIONAL_EXPLICITLY_BOUND_PROVIDER
     google_auto_binding: PROHIBITED
+    authentication_may_create_membership: false
+    authentication_may_settle_invoice: false
+    authentication_may_activate_membership: false
+  activation:
+    ordinary_membership: CONFIRMED_ANNUAL_SUBSCRIPTION_SETTLEMENT_AFTER_GOVERNED_MEMBER_AUTHENTICATION
+    settlement_effect: ACTIVATE_OR_RESTORE_EXISTING_NUMBERED_MEMBERSHIP_AS_POLICY_ALLOWS
+    settlement_must_not_issue_or_replace_member_number: true
+    authentication_without_settlement_confers_active_rights: false
+  expiry_and_renewal:
+    expiry_destroys_membership_identity: false
+    expiry_changes_member_number: false
+    renewal_invoice_targets_existing_numbered_membership: true
+    renewal_settlement_restores_existing_membership: true
+    renewal_authentication_precedes_member_initiated_settlement: true
 external_service_control_plane:
   principle: CONFIGURE_DEPLOY_TEST_EXPLICITLY_ACTIVATE_FAIL_CLOSED
   delegated_management_capability: workforce:settings.manage
@@ -63,6 +111,19 @@ bootstrap_control_plane:
     reason: SETTINGS_RUNTIME_AND_AUTHORITY_AUDIT_DEPEND_ON_DATABASE_AND_CANNOT_SELF_BOOTSTRAP_OR_SAFELY_ROTATE_ITS_OWN_DATABASE_SECRET
 fail_closed_invariants:
   - unsupported_http_methods_are_rejected_before_authentication_or_database_work
+  - newly_issued_member_numbers_are_exactly_12_ascii_decimal_digits_without_prefix_or_separator
+  - barcode_and_qr_credentials_encode_only_the_raw_member_number_and_resolve_authority_server_side
+  - existing_issued_member_numbers_are_never_rewritten_by_format_migration
+  - membership_identity_creation_does_not_depend_on_subscription_fee_configuration
+  - successful_new_member_application_triggers_billing_only_after_numbered_membership_exists
+  - invoice_generation_failure_never_erases_or_replaces_membership_identity
+  - annual_invoice_generation_is_idempotent_per_membership_and_subscription_year
+  - initial_fee_due_numbered_membership_is_authentication_eligible_before_settlement
+  - authenticated_initial_fee_due_member_resolves_to_payment_required_without_member_area_authority
+  - authentication_never_creates_membership_settles_invoice_or_activates_membership
+  - governed_member_authentication_precedes_member_initiated_annual_subscription_settlement
+  - confirmed_settlement_not_authentication_is_the_ordinary_activation_boundary
+  - expiry_and_renewal_never_replace_member_number
   - missing_credentials_means_not_active
   - saved_credentials_are_pending_until_exact_generation_is_observed_in_running_deployment
   - connectivity_test_cannot_run_against_stale_or_pre_rotation_credentials

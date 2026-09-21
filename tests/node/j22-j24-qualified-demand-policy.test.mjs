@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { qualificationState, paymentDeadline, deadlineDisposition } from '../../lib/qualified-demand-policy.js';
 
+const apply=fs.readFileSync(new URL('../../api/membership-apply.js',import.meta.url),'utf8');
 const settle=fs.readFileSync(new URL('../../api/membership-subscription-settle.js',import.meta.url),'utf8');
 const migration=fs.readFileSync(new URL('../../packages/durability/sql/022_qualified_demand_credit_v1.sql',import.meta.url),'utf8');
 const reconciliation=fs.readFileSync(new URL('../../packages/durability/sql/027_final_policy_consistency_v1.sql',import.meta.url),'utf8');
@@ -13,7 +14,7 @@ const processor=fs.readFileSync(new URL('../../api/process-payment-deadlines.js'
 
 const executableCurrent=[pay,demand,processor,fs.readFileSync(new URL('../../lib/qualified-demand-policy.js',import.meta.url),'utf8')].join('\n');
 
-test('J22 primary activation provisions separate stable public member ID',()=>{assert.match(settle,/WFC-P-/);assert.match(settle,/public_member_id=COALESCE\(m\.public_member_id/);assert.match(settle,/PRIMARY_SUBSCRIPTION_REQUIRED/);assert.match(migration,/application_membership_public_member_id_uq/);});
+test('J22 primary membership provisions separate stable public member ID before settlement',()=>{assert.match(apply,/randomInt\(100000000000,1000000000000\)/);assert.doesNotMatch(apply,/WFC-P-/);assert.match(apply,/public_member_id/);assert.match(settle,/MEMBER_NUMBER_NOT_ISSUED/);assert.doesNotMatch(settle,/public_member_id=COALESCE\(m\.public_member_id/);assert.match(settle,/PRIMARY_SUBSCRIPTION_REQUIRED/);assert.match(migration,/application_membership_public_member_id_uq/);});
 test('J24 demand qualification is offer-specific while fulfillment tiers remain 50/70/100',()=>{assert.equal(qualificationState({totalMinor:10000,paidMinor:3999,demandPoolBps:4000}),'UNQUALIFIED');assert.equal(qualificationState({totalMinor:10000,paidMinor:4000,demandPoolBps:4000}),'DEMAND_QUALIFIED');assert.equal(qualificationState({totalMinor:10000,paidMinor:4999,demandPoolBps:4000}),'DEMAND_QUALIFIED');assert.equal(qualificationState({totalMinor:10000,paidMinor:5000,demandPoolBps:4000}),'CURRENT_BATCH_RESCHEDULE');assert.equal(qualificationState({totalMinor:10000,paidMinor:7000,demandPoolBps:4000}),'PRORATED_FULFILLMENT');assert.equal(qualificationState({totalMinor:10000,paidMinor:10000,demandPoolBps:4000}),'FULLY_PAID');assert.match(reconciliation,/demand_qualification_bps/);});
 test('J24 qualification fails closed when offer threshold is absent',()=>{assert.throws(()=>qualificationState({totalMinor:10000,paidMinor:4000}),/demandPoolBps must be an explicit integer/);assert.doesNotMatch(pay,/COALESCE\(o\.demand_qualification_bps/);assert.doesNotMatch(processor,/COALESCE\(o\.demand_qualification_bps/);assert.match(reconciliation,/DROP DEFAULT/);assert.match(reconciliation,/SET NOT NULL/);});
 test('J24 full payment deadline is exactly 24 hours before delivery',()=>{assert.equal(paymentDeadline('2026-09-21T14:00:00.000Z').toISOString(),'2026-09-20T14:00:00.000Z');});
