@@ -6,47 +6,87 @@
   <title>Food Club Ghana — Join Food Club</title>
   <link rel="stylesheet" href="/styles.css">
   <style>
-    body{display:flex;justify-content:center;padding:48px 20px}.bootstrap-shell{max-width:600px;width:100%}.bootstrap-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:var(--shadow)}.bootstrap-card h1{font-size:26px;margin:6px 0 8px}.bootstrap-card p{color:var(--muted);line-height:1.55}.steps{margin:18px 0;padding:14px 16px;border:1px solid var(--line);border-radius:12px}.steps summary{cursor:pointer;font-weight:700}.steps ol{margin:10px 0 0;padding-left:22px;line-height:1.7}.field{margin:12px 0}.field label{display:block;font-weight:600;margin-bottom:5px}.field input,.field textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}.field textarea{min-height:70px;resize:vertical}.bootstrap-result{margin-top:18px;border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.6}.bootstrap-result.ok{background:var(--green2);color:var(--green)}.bootstrap-result.err{background:var(--redbg);color:var(--red)}.bootstrap-status{color:var(--muted);font-size:13px}.secondary-link{display:inline-block;margin-top:14px}
+    body{display:flex;justify-content:center;padding:48px 20px}.bootstrap-shell{max-width:600px;width:100%}.bootstrap-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:var(--shadow)}.bootstrap-card h1{font-size:26px;margin:6px 0 8px}.bootstrap-card p{color:var(--muted);line-height:1.55}.steps{margin:18px 0;padding:14px 16px;border:1px solid var(--line);border-radius:12px}.steps summary{cursor:pointer;font-weight:700}.steps ol{margin:10px 0 0;padding-left:22px;line-height:1.7}.field{margin:12px 0}.field label{display:block;font-weight:600;margin-bottom:5px}.field input,.field textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}.field textarea{min-height:70px;resize:vertical}.bootstrap-result{margin-top:18px;border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.6}.bootstrap-result.ok{background:var(--green2);color:var(--green)}.bootstrap-result.err{background:var(--redbg);color:var(--red)}.bootstrap-status{color:var(--muted);font-size:13px}.secondary-link{display:inline-block;margin-top:14px}.progress{display:flex;gap:6px;margin-bottom:18px}.progress span{flex:1;height:4px;border-radius:2px;background:var(--line)}.progress span.done{background:var(--green)}
   </style>
 </head>
 <body>
 <main class="bootstrap-shell"><section class="bootstrap-card">
   <p class="eyebrow">Food Club Ghana</p><h1>Join Food Club</h1>
-  <p>For government workers. No Google account is required.</p>
-  <form id="join-form">
+  <div class="progress"><span id="progress-1"></span><span id="progress-2"></span><span id="progress-3"></span></div>
+
+  <form id="details-form">
+    <p>For government workers. No Google account is required.</p>
     <div class="field"><label for="full-name">Full name</label><input id="full-name" name="fullName" autocomplete="name" maxlength="200" required></div>
-    <div class="field"><label for="employer">Government ministry, department, agency or employer</label><input id="employer" name="governmentEmployer" maxlength="240" required></div>
+    <div class="field" id="employer-field"><label for="employer">Government ministry, department, agency or employer</label><input id="employer" name="governmentEmployer" maxlength="240"></div>
     <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40" required></div>
     <div class="field"><label for="email">Email <span style="font-weight:400">(optional)</span></label><input id="email" name="email" type="email" autocomplete="email" maxlength="320"></div>
-    <p class="bootstrap-status">A deliverable phone number is required for account verification and Member Number recovery. Transactional email verification is not yet supported.</p>
-    <div class="field"><label for="contact-note">Additional information <span style="font-weight:400">(optional)</span></label><textarea id="contact-note" name="contactNote" maxlength="2000"></textarea></div>
-    <button id="submit-button" type="submit" class="primary">Create membership record</button>
+    <p class="bootstrap-status">A deliverable phone number is required to verify your account before we create your Member Number.</p>
+    <button id="details-submit" type="submit" class="primary">Send verification code</button>
   </form>
+
+  <form id="code-form" hidden>
+    <p>Enter the 6-digit code sent to your phone.</p>
+    <div class="field"><label for="code">Verification code</label><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></div>
+    <button id="code-submit" type="submit" class="primary">Verify and continue</button>
+    <p style="margin-top:10px"><button id="resend-button" type="button" class="secondary small">Resend code</button></p>
+  </form>
+
   <p id="status" class="bootstrap-status" aria-live="polite"></p><div id="result" class="bootstrap-result" hidden></div>
-  <details class="steps"><summary>What happens after I apply?</summary><ol>
-    <li>Food Club creates your membership record and permanent Member Number.</li>
+  <details class="steps"><summary>What happens after I verify?</summary><ol>
+    <li>We create your permanent Member Number as soon as your phone is verified.</li>
     <li>An annual membership invoice is created against that Member Number.</li>
-    <li><strong>Authenticate your new account</strong> using the Member Number and registered phone.</li>
-    <li>After authentication, settle the annual membership invoice.</li>
+    <li>You settle the annual membership invoice — no separate sign-in step needed.</li>
     <li>Confirmed settlement activates membership rights. Payment never changes your Member Number.</li>
-    <li>The authenticated member account then provides access to member areas.</li>
   </ol></details>
   <a class="secondary-link" href="/?auth=member">Already have a Member Number? Authenticate / sign in</a>
 </section></main>
 <script>
 (() => {
-  const form=document.getElementById('join-form'),button=document.getElementById('submit-button'),status=document.getElementById('status'),result=document.getElementById('result');
+  const detailsForm=document.getElementById('details-form'),codeForm=document.getElementById('code-form');
+  const detailsSubmit=document.getElementById('details-submit'),codeSubmit=document.getElementById('code-submit'),resendButton=document.getElementById('resend-button');
+  const status=document.getElementById('status'),result=document.getElementById('result');
+  const progress=[document.getElementById('progress-1'),document.getElementById('progress-2'),document.getElementById('progress-3')];
+  const employerField=document.getElementById('employer-field'),employerInput=document.getElementById('employer');
   const escapeHtml=value=>String(value).replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
-  const errors={FULL_NAME_REQUIRED:'Enter your full name.',GOVERNMENT_EMPLOYER_REQUIRED:'Enter your government ministry, department, agency or employer.',EMAIL_OR_PHONE_REQUIRED:'Enter your phone number.',DELIVERABLE_VERIFICATION_CHANNEL_REQUIRED:'Enter a deliverable phone number for account verification.',PHONE_INVALID:'Enter a valid Ghana phone number.',EMAIL_INVALID:'Enter a valid email address.',PRODUCTION_APPLICATION_ACCESS_DISABLED:'Membership enrollment is temporarily unavailable.',DATABASE_URL_MISSING:'Membership enrollment is temporarily unavailable.',MEMBERSHIP_APPLY_FAILED:'We could not create the membership record. Please try again.'};
-  form.addEventListener('submit',async event=>{
-    event.preventDefault();result.hidden=true;status.textContent='Creating your membership record…';button.disabled=true;
-    const body={fullName:form.fullName.value,governmentEmployer:form.governmentEmployer.value,email:form.email.value,phone:form.phone.value,contactNote:form.contactNote.value};
+  const errors={FULL_NAME_REQUIRED:'Enter your full name.',GOVERNMENT_EMPLOYER_REQUIRED:'Enter your government ministry, department, agency or employer.',CONTACT_INVALID:'Enter a valid phone number.',PHONE_INVALID:'Enter a valid Ghana phone number.',VERIFICATION_CHANNEL_UNAVAILABLE:'Phone verification is temporarily unavailable.',CAMPAIGN_TOKEN_INVALID:'This enrollment link is no longer valid.',ENROLLMENT_CAMPAIGN_CLOSED:'This enrollment campaign is not currently open.',ENROLLMENT_CAMPAIGN_FULL:'This enrollment campaign has reached its capacity.',CHALLENGE_AND_CODE_REQUIRED:'Enter the 6-digit code.',CHALLENGE_INVALID:'That code is incorrect or has expired.',CHALLENGE_LOCKED:'Too many attempts. Request a new code.',PRODUCTION_APPLICATION_ACCESS_DISABLED:'Membership enrollment is temporarily unavailable.',DATABASE_URL_MISSING:'Membership enrollment is temporarily unavailable.',ENROLLMENT_VERIFY_START_FAILED:'We could not send a verification code. Please try again.',ENROLLMENT_VERIFY_COMPLETE_FAILED:'We could not complete verification. Please try again.'};
+  const campaignToken=new URLSearchParams(location.search).get('campaign')||'';
+  if(campaignToken){employerField.hidden=true;employerInput.required=false;}else{employerInput.required=true;}
+  let challengeId=null;
+
+  async function sendCode(){
+    status.textContent='Sending verification code…';detailsSubmit.disabled=true;resendButton.disabled=true;result.hidden=true;
+    const body={fullName:detailsForm.fullName.value,governmentEmployer:detailsForm.governmentEmployer.value,phone:detailsForm.phone.value,email:detailsForm.email.value,channel:'PHONE',campaignToken};
     try{
-      const response=await fetch('/api/membership-apply',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(body)}),payload=await response.json().catch(()=>null);
-      status.textContent='';button.disabled=false;result.hidden=false;
-      if(response.ok&&payload?.ok){result.className='bootstrap-result ok';if(payload.reviewRequired){result.innerHTML='<strong>Application received.</strong><br>This application has been selected for administrative review.';}else{const memberId=escapeHtml(payload.publicMemberId||''),authHref='/?auth=member&memberId='+encodeURIComponent(payload.publicMemberId||''),invoice=payload.invoiceId?'<br>Your annual membership invoice <strong>'+escapeHtml(payload.invoiceId)+'</strong> has been created.':'<br><strong>Your membership was created, but the annual invoice is still being prepared.</strong> Your Member Number remains valid; billing can be retried without creating another membership.';result.innerHTML='<strong>Membership record created.</strong><br>Your Member Number is <strong>'+memberId+'</strong>.'+invoice+'<br><strong>Next: authenticate your account before subscription settlement.</strong><br><a class="secondary-link" href="'+authHref+'">Authenticate with this Member Number</a>';}form.hidden=true;return;}
-      const code=payload?.error||('HTTP '+response.status);result.className='bootstrap-result err';result.innerHTML='<strong>Enrollment not completed.</strong><br>'+escapeHtml(errors[code]||'Please review your information and try again.')+' <small>'+escapeHtml(code)+'</small>';
-    }catch{status.textContent='';button.disabled=false;result.hidden=false;result.className='bootstrap-result err';result.textContent='Request failed. Check your connection and try again.';}
+      const response=await fetch('/api/enrollment-verify-start',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(body)}),payload=await response.json().catch(()=>null);
+      status.textContent='';detailsSubmit.disabled=false;resendButton.disabled=false;
+      if(response.ok&&payload?.ok){
+        challengeId=payload.challengeId||null;
+        result.hidden=false;result.className='bootstrap-result ok';result.textContent=payload.message||'If these details are eligible for enrollment, a verification code has been sent.';
+        detailsForm.hidden=true;codeForm.hidden=false;progress[0].classList.add('done');document.getElementById('code').focus();
+        return true;
+      }
+      const code=payload?.error||('HTTP '+response.status);result.hidden=false;result.className='bootstrap-result err';result.innerHTML='<strong>Could not send code.</strong><br>'+escapeHtml(errors[code]||'Please review your information and try again.')+' <small>'+escapeHtml(code)+'</small>';
+      return false;
+    }catch{status.textContent='';detailsSubmit.disabled=false;resendButton.disabled=false;result.hidden=false;result.className='bootstrap-result err';result.textContent='Request failed. Check your connection and try again.';return false;}
+  }
+
+  detailsForm.addEventListener('submit',event=>{event.preventDefault();sendCode();});
+  resendButton.addEventListener('click',()=>sendCode());
+
+  codeForm.addEventListener('submit',async event=>{
+    event.preventDefault();result.hidden=true;status.textContent='Verifying…';codeSubmit.disabled=true;
+    try{
+      const response=await fetch('/api/enrollment-verify-complete',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({challengeId,code:codeForm.code.value})}),payload=await response.json().catch(()=>null);
+      status.textContent='';codeSubmit.disabled=false;result.hidden=false;
+      if(response.ok&&payload?.ok){
+        result.className='bootstrap-result ok';progress[1].classList.add('done');progress[2].classList.add('done');
+        try{sessionStorage.setItem('wfc_member_session',payload.sessionToken);}catch{}
+        const memberId=escapeHtml(payload.publicMemberId||'');
+        result.innerHTML='<strong>Phone verified.</strong> Your Member Number is <strong>'+memberId+'</strong>.<br>Next: settle your annual membership invoice to activate membership.<br><a class="secondary-link" href="/?auth=member&memberId='+encodeURIComponent(payload.publicMemberId||'')+'">Continue to payment</a>';
+        codeForm.hidden=true;return;
+      }
+      const code=payload?.error||('HTTP '+response.status);result.className='bootstrap-result err';result.innerHTML='<strong>Verification failed.</strong><br>'+escapeHtml(errors[code]||'Please try again.')+' <small>'+escapeHtml(code)+'</small>';
+    }catch{status.textContent='';codeSubmit.disabled=false;result.hidden=false;result.className='bootstrap-result err';result.textContent='Request failed. Check your connection and try again.';}
   });
 })();
 </script>

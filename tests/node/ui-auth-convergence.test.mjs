@@ -8,9 +8,9 @@ const api=fs.readFileSync(new URL('../../api/employee-session.js',import.meta.ur
 
 test('guest shell separates enrollment from existing-member authentication',()=>{
   assert.match(index,/Join Food Club/);assert.match(index,/Member sign in/i);assert.match(index,/Approval alone does not activate membership/);
-  assert.match(join,/For government workers\. No Google account is required\./);assert.match(join,/Create membership record/);assert.match(join,/Authenticate your new account/);
-  assert.match(join,/Member Number and registered phone/);assert.match(join,/After authentication, settle the annual membership invoice/);
-  assert.match(join,/deliverable phone number is required/);assert.match(join,/Transactional email verification is not yet supported/);
+  assert.match(join,/For government workers\. No Google account is required\./);assert.match(join,/Send verification code/);
+  assert.match(join,/as soon as your phone is verified/);assert.match(join,/you settle the annual membership invoice/i);
+  assert.match(join,/A deliverable phone number is required/);
 });
 test('member shell does not expose operator governance navigation',()=>{assert.doesNotMatch(index,/>Operations</);assert.doesNotMatch(index,/>Workforce & Authority</);assert.doesNotMatch(index,/>Release Controls</)});
 test('employee access is a dedicated second authentication journey',()=>{assert.match(employee,/Employee verification/);assert.match(employee,/Member sign-in does not grant operator authority/);assert.match(employee,/employee-stepup-intent\.js/)});
