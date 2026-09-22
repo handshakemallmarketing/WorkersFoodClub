@@ -1,0 +1,132 @@
+name: Production application access SHA-gate sync
+
+# This workflow grants no new authorization. It only keeps the immutable
+# PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA pin synchronized with whatever
+# commit is actually live on main, for a standing authorization that is
+# already ACTIVE (see docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json).
+# Every commit reaching main has already passed required CI (constitutional-conformance)
+# and PR review before merge, so re-pinning the gate to that commit is not a new
+# access decision. If Production application access is not already enabled, this
+# workflow refuses to enable it — that remains a separate, explicitly governed
+# ceremony (production-application-access-activation.yml). Live funds and Paystack
+# live mode are never touched here.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-application-access-sha-sync
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_WkMSXuSv8kDLoOlGHYtIggZ1
+  VERCEL_PROJECT_ID: prj_Ti1NOQryzFeImhMSwncMXNxs01I8
+  VERCEL_SCOPE: origin-os
+  PRODUCTION_BASE_URL: https://workers-food-club.vercel.app
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse to originate authorization; only sync an already-active standing grant
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo 'VERCEL_TOKEN missing; refusing sync.' >&2; exit 1; }
+          response="$(curl --silent --show-error --fail-with-body \
+            --url "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&target=production" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}")"
+          enabled="$(printf '%s' "$response" | jq -r '.envs[] | select(.key=="PRODUCTION_APPLICATION_ACCESS_ENABLED") | .value')"
+          test "$enabled" = 'true' || { echo 'Production application access is not currently enabled; this sync workflow never originates activation. Standing down.' >&2; exit 1; }
+          echo 'Standing Production application-access authorization confirmed active; proceeding to sync the SHA pin.'
+
+      - name: Wait for the exact-head Vercel deployment to reach READY
+        id: wait
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            response="$(curl --silent --show-error --fail-with-body \
+              --url "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&limit=10" \
+              --header "Authorization: Bearer ${VERCEL_TOKEN}")"
+            state="$(printf '%s' "$response" | jq -r --arg sha "$GITHUB_SHA" '.deployments[] | select(.meta.githubCommitSha == $sha) | .readyState' | head -n1)"
+            if [ "$state" = 'READY' ]; then
+              echo "Exact-head deployment for ${GITHUB_SHA} reached READY after attempt ${attempt}."
+              exit 0
+            fi
+            if [ "$state" = 'ERROR' ] || [ "$state" = 'CANCELED' ]; then
+              echo "Exact-head deployment for ${GITHUB_SHA} failed with state ${state}." >&2
+              exit 1
+            fi
+            echo "Waiting for exact-head deployment (attempt ${attempt}/60): state=${state:-<not found>}"
+            sleep 10
+          done
+          echo "Exact-head deployment for ${GITHUB_SHA} did not reach READY within 10 minutes." >&2
+          exit 1
+
+      - name: Pin the SHA gate to this commit only after its own build is confirmed READY
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body --request POST \
+            --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&upsert=true" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" --header 'Content-Type: application/json' \
+            --data "$(jq -cn --arg sha "$GITHUB_SHA" '[{"key":"PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA","value":$sha,"type":"plain","target":["production"],"comment":"Exact governed Production application-access candidate SHA, kept synced to main by production-sha-gate-sync.yml"}]')" >/dev/null
+          echo "Pinned PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA to ${GITHUB_SHA}."
+
+      - name: Install pinned deployment tools
+        run: |
+          npm install --global vercel@59.11.7
+          npm install --global pnpm@9.15.4
+
+      - name: Force a fresh build so the corrected SHA pin is actually compiled in
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the gate actually passes on the canonical alias, not just deployment metadata
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          immutable="$(vercel curl /api/build-info --deployment "$DEPLOY_URL" --scope="$VERCEL_SCOPE")"
+          immutable_sha="$(printf '%s' "$immutable" | jq -r '.commitSha // .gitCommitSha // .sha // empty')"
+          test "$immutable_sha" = "$GITHUB_SHA"
+          for attempt in $(seq 1 30); do
+            response="$(curl --silent --show-error --write-out $'\n%{http_code}' "${PRODUCTION_BASE_URL}/api/member-orders" || true)"
+            status="${response##*$'\n'}"
+            body="${response%$'\n'*}"
+            if [ "$status" = '401' ]; then
+              echo "Canonical Production alias gate passed after attempt ${attempt}: HTTP 401 AUTHENTICATION_REQUIRED."
+              exit 0
+            fi
+            echo "Waiting for canonical Production alias gate propagation (attempt ${attempt}/30): HTTP ${status}"
+            sleep 2
+          done
+          echo "Canonical Production alias did not converge to the passing gate state within 60 seconds." >&2
+          echo "$body" >&2
+          exit 1
