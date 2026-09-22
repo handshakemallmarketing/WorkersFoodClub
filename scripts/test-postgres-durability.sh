@@ -17,6 +17,9 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/012_membership_business_logic_v2.sql
 "${PSQL[@]}" -f packages/durability/sql/013_membership_shopping_credit_accounting.sql
 "${PSQL[@]}" -f packages/durability/sql/014_wave2_support_case.sql
+"${PSQL[@]}" -f packages/durability/sql/022_external_service_configuration.sql
+# Migration 022 is additive and must remain safe to replay during deployment recovery.
+"${PSQL[@]}" -f packages/durability/sql/022_external_service_configuration.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -26,6 +29,25 @@ a2_credit_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.ta
 [[ "$a2_credit_tables" == "2" ]] || { echo "A2 shopping-credit schema is not reproducible from migrations" >&2; exit 1; }
 a10_support_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('support_case','support_case_transition')")
 [[ "$a10_support_tables" == "2" ]] || { echo "A10 support schema is not reproducible from migrations" >&2; exit 1; }
+external_service_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('external_service_configuration','external_service_configuration_event')")
+[[ "$external_service_tables" == "2" ]] || { echo "external service configuration schema is not reproducible from migration 022" >&2; exit 1; }
+secret_columns=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='external_service_configuration' AND column_name ~* '(secret|token|password|api_key|auth_key)'")
+[[ "$secret_columns" == "0" ]] || { echo "external service configuration must not persist provider secrets" >&2; exit 1; }
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO external_service_configuration(service_id,provider) VALUES('sms','TWILIO');
+DO $$
+DECLARE configured external_service_configuration%ROWTYPE;
+BEGIN
+ SELECT * INTO configured FROM external_service_configuration WHERE service_id='sms';
+ IF configured.state <> 'DISABLED' OR configured.last_test_state <> 'NOT_TESTED' OR configured.credential_fields <> '{}'::text[] OR configured.last_tested_at IS NOT NULL OR configured.activated_at IS NOT NULL THEN
+  RAISE EXCEPTION 'external service configuration defaults are not fail closed';
+ END IF;
+END $$;
+ROLLBACK;
+SQL
+if "${PSQL[@]}" -c "INSERT INTO external_service_configuration(service_id,provider,state) VALUES('invalid-state','TWILIO','ACTIVE_WITHOUT_TEST')" >/dev/null 2>&1; then echo "invalid external service state unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO external_service_configuration_event(event_id,service_id,event_type,actor_id) VALUES('invalid-event','sms','ROTATE','actor:test')" >/dev/null 2>&1; then echo "invalid external service event type unexpectedly succeeded" >&2; exit 1; fi
 accepted_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_member_commitment' AND column_name='accepted_at'")
 [[ "$accepted_at_contract" == NO:* && "$accepted_at_contract" != "NO:" ]] || { echo "preview_member_commitment.accepted_at must remain NOT NULL with a database default" >&2; exit 1; }
 recorded_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_sandbox_payment' AND column_name='recorded_at'")

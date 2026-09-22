@@ -3,7 +3,7 @@ import { requireProductionApplicationAccess } from '../lib/production-access-pol
 import { createMemberChallengeDelivery } from '../lib/member-auth-challenge-delivery.js';
 const sha=v=>createHash('sha256').update(String(v)).digest('hex');
 function access(env){if((env.VERCEL_ENV||'unknown')==='preview')return{ok:true};return requireProductionApplicationAccess(env);}
-function challengeCode(env,options){if(options.code!==undefined)return String(options.code);const preview=(env.VERCEL_ENV||'')==='preview',fixed=String(env.MEMBER_AUTH_PREVIEW_FIXED_OTP||'').trim();if(preview&&/^\d{6}$/.test(fixed))return fixed;return String(randomInt(100000,1000000));}
+function challengeCode(env,options){if(options.code!==undefined)return String(options.code);const preview=(env.VERCEL_ENV||'')==='preview',expose=env.MEMBER_AUTH_PREVIEW_EXPOSE_CODE==='true',fixed=String(env.MEMBER_AUTH_PREVIEW_FIXED_OTP||'').trim();if(preview&&expose&&/^\d{6}$/.test(fixed))return fixed;return String(randomInt(100000,1000000));}
 export default async function handler(req,res,options={}){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
  const env=options.env||process.env,a=access(env);if(!a.ok)return res.status(a.status).json({ok:false,error:a.error});
