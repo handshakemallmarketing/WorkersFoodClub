@@ -52,12 +52,19 @@ jobs:
           github.event_name == 'pull_request' &&
           (github.head_ref == 'sw1-rc2-production-readiness-falsification' ||
            github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification' ||
-           github.head_ref == 'launch-j20-reconcile-current-main')
+           github.head_ref == 'launch-j20-reconcile-current-main' ||
+           github.head_ref == 'fix/member-auth-challenge-delivery')
         env:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
           EXPECTED_VERCEL_TARGET_PREFIX: https://vercel.com/origin-os/workers-food-club/
         run: node scripts/wait-for-vercel-status.mjs
+      - name: Member-auth exact-head deployment boundary status
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/member-auth-challenge-delivery'
+        run: |
+          echo "Member-auth remediation exact-head Preview deployment is proven by the preceding immutable-SHA Vercel status check."
+          echo "This is deployment identity/readiness proof; it does not activate Production, external services, or live funds."
+          echo "Enrollment/authentication functional behavior remains certified by the enrollment-member-record and constitutional test suites."
       - name: J20 exact-head deployment boundary status
         if: github.event_name == 'pull_request' && github.head_ref == 'launch-j20-reconcile-current-main'
         run: |
@@ -73,7 +80,7 @@ jobs:
       - name: RC3 exact-head deployment boundary status
         if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification'
         run: |
-          echo "RC3 exact-head Preview deployment status is required and proven by the preceding Vercel status check."
+          echo "RC3 exact-head Preview deployment status is required and proven by the preceding status check."
           echo "Preview deployment proof does not authorize Production application access, Production writes, or live funds."
           echo "Run the RC3 production identity rehearsal workflow against an exact Production deployment with canonical member/operator bindings before closing RC3-ENV-001 or RC3-REHEARSAL-001."
           echo "Run the RC3 production access rollback rehearsal against an exact Production deployment with PRODUCTION_APPLICATION_ACCESS_ENABLED disabled before closing RC3-ROLLBACK-001."
