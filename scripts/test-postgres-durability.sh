@@ -17,12 +17,20 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/012_membership_business_logic_v2.sql
 "${PSQL[@]}" -f packages/durability/sql/013_membership_shopping_credit_accounting.sql
 "${PSQL[@]}" -f packages/durability/sql/014_wave2_support_case.sql
+"${PSQL[@]}" -f packages/durability/sql/017_membership_application.sql
+"${PSQL[@]}" -f packages/durability/sql/018_entry_journey_activation.sql
+"${PSQL[@]}" -f packages/durability/sql/019_membership_lifecycle_v3.sql
+"${PSQL[@]}" -f packages/durability/sql/020_guest_membership_enrollment.sql
+"${PSQL[@]}" -f packages/durability/sql/029_member_auth_runtime_consistency.sql
 "${PSQL[@]}" -f packages/durability/sql/022_external_service_configuration.sql
 # Migration 022 is additive and must remain safe to replay during deployment recovery.
 "${PSQL[@]}" -f packages/durability/sql/022_external_service_configuration.sql
 "${PSQL[@]}" -f packages/durability/sql/030_member_number_recovery.sql
 # Recovery schema is also forward-only and safe to replay.
 "${PSQL[@]}" -f packages/durability/sql/030_member_number_recovery.sql
+"${PSQL[@]}" -f packages/durability/sql/031_member_auth_challenge_atomicity.sql
+# Native authentication race constraints and functions must also replay safely.
+"${PSQL[@]}" -f packages/durability/sql/031_member_auth_challenge_atomicity.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -61,13 +69,13 @@ refund_unique_constraints=$("${PSQL[@]}" -Atc "SELECT count(*) FROM pg_constrain
 [[ "$refund_unique_constraints" == "8" ]] || { echo "preview refund idempotency constraints are incomplete" >&2; exit 1; }
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE support_case_transition,support_case,member_number_recovery_challenge,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+TRUNCATE support_case_transition,support_case,member_session,member_auth_challenge,member_number_recovery_challenge,application_access_audit,membership_subscription_invoice,household_beneficiary_invitation,membership_application,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
 SQL
 
 # RC3-BIND-001: durable participant, membership and operator authority are independent governed records.
 "${PSQL[@]}" <<'SQL'
 INSERT INTO application_participant(participant_id,kind,state) VALUES ('participant:member','PERSON','ACTIVE'),('participant:operator','PERSON','ACTIVE'),('participant:system','SYSTEM','ACTIVE');
-INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:live','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:1']);
+INSERT INTO application_membership(membership_id,participant_id,state,standing,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:live','participant:member','ACTIVE','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:1']);
 INSERT INTO application_authority_grant(grant_id,grantor_id,actor_id,actions,valid_from) VALUES('grant:operator:orders','participant:system','participant:operator',ARRAY['operator:orders.read'],now()-interval '1 minute');
 SQL
 participant=$("${PSQL[@]}" -Atc "SELECT participant_id||':'||state FROM application_participant WHERE participant_id='participant:member'")
@@ -147,6 +155,79 @@ fifth_total=$(( $(cat "$fifth_good") + $(cat "$fifth_bad") ))
 rm -f "$fifth_good" "$fifth_bad"
 fifth_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_number_recovery_challenge WHERE challenge_id='recovery:fifth-race'")
 [[ "$fifth_total" == "1" && ( "$fifth_state" == "USED:4" || "$fifth_state" == "REVOKED:5" ) ]] || { echo "correct versus fifth-wrong recovery race produced an impossible result" >&2; exit 1; }
+
+# Native member-auth issuance, attempt accounting and session creation remain bounded under real PostgreSQL races.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state) VALUES ('participant:auth','PERSON','ACTIVE');
+INSERT INTO application_membership(membership_id,participant_id,state,standing,established_at,eligibility_policy_version,eligibility_evidence_ids)
+VALUES('membership:auth','participant:auth','ACTIVE','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:auth']);
+SQL
+auth_issuance_outputs=()
+auth_issuance_pids=()
+for i in $(seq 1 10); do
+  output=$(mktemp)
+  auth_issuance_outputs+=("$output")
+  "${PSQL[@]}" -Atc "SELECT count(*) FROM create_member_auth_challenge('auth:issue:$i','membership:auth','PHONE','destination-hash','code-hash',now()+interval '10 minutes')" >"$output" &
+  auth_issuance_pids+=("$!")
+done
+for pid in "${auth_issuance_pids[@]}"; do wait "$pid"; done
+auth_issued=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_auth_challenge WHERE membership_id='membership:auth'")
+[[ "$auth_issued" == "5" ]] || { echo "concurrent member-auth issuance exceeded five challenges" >&2; exit 1; }
+rm -f "${auth_issuance_outputs[@]}"
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_auth_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at)
+VALUES('auth:correct-race','membership:live','PHONE','destination-hash','good-hash','OPEN',now()+interval '10 minutes');
+SQL
+auth_correct_a=$(mktemp)
+auth_correct_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:correct-race','good-hash',now(),'session:auth:correct:a',now()+interval '12 hours')" >"$auth_correct_a" &
+auth_correct_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:correct-race','good-hash',now(),'session:auth:correct:b',now()+interval '12 hours')" >"$auth_correct_b" &
+auth_correct_pid_b=$!
+wait "$auth_correct_pid_a"
+wait "$auth_correct_pid_b"
+auth_correct_total=$(( $(cat "$auth_correct_a") + $(cat "$auth_correct_b") ))
+rm -f "$auth_correct_a" "$auth_correct_b"
+auth_correct_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_auth_challenge WHERE challenge_id='auth:correct-race'")
+auth_correct_sessions=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_session WHERE session_id LIKE 'session:auth:correct:%'")
+[[ "$auth_correct_total" == "1" && "$auth_correct_state" == "USED:0" && "$auth_correct_sessions" == "1" ]] || { echo "concurrent correct member-auth verification was not single-use" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_auth_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at)
+VALUES('auth:wrong-race','membership:live','PHONE','destination-hash','good-hash','OPEN',now()+interval '10 minutes');
+SQL
+auth_wrong_outputs=()
+auth_wrong_pids=()
+for i in $(seq 1 10); do
+  output=$(mktemp)
+  auth_wrong_outputs+=("$output")
+  "${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:wrong-race','bad-hash',now(),'session:auth:wrong:$i',now()+interval '12 hours')" >"$output" &
+  auth_wrong_pids+=("$!")
+done
+for pid in "${auth_wrong_pids[@]}"; do wait "$pid"; done
+rm -f "${auth_wrong_outputs[@]}"
+auth_wrong_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_auth_challenge WHERE challenge_id='auth:wrong-race'")
+auth_wrong_sessions=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_session WHERE session_id LIKE 'session:auth:wrong:%'")
+[[ "$auth_wrong_state" == "REVOKED:5" && "$auth_wrong_sessions" == "0" ]] || { echo "concurrent wrong member-auth attempts escaped the five-attempt cap" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_auth_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,attempts,expires_at)
+VALUES('auth:fifth-race','membership:live','PHONE','destination-hash','good-hash','OPEN',4,now()+interval '10 minutes');
+SQL
+auth_fifth_good=$(mktemp)
+auth_fifth_bad=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:fifth-race','good-hash',now(),'session:auth:fifth:good',now()+interval '12 hours')" >"$auth_fifth_good" &
+auth_fifth_good_pid=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:fifth-race','bad-hash',now(),'session:auth:fifth:bad',now()+interval '12 hours')" >"$auth_fifth_bad" &
+auth_fifth_bad_pid=$!
+wait "$auth_fifth_good_pid"
+wait "$auth_fifth_bad_pid"
+auth_fifth_total=$(( $(cat "$auth_fifth_good") + $(cat "$auth_fifth_bad") ))
+rm -f "$auth_fifth_good" "$auth_fifth_bad"
+auth_fifth_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_auth_challenge WHERE challenge_id='auth:fifth-race'")
+auth_fifth_sessions=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_session WHERE session_id LIKE 'session:auth:fifth:%'")
+[[ "$auth_fifth_total" == "1" && ( ( "$auth_fifth_state" == "USED:4" && "$auth_fifth_sessions" == "1" ) || ( "$auth_fifth_state" == "REVOKED:5" && "$auth_fifth_sessions" == "0" ) ) ]] || { echo "correct versus fifth-wrong member-auth race produced an impossible result" >&2; exit 1; }
 
 # A10 durable support lifecycle falsification.
 "${PSQL[@]}" <<'SQL'

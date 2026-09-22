@@ -1,3 +1,18 @@
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
-const index=fs.readFileSync(new URL('../../public/index.html',import.meta.url),'utf8');const join=fs.readFileSync(new URL('../../public/join.html',import.meta.url),'utf8');const employee=fs.readFileSync(new URL('../../public/employee.html',import.meta.url),'utf8');const api=fs.readFileSync(new URL('../../api/employee-session.js',import.meta.url),'utf8');
-test('guest shell separates enrollment from existing-member authentication',()=>{assert.match(index,/Join Food Club/);assert.match(index,/Member sign in/i);assert.match(index,/Approval alone does not activate membership/);assert.match(join,/For government workers\. No Google account is required\./);assert.match(join,/Create membership record/);assert.match(join,/Authenticate your new account/);assert.match(join,/Member Number and the email or phone verification method/);assert.match(join,/After authentication, settle the annual membership invoice/);});test('member shell does not expose operator governance navigation',()=>{assert.doesNotMatch(index,/>Operations</);assert.doesNotMatch(index,/>Workforce & Authority</);assert.doesNotMatch(index,/>Release Controls</);});test('employee access is a dedicated second authentication journey',()=>{assert.match(employee,/Employee verification/);assert.match(employee,/Member sign-in does not grant operator authority/);assert.match(employee,/employee-stepup-intent\.js/);});test('employee session mint requires explicit employee-access intent',()=>{assert.match(api,/x-employee-step-up-intent/);assert.match(api,/EXPLICIT_EMPLOYEE_STEP_UP_REQUIRED/);});test('member shell does not use SuperUser as an authority label',()=>assert.doesNotMatch(index,/SuperUser/));
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const index=fs.readFileSync(new URL('../../public/index.html',import.meta.url),'utf8');
+const join=fs.readFileSync(new URL('../../public/join.html',import.meta.url),'utf8');
+const employee=fs.readFileSync(new URL('../../public/employee.html',import.meta.url),'utf8');
+const api=fs.readFileSync(new URL('../../api/employee-session.js',import.meta.url),'utf8');
+
+test('guest shell separates enrollment from existing-member authentication',()=>{
+  assert.match(index,/Join Food Club/);assert.match(index,/Member sign in/i);assert.match(index,/Approval alone does not activate membership/);
+  assert.match(join,/For government workers\. No Google account is required\./);assert.match(join,/Create membership record/);assert.match(join,/Authenticate your new account/);
+  assert.match(join,/Member Number and registered phone/);assert.match(join,/After authentication, settle the annual membership invoice/);
+  assert.match(join,/deliverable phone number is required/);assert.match(join,/Transactional email verification is not yet supported/);
+});
+test('member shell does not expose operator governance navigation',()=>{assert.doesNotMatch(index,/>Operations</);assert.doesNotMatch(index,/>Workforce & Authority</);assert.doesNotMatch(index,/>Release Controls</)});
+test('employee access is a dedicated second authentication journey',()=>{assert.match(employee,/Employee verification/);assert.match(employee,/Member sign-in does not grant operator authority/);assert.match(employee,/employee-stepup-intent\.js/)});
+test('employee session mint requires explicit employee-access intent',()=>{assert.match(api,/x-employee-step-up-intent/);assert.match(api,/EXPLICIT_EMPLOYEE_STEP_UP_REQUIRED/)});
+test('member shell does not use SuperUser as an authority label',()=>assert.doesNotMatch(index,/SuperUser/));
