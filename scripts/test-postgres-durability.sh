@@ -20,6 +20,9 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/022_external_service_configuration.sql
 # Migration 022 is additive and must remain safe to replay during deployment recovery.
 "${PSQL[@]}" -f packages/durability/sql/022_external_service_configuration.sql
+"${PSQL[@]}" -f packages/durability/sql/030_member_number_recovery.sql
+# Recovery schema is also forward-only and safe to replay.
+"${PSQL[@]}" -f packages/durability/sql/030_member_number_recovery.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -31,6 +34,8 @@ a10_support_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.
 [[ "$a10_support_tables" == "2" ]] || { echo "A10 support schema is not reproducible from migrations" >&2; exit 1; }
 external_service_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('external_service_configuration','external_service_configuration_event')")
 [[ "$external_service_tables" == "2" ]] || { echo "external service configuration schema is not reproducible from migration 022" >&2; exit 1; }
+member_recovery_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='member_number_recovery_challenge'")
+[[ "$member_recovery_tables" == "1" ]] || { echo "member number recovery schema is not reproducible from migration 030" >&2; exit 1; }
 secret_columns=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='external_service_configuration' AND column_name ~* '(secret|token|password|api_key|auth_key)'")
 [[ "$secret_columns" == "0" ]] || { echo "external service configuration must not persist provider secrets" >&2; exit 1; }
 "${PSQL[@]}" <<'SQL'
