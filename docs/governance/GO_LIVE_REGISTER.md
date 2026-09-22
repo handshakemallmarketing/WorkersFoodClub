@@ -137,6 +137,44 @@ UC-01/02/03/04/11/14/28 had no backing tables at all, independent of
 - [ ] Run `api/db-health.js` (or the `/api/build-info` probe path) against production after
       migrating, to confirm schema/runtime agreement before enabling application access.
 
+**Migrations 016-029 (the J1-J31 launch-journey program's membership/auth-model rework,
+workforce tools, catalog administration, promotions and credit schema) were confirmed missing
+2026-09-22** during a codebase review: `main` had 374 external commits building this schema, but
+production still only had the 27 tables from migrations 001-015 — none of the new membership
+model, workforce, catalog-admin, promotions or credit schema existed, meaning that entire program
+was non-functional in production despite being merged and (per its own governance record)
+policy-ratified.
+
+**Remediation complete (`BLV2-DEC-027`, `BLV2-DEC-028`):**
+- [x] Dry-run applied all 16 outstanding migration files (the isolated `preview` Neon branch
+      already had 016-019, `020_guest_membership_enrollment`,
+      `021_j16_j17_j20_launch_journeys`, `021_member_native_auth`, and
+      `027_catalog_administration_v1` applied by the external rework's own prior testing) to
+      `br-purple-grass-aej54d2x`. All applied cleanly; preview went from 38 to 58 tables.
+      **Found, documented, not fixed**: `application_membership.standing` is renamed
+      inconsistently across `021_employee_membership_entitlement.sql` (→ `ACTIVE`/`GRACE`/
+      `TERMINATED`), `027_final_policy_consistency_v1.sql` (reverts to `CURRENT`/`ENDED` with no
+      data UPDATE), and `029_member_auth_runtime_consistency.sql` (→ `ACTIVE`/`ENDED`, the final
+      state). This only avoided failing outright because no real membership row anywhere had a
+      `standing` value that would violate the intermediate constraints. The migration files
+      should be cleaned up into one consistent enum definition before anyone relies on applying
+      them individually rather than as one batch.
+- [x] With explicit human authorization ("Apply 016-029 to production now"), applied all 18
+      files to the actual `production` branch (`br-winter-poetry-ae8qho57`), statement by
+      statement. Verified via `get_database_tables`: all 58 expected tables now present, matching
+      the preview fork exactly. Verified `application_membership_standing_check` and
+      `application_membership_member_type_check` landed at their final ratified form. Verified
+      the one real membership row (`membership:rc3:member:001`) was unaffected by the standing
+      enum churn (`standing='INITIAL_FEE_DUE'` throughout). No data was deleted or altered — every
+      statement was `CREATE TABLE/INDEX IF NOT EXISTS` or an additive/`DROP CONSTRAINT`-then-`ADD
+      CONSTRAINT` change.
+- [ ] Re-run `/api/build-info` / `/api/db-health` against the Production Vercel deployment to
+      confirm the running app sees the new schema end-to-end.
+- [ ] Exercise at least one real end-to-end flow through the new membership/auth model (self-
+      service enrollment, Member Number issuance, authentication-before-settlement) against real
+      production, the same way owner-bootstrap and the authority-invite flow were each proven with
+      one real execution before being trusted.
+
 ---
 
 ## 4. Identity and authority seed data (Owner bootstrap)
