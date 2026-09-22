@@ -61,7 +61,7 @@ refund_unique_constraints=$("${PSQL[@]}" -Atc "SELECT count(*) FROM pg_constrain
 [[ "$refund_unique_constraints" == "8" ]] || { echo "preview refund idempotency constraints are incomplete" >&2; exit 1; }
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE support_case_transition,support_case,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+TRUNCATE member_number_recovery_challenge,support_case_transition,support_case,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
 SQL
 
 # RC3-BIND-001: durable participant, membership and operator authority are independent governed records.
@@ -77,6 +77,76 @@ membership=$("${PSQL[@]}" -Atc "SELECT membership_id||':'||state FROM applicatio
 authority=$("${PSQL[@]}" -Atc "SELECT grant_id FROM application_authority_grant WHERE actor_id='participant:operator' AND 'operator:orders.read'=ANY(actions) AND valid_from<=now() AND (valid_until IS NULL OR valid_until>=now()) AND (revoked_at IS NULL OR revoked_at>now())")
 [[ "$authority" == "grant:operator:orders" ]] || { echo "operator authority did not survive connection boundary" >&2; exit 1; }
 if "${PSQL[@]}" -c "INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:duplicate','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:2'])" >/dev/null 2>&1; then echo "second ACTIVE membership unexpectedly succeeded" >&2; exit 1; fi
+
+# Member Number recovery issuance and verification remain bounded under real PostgreSQL races.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state) VALUES ('participant:recovery','PERSON','ACTIVE');
+INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids)
+VALUES('membership:recovery','participant:recovery','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:recovery']);
+SQL
+recovery_issuance_outputs=()
+recovery_issuance_pids=()
+for i in $(seq 1 10); do
+  output=$(mktemp)
+  recovery_issuance_outputs+=("$output")
+  "${PSQL[@]}" -Atc "SELECT count(*) FROM create_member_number_recovery_challenge('recovery:issue:$i','membership:recovery','EMAIL','destination-hash','code-hash',now()+interval '10 minutes')" >"$output" &
+  recovery_issuance_pids+=("$!")
+done
+for pid in "${recovery_issuance_pids[@]}"; do wait "$pid"; done
+issued=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_number_recovery_challenge WHERE membership_id='membership:recovery'")
+[[ "$issued" == "5" ]] || { echo "concurrent recovery issuance exceeded five challenges" >&2; exit 1; }
+rm -f "${recovery_issuance_outputs[@]}"
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_number_recovery_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at)
+VALUES('recovery:correct-race','membership:live','EMAIL','destination-hash','good-hash','OPEN',now()+interval '10 minutes');
+SQL
+correct_a=$(mktemp)
+correct_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:correct-race','good-hash',now())" >"$correct_a" &
+correct_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:correct-race','good-hash',now())" >"$correct_b" &
+correct_pid_b=$!
+wait "$correct_pid_a"
+wait "$correct_pid_b"
+correct_total=$(( $(cat "$correct_a") + $(cat "$correct_b") ))
+rm -f "$correct_a" "$correct_b"
+correct_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_number_recovery_challenge WHERE challenge_id='recovery:correct-race'")
+[[ "$correct_total" == "1" && "$correct_state" == "USED:0" ]] || { echo "concurrent correct recovery was not single-use" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_number_recovery_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at)
+VALUES('recovery:wrong-race','membership:live','EMAIL','destination-hash','good-hash','OPEN',now()+interval '10 minutes');
+SQL
+wrong_outputs=()
+wrong_pids=()
+for i in $(seq 1 10); do
+  output=$(mktemp)
+  wrong_outputs+=("$output")
+  "${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:wrong-race','bad-hash',now())" >"$output" &
+  wrong_pids+=("$!")
+done
+for pid in "${wrong_pids[@]}"; do wait "$pid"; done
+rm -f "${wrong_outputs[@]}"
+wrong_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_number_recovery_challenge WHERE challenge_id='recovery:wrong-race'")
+[[ "$wrong_state" == "REVOKED:5" ]] || { echo "concurrent wrong recovery attempts escaped the five-attempt cap" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_number_recovery_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,attempts,expires_at)
+VALUES('recovery:fifth-race','membership:live','EMAIL','destination-hash','good-hash','OPEN',4,now()+interval '10 minutes');
+SQL
+fifth_good=$(mktemp)
+fifth_bad=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:fifth-race','good-hash',now())" >"$fifth_good" &
+fifth_good_pid=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:fifth-race','bad-hash',now())" >"$fifth_bad" &
+fifth_bad_pid=$!
+wait "$fifth_good_pid"
+wait "$fifth_bad_pid"
+fifth_total=$(( $(cat "$fifth_good") + $(cat "$fifth_bad") ))
+rm -f "$fifth_good" "$fifth_bad"
+fifth_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_number_recovery_challenge WHERE challenge_id='recovery:fifth-race'")
+[[ "$fifth_total" == "1" && ( "$fifth_state" == "USED:4" || "$fifth_state" == "REVOKED:5" ) ]] || { echo "correct versus fifth-wrong recovery race produced an impossible result" >&2; exit 1; }
 
 # A10 durable support lifecycle falsification.
 "${PSQL[@]}" <<'SQL'
