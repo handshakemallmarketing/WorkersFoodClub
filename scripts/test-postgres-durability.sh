@@ -31,6 +31,10 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/031_member_auth_challenge_atomicity.sql
 # Native authentication race constraints and functions must also replay safely.
 "${PSQL[@]}" -f packages/durability/sql/031_member_auth_challenge_atomicity.sql
+"${PSQL[@]}" -f packages/durability/sql/023_credit_payroll_promotions_v1.sql
+"${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
+# Settlement evidence claims and functions must remain replay safe.
+"${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -69,7 +73,72 @@ refund_unique_constraints=$("${PSQL[@]}" -Atc "SELECT count(*) FROM pg_constrain
 [[ "$refund_unique_constraints" == "8" ]] || { echo "preview refund idempotency constraints are incomplete" >&2; exit 1; }
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE support_case_transition,support_case,member_session,member_auth_challenge,member_number_recovery_challenge,application_access_audit,membership_subscription_invoice,household_beneficiary_invitation,membership_application,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+TRUNCATE support_case_transition,support_case,membership_subscription_settlement_allocation,electronic_payment_evidence_consumption,item_credit_repayment_allocation,item_credit_receivable,electronic_payment_evidence,cag_deduction_enrollment,member_session,member_auth_challenge,member_number_recovery_challenge,application_access_audit,membership_subscription_invoice,household_beneficiary_invitation,membership_application,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+SQL
+
+# Initial annual settlement requires authenticated-member lineage, exact
+# reconciled evidence and a single atomic durable effect.  All fixtures roll
+# back so the remainder of the harness starts from its canonical empty state.
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:settlement','PERSON','ACTIVE'),
+       ('participant:suspended','PERSON','ACTIVE'),
+       ('participant:mismatch','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES
+ ('membership:settlement','participant:settlement','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-SETTLEMENT',now(),'test-v1',ARRAY['eligibility:settlement']),
+ ('membership:suspended','participant:suspended','SUSPENDED','SUSPENDED','PRIMARY','WFC-SUSPENDED',now(),'test-v1',ARRAY['eligibility:suspended']),
+ ('membership:mismatch','participant:mismatch','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-MISMATCH',now(),'test-v1',ARRAY['eligibility:mismatch']);
+INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
+VALUES ('invoice:settlement','membership:settlement',2026,10000,'GHS','OPEN',now()+interval '1 day'),
+       ('invoice:suspended','membership:suspended',2026,10000,'GHS','OPEN',now()+interval '1 day'),
+       ('invoice:mismatch','membership:mismatch',2026,10000,'GHS','OPEN',now()+interval '1 day');
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES ('member-session:settlement','membership:settlement','participant:settlement','ACTIVE',now()+interval '1 hour'),
+       ('member-session:suspended','membership:suspended','participant:suspended','ACTIVE',now()+interval '1 hour'),
+       ('member-session:mismatch','membership:mismatch','participant:mismatch','ACTIVE',now()+interval '1 hour');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES
+ ('evidence:settlement','membership:settlement','invoice:settlement','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:settlement',now()),
+ ('evidence:suspended','membership:suspended','invoice:suspended','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:suspended',now()),
+ ('evidence:mismatch','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',9999,'GHS','provider:mismatch',now());
+DO $$
+DECLARE first_result record; replay_result record;
+BEGIN
+ SELECT * INTO first_result FROM settle_membership_subscription(
+   'invoice:settlement','evidence:settlement','member-session:settlement',
+   'audit:settlement','request:settlement',now());
+ IF NOT FOUND OR first_result.idempotent OR first_result.membership_state<>'ACTIVE' THEN
+   RAISE EXCEPTION 'exact authenticated settlement did not produce one activation';
+ END IF;
+ SELECT * INTO replay_result FROM settle_membership_subscription(
+   'invoice:settlement','evidence:settlement','member-session:settlement',
+   'audit:settlement','request:settlement',now());
+ IF NOT FOUND OR NOT replay_result.idempotent THEN
+   RAISE EXCEPTION 'lost-response settlement replay is not idempotent';
+ END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:suspended','evidence:suspended','member-session:suspended',
+   'audit:suspended','request:suspended',now());
+ IF FOUND THEN RAISE EXCEPTION 'generic suspension was cleared by settlement'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:mismatch','member-session:mismatch',
+   'audit:mismatch','request:mismatch',now());
+ IF FOUND THEN RAISE EXCEPTION 'amount-mismatched evidence settled an invoice'; END IF;
+ IF (SELECT count(*) FROM membership_subscription_settlement_allocation)<>1
+    OR (SELECT count(*) FROM electronic_payment_evidence_consumption)<>1
+    OR (SELECT count(*) FROM application_access_audit WHERE event_type='MEMBERSHIP_SUBSCRIPTION_SETTLED')<>1
+    OR (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:suspended')<>'OPEN'
+    OR (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:mismatch')<>'OPEN' THEN
+   RAISE EXCEPTION 'settlement adverse paths left partial durable effects';
+ END IF;
+END $$;
+ROLLBACK;
 SQL
 
 # RC3-BIND-001: durable participant, membership and operator authority are independent governed records.
