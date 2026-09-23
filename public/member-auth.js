@@ -58,11 +58,28 @@
     button.onclick = async () => { button.disabled = true; try { const response = await upstream('/api/member-number-recovery-verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId: challenge.challengeId, code: input.value }) }); const result = await response.json().catch(() => null); if (!response.ok || !result?.publicMemberId) throw new Error(); body.innerHTML = ''; subtitle.textContent = 'Member Number recovered.'; const paragraph = document.createElement('p'); paragraph.textContent = `Your Member Number is ${result.publicMemberId}.`; const go = document.createElement('button'); go.className = 'primary'; go.textContent = 'Continue to sign in'; go.onclick = () => { const url = new URL(location.href); url.searchParams.set('memberId', result.publicMemberId); history.replaceState(null, '', url.pathname + url.search); render(); }; body.append(paragraph, go); } catch { message.textContent = 'Verification failed. Check the code and try again.'; } finally { button.disabled = false; } };
     body.append(input, button, message); if (challenge.previewCode) { const hint = document.createElement('code'); hint.textContent = `Preview code: ${challenge.previewCode}`; body.appendChild(hint); }
   }
+  async function paySandbox(invoiceId, message, button) {
+    button.disabled = true;
+    try {
+      const response = await upstream('/api/membership-subscription-pay-sandbox', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ invoiceId }) });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.ok !== true) throw new Error(result?.error || 'SANDBOX_PAYMENT_FAILED');
+      message.textContent = 'Sandbox payment simulated. Refreshing membership status…'; await check();
+    } catch (error) { message.textContent = `Sandbox payment failed: ${error.message}`; button.disabled = false; }
+  }
   function renderRestricted(body, title, subtitle) {
     title.textContent = 'Membership payment required'; subtitle.textContent = 'Your phone is verified, but member-area access remains disabled until the annual membership invoice is settled.';
-    const invoice = document.createElement('p'); invoice.textContent = `Annual membership invoice: ${status?.invoice?.invoiceId || 'pending invoice'}.`;
+    const invoiceId = status?.invoice?.invoiceId || null;
+    const invoice = document.createElement('p'); invoice.textContent = `Annual membership invoice: ${invoiceId || 'pending invoice'}.`;
     const unavailable = document.createElement('p'); unavailable.textContent = 'Online subscription payment is not yet certified. No payment has been taken.';
-    const out = document.createElement('button'); out.className = 'secondary'; out.textContent = 'Sign out'; out.onclick = signOut; body.append(invoice, unavailable, out);
+    const out = document.createElement('button'); out.className = 'secondary'; out.textContent = 'Sign out'; out.onclick = signOut; body.append(invoice, unavailable);
+    if (status?.sandboxPaymentAvailable === true && invoiceId) {
+      const message = document.createElement('p');
+      const pay = document.createElement('button'); pay.className = 'primary'; pay.textContent = 'Pay now (sandbox)';
+      pay.onclick = () => paySandbox(invoiceId, message, pay);
+      body.append(pay, message);
+    }
+    body.append(out);
   }
   function render() {
     const body = el('auth-modal-body'), title = el('auth-modal-title'), subtitle = el('auth-modal-subtitle'); if (!body || !title || !subtitle) return; body.innerHTML = '';
