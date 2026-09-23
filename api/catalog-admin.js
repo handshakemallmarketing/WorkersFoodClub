@@ -4,7 +4,6 @@ import { CATALOG_CAPABLE_OPERATORS } from '../lib/operator-tiers.js';
 const ID=/^[A-Za-z0-9:_-]{1,120}$/;const clean=v=>typeof v==='string'?v.trim():'';const bounded=(v,max)=>v.length>0&&v.length<=max;
 export default async function handler(req,res){
  if(!['GET','POST','PATCH','DELETE'].includes(req.method)){res.setHeader('Allow','GET, POST, PATCH, DELETE');return res.status(405).json({ok:false,error:'METHOD_NOT_ALLOWED'});}
- if(req.method!=='GET'&&!['preview','development'].includes(process.env.VERCEL_ENV||''))return res.status(403).json({ok:false,error:'CATALOG_MUTATION_ENVIRONMENT_NOT_AUTHORIZED'});
  const principal=await requireApplicationAuth(req,res,'operator:catalog.manage',CATALOG_CAPABLE_OPERATORS);if(!principal)return;const actor=String(principal.actorId||principal.participantId||'').trim();if(!actor)return res.status(403).json({ok:false,error:'CATALOG_ACTOR_REQUIRED'});
  const cs=process.env.DATABASE_URL;if(!cs)return res.status(503).json({ok:false,error:'DATABASE_URL_MISSING'});
  try{const {neon}=await import('@neondatabase/serverless');const sql=neon(cs,{fetchOptions:{signal:AbortSignal.timeout(5000)}});const b=req.body||{},resource=b.resource==='category'?'category':'listing';
