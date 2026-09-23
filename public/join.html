@@ -29,6 +29,7 @@
     <div class="field"><label for="code">Verification code</label><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></div>
     <button id="code-submit" type="submit" class="primary">Verify and continue</button>
     <p style="margin-top:10px"><button id="resend-button" type="button" class="secondary small">Resend code</button></p>
+    <p style="margin-top:6px"><button id="edit-details-button" type="button" class="secondary small">Wrong number? Edit details</button></p>
   </form>
 
   <p id="status" class="bootstrap-status" aria-live="polite"></p><div id="result" class="bootstrap-result" hidden></div>
@@ -43,7 +44,7 @@
 <script>
 (() => {
   const detailsForm=document.getElementById('details-form'),codeForm=document.getElementById('code-form');
-  const detailsSubmit=document.getElementById('details-submit'),codeSubmit=document.getElementById('code-submit'),resendButton=document.getElementById('resend-button');
+  const detailsSubmit=document.getElementById('details-submit'),codeSubmit=document.getElementById('code-submit'),resendButton=document.getElementById('resend-button'),editDetailsButton=document.getElementById('edit-details-button');
   const status=document.getElementById('status'),result=document.getElementById('result');
   const progress=[document.getElementById('progress-1'),document.getElementById('progress-2'),document.getElementById('progress-3')];
   const employerField=document.getElementById('employer-field'),employerInput=document.getElementById('employer');
@@ -72,6 +73,11 @@
 
   detailsForm.addEventListener('submit',event=>{event.preventDefault();sendCode();});
   resendButton.addEventListener('click',()=>sendCode());
+  editDetailsButton.addEventListener('click',()=>{
+    challengeId=null;codeForm.code.value='';codeForm.hidden=true;detailsForm.hidden=false;
+    progress[0].classList.remove('done');result.hidden=true;status.textContent='';
+    detailsForm.phone.focus();
+  });
 
   codeForm.addEventListener('submit',async event=>{
     event.preventDefault();result.hidden=true;status.textContent='Verifying…';codeSubmit.disabled=true;
