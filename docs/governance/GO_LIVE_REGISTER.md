@@ -82,7 +82,8 @@ Legend: **REQUIRED** = route/feature fails closed (503/deny) without it. **OPTIO
 | `EMPLOYEE_SESSION_SECRET` | `lib/application-principal-binding.js`, `api/employee-session.js`, `api/employee-session-lock.js` (new in PR #93) | HMAC signing secret for employee-session tokens | **New requirement, not yet provisioned anywhere.** Without it, every employee-session endpoint returns 503 `EMPLOYEE_SESSION_NOT_CONFIGURED`, which means no operator-scoped action can be authorized at all in production (the employee-session check is now unconditionally required in the operator branch of `resolveApplicationPrincipal()`). **Must be generated (long random value, e.g. `openssl rand -hex 32`) and set on the Production environment before any real operator/employee workflow can function.** |
 | `PREVIEW_API_AUTH_SECRET` | `lib/preview-api-auth.js` | Signs preview-only bearer tokens | Should exist only in Preview/Development environments. Must **not** be set on Production (the code fails closed on `VERCEL_ENV` outside `preview`/`development`, but do not also provision the secret there — no reason to have it reachable). |
 | `PAYSTACK_SECRET_KEY` | `api/paystack-rehearsal.js`, pilot-payments package | Paystack API key | Currently test-mode only by design; see §5 before ever changing this to a live key. |
-| `MEMBERSHIP_RENEWAL_AUTHORITY_TOKEN` | `api/membership-renewal-invoice.js` | Shared-secret header (`x-membership-renewal-authority`), min 32 chars, checked in addition to production access | **Not provisioned anywhere; no caller exists either** (found 2026-09-24). No cron, no admin UI button, and no vercel.json cron entry call this endpoint — annual renewal invoicing has no operational trigger today. Not a day-one blocker (no member's first year has elapsed yet), but must be resolved — provision this secret plus a real trigger (cron or admin-initiated) — before the first pilot cohort's renewal date. |
+| `MEMBERSHIP_RENEWAL_AUTHORITY_TOKEN` | `api/membership-renewal-invoice.js`, `api/membership-renewal-cron.js` | Shared-secret header (`x-membership-renewal-authority`), min 32 chars, checked in addition to production access | **RESOLVED 2026-09-24 (`BLV2-DEC-048`)** — a daily cron (`vercel.json` `crons`, `0 6 * * *`) now calls `/api/membership-renewal-cron`, which issues renewal invoices and drives the `ACTIVE -> GRACE -> RESTRICTED` standing transition. The cron accepts either this token (manual/ops trigger) or `CRON_SECRET` below (Vercel's own scheduled invocation). Still must be provisioned before Vercel Cron can actually authenticate. |
+| `CRON_SECRET` | `api/membership-renewal-cron.js` | Vercel's native scheduled-invocation bearer — Vercel automatically sends `Authorization: Bearer $CRON_SECRET` when firing a `vercel.json` cron entry, if this var is set | **New requirement, not yet provisioned** (added 2026-09-24, `BLV2-DEC-048`). Without it, the daily `/api/membership-renewal-cron` invocation gets `401 RENEWAL_AUTHORITY_REQUIRED` and nothing renews. Generate a long random value (e.g. `openssl rand -hex 32`) and set it on Production before relying on the cron. |
 | `PREVIEW_BASE_URL` / `PRODUCTION_BASE_URL` | test/rehearsal scripts, activation workflow | Target URLs for scripted checks | `PRODUCTION_BASE_URL` is hardcoded in the activation workflow as `https://workers-food-club-chi.vercel.app` — confirm this is still the canonical production alias before firing activation. |
 | `VERCEL_ENV` | many fail-closed checks (`isPreviewLikeEnvironment()`, OIDC gate, etc.) | Vercel-injected; should not be manually set | Vercel sets this automatically per deployment target — no action needed, just don't override it in project settings. |
 | `VERCEL_TOKEN`, `VERCEL_SCOPE`, `VERCEL_BRANCH_URL`, `VERCEL_DEPLOYMENT_ID`, `VERCEL_GIT_COMMIT_REF`, `VERCEL_GIT_COMMIT_SHA`, `VERCEL_URL`, `VERCEL_TRUSTED_OIDC_TOKEN` | Vercel platform / build-info probes | Vercel-managed | No action needed beyond what's below for GitHub Actions secrets. |
@@ -188,12 +189,25 @@ route is *reachable* in production: per §5, `/api/pay-sandbox` remains hard-dis
 (`403 SANDBOX_PAYMENT_DISABLED_IN_PRODUCTION`) regardless of this change, unaffected and
 re-verified — this entry documents schema readiness only, not a production activation.
 
-(This narrative otherwise stops at migration 029, applied 2026-09-22; migrations 030-035 —
-catalog/offer-listing linkage, membership-subscription settlement atomicity, and the
-admin-editable membership fee — were each separately dry-run and applied to production during this
-same engagement, see the decision register `BLV2-DEC-034`/`-035`/`-038`/`-043` for their own
-evidence. This section has not been reconciled to list every migration individually since 029; the
-decision register remains the authoritative, complete record.)
+**Membership renewal cron + grace-period settlement (`BLV2-DEC-048`, migration 036, 2026-09-24).**
+Building the daily renewal cron (`api/membership-renewal-cron.js`) surfaced that the 30-day grace
+window columns (`grace_started_at`/`grace_ends_at`, added by migrations 027/029) had never actually
+been driven by any code — nothing transitioned a membership `ACTIVE -> GRACE -> RESTRICTED` on an
+overdue renewal invoice, and separately `settle_membership_subscription` (migration 032) only ever
+recognized the very first invoice, so paying a *renewal* invoice while `GRACE`/`RESTRICTED` would
+have silently no-op'd, leaving the member restricted even after paying. Migration 036 adds a second,
+narrower precondition to the same function (`state='ACTIVE' AND standing IN ('GRACE','RESTRICTED')`)
+that restores `ACTIVE` and clears the grace window, without touching the original branch. The cron
+never auto-advances a membership past `RESTRICTED` to `SUSPENDED` — that remains a manual
+administrative action. See §2 for the new `CRON_SECRET` variable this depends on.
+
+(This narrative otherwise stops at migration 029, applied 2026-09-22; migrations 030-036 —
+catalog/offer-listing linkage, membership-subscription settlement atomicity, the admin-editable
+membership fee, and the renewal-cron grace-settlement fix above — were each separately dry-run and
+applied to production during this same engagement, see the decision register
+`BLV2-DEC-034`/`-035`/`-038`/`-043`/`-048` for their own evidence. This section has not been
+reconciled to list every migration individually since 029; the decision register remains the
+authoritative, complete record.)
 
 ---
 

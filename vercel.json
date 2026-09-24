@@ -6,6 +6,7 @@
     { "source": "/catalog-admin", "destination": "/catalog-admin.html" },
     { "source": "/operator-fulfillment", "destination": "/operator-fulfillment.html" },
     { "source": "/settings", "destination": "/settings.html" },
+    { "source": "/workforce", "destination": "/workforce.html" },
     { "source": "/promotions", "destination": "/promotions.html" },
     { "source": "/join", "destination": "/join.html" },
     { "source": "/apply", "destination": "/join.html" },
@@ -15,5 +16,8 @@
     { "source": "/api/auth-readiness", "destination": "/api/db-health?probe=identity-readiness" },
     { "source": "/api/auth-client-config", "destination": "/api/db-health?probe=auth-client-config" },
     { "source": "/api/identity-subject", "destination": "/api/db-health?probe=identity-subject" }
+  ],
+  "crons": [
+    { "path": "/api/membership-renewal-cron", "schedule": "0 6 * * *" }
   ]
 }
