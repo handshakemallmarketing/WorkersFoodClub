@@ -4,6 +4,7 @@
   "rewrites": [
     { "source": "/employee", "destination": "/employee.html" },
     { "source": "/catalog-admin", "destination": "/catalog-admin.html" },
+    { "source": "/operator-fulfillment", "destination": "/operator-fulfillment.html" },
     { "source": "/join", "destination": "/join.html" },
     { "source": "/apply", "destination": "/join.html" },
     { "source": "/activate", "destination": "/activate.html" },
