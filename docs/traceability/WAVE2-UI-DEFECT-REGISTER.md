@@ -14,6 +14,6 @@
 | Runtime Offers projection failure | Fixed: Vercel error isolated missing migration 021 columns; connected Neon schema brought forward and verified |
 | Employee governance terminology | Fixed in rendered employee area with System Owner / Admin / bounded Operator terminology |
 | Legacy operator renderer embedded in app.js | Fixed at active-document boundary: member page no longer loads `app.js` or `workforce.js`; member commerce lives in `member-shell.js` |
-| Legacy combined auth.js | Removed from active member document; retained only as non-loaded historical/test surface pending later repository deletion after dependent historical tests are retired |
+| Legacy combined auth.js | Removed from the member document (`index.html`), but this row's original "non-loaded, pending deletion" framing is stale as of 2026-09-21+: `auth.js` is the live authentication controller for `catalog-admin.html`, `promotions.html`, and `operator-fulfillment.html`. Do not delete it. |
 
 Exact-head CI and deployment verification remain release gates; no live-money authority is implied.

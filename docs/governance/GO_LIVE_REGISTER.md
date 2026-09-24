@@ -82,6 +82,7 @@ Legend: **REQUIRED** = route/feature fails closed (503/deny) without it. **OPTIO
 | `EMPLOYEE_SESSION_SECRET` | `lib/application-principal-binding.js`, `api/employee-session.js`, `api/employee-session-lock.js` (new in PR #93) | HMAC signing secret for employee-session tokens | **New requirement, not yet provisioned anywhere.** Without it, every employee-session endpoint returns 503 `EMPLOYEE_SESSION_NOT_CONFIGURED`, which means no operator-scoped action can be authorized at all in production (the employee-session check is now unconditionally required in the operator branch of `resolveApplicationPrincipal()`). **Must be generated (long random value, e.g. `openssl rand -hex 32`) and set on the Production environment before any real operator/employee workflow can function.** |
 | `PREVIEW_API_AUTH_SECRET` | `lib/preview-api-auth.js` | Signs preview-only bearer tokens | Should exist only in Preview/Development environments. Must **not** be set on Production (the code fails closed on `VERCEL_ENV` outside `preview`/`development`, but do not also provision the secret there — no reason to have it reachable). |
 | `PAYSTACK_SECRET_KEY` | `api/paystack-rehearsal.js`, pilot-payments package | Paystack API key | Currently test-mode only by design; see §5 before ever changing this to a live key. |
+| `MEMBERSHIP_RENEWAL_AUTHORITY_TOKEN` | `api/membership-renewal-invoice.js` | Shared-secret header (`x-membership-renewal-authority`), min 32 chars, checked in addition to production access | **Not provisioned anywhere; no caller exists either** (found 2026-09-24). No cron, no admin UI button, and no vercel.json cron entry call this endpoint — annual renewal invoicing has no operational trigger today. Not a day-one blocker (no member's first year has elapsed yet), but must be resolved — provision this secret plus a real trigger (cron or admin-initiated) — before the first pilot cohort's renewal date. |
 | `PREVIEW_BASE_URL` / `PRODUCTION_BASE_URL` | test/rehearsal scripts, activation workflow | Target URLs for scripted checks | `PRODUCTION_BASE_URL` is hardcoded in the activation workflow as `https://workers-food-club-chi.vercel.app` — confirm this is still the canonical production alias before firing activation. |
 | `VERCEL_ENV` | many fail-closed checks (`isPreviewLikeEnvironment()`, OIDC gate, etc.) | Vercel-injected; should not be manually set | Vercel sets this automatically per deployment target — no action needed, just don't override it in project settings. |
 | `VERCEL_TOKEN`, `VERCEL_SCOPE`, `VERCEL_BRANCH_URL`, `VERCEL_DEPLOYMENT_ID`, `VERCEL_GIT_COMMIT_REF`, `VERCEL_GIT_COMMIT_SHA`, `VERCEL_URL`, `VERCEL_TRUSTED_OIDC_TOKEN` | Vercel platform / build-info probes | Vercel-managed | No action needed beyond what's below for GitHub Actions secrets. |
@@ -426,6 +427,13 @@ branch, and headless smoke tests of all four gate scenarios (no membership / pen
 SUSPENDED / ACTIVE) plus the approval and application flows. **Explicitly not built**: locking down
 specific economic actions (purchase/payment) for `SUSPENDED` members app-wide — tracked as a
 follow-on, not silently skipped. **Not yet exercised against real production.**
+
+**Correction, 2026-09-24**: the description above of `api/membership-apply.js` reflects what was
+built on 2026-09-19, not current behavior. Per `BLV2-DEC-031`, `membership-apply.js`'s AUTO mode
+now returns `410 ENROLLMENT_FLOW_MOVED`, and `public/join.html` calls
+`/api/enrollment-verify-start` / `/api/enrollment-verify-complete` directly, not
+`membership-apply.js`. `membership-apply.js` still accepts MANUAL-review applications as a queued
+request (unchanged), it is just no longer the self-service path behind `join.html`.
 
 The original report, kept for the record:
 
