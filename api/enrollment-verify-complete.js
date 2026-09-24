@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { requireProductionApplicationAccess } from '../lib/production-access-policy.js';
 import { ensureAnnualMembershipInvoice } from '../lib/membership-annual-invoice.js';
+import { resolveAnnualFeeMinor } from '../lib/membership-fee-configuration.js';
 
 const sha = v => createHash('sha256').update(String(v)).digest('hex');
 const newPrimaryMemberId = () => String(randomInt(100000000000,1000000000000));
@@ -40,7 +41,8 @@ export default async function handler(req, res, options = {}) {
       const membershipIdStr = String(r.membership_id), publicMemberIdStr = String(r.public_member_id);
       const base = { ok: true, sessionToken, expiresAt: sessionExpiresAt, accessState: 'MEMBERSHIP_PAYMENT_REQUIRED', publicMemberId: publicMemberIdStr, membershipId: membershipIdStr, idempotent: r.idempotent === true || String(r.idempotent) === 'true' };
       try {
-        const invoice = await ensureAnnualMembershipInvoice({ sql, membershipId: membershipIdStr, publicMemberId: publicMemberIdStr, now: options.now ?? Date.now(), env, amountMinor: options.annualFeeMinor });
+        const amountMinor = options.annualFeeMinor ?? (await resolveAnnualFeeMinor({ sql, env }))?.amountMinor;
+        const invoice = await ensureAnnualMembershipInvoice({ sql, membershipId: membershipIdStr, publicMemberId: publicMemberIdStr, now: options.now ?? Date.now(), env, amountMinor });
         return res.status(200).json({ ...base, subscriptionInvoicePending: false, invoiceId: invoice.invoiceId, invoiceState: invoice.state, invoiceAmountMinor: invoice.amountMinor, invoiceCurrency: invoice.currency, dueAt: invoice.dueAt });
       } catch (invoiceError) {
         const billingError = String(invoiceError?.code || 'ANNUAL_SUBSCRIPTION_INVOICE_FAILED').replace(/[^A-Z0-9_]/gi, '_').slice(0, 80);
