@@ -152,9 +152,9 @@ export default async function handler(req, res, options = {}) {
   } catch (error) {
     if (error?.code === '23505') {
       try {
-        const { neon } = await import('@neondatabase/serverless');
-        const sql = options.sql || neon(cs);
-        const existing = await readExistingPayment(sql, requestId);
+        let raceSql = options.sql;
+        if (!raceSql) { const { neon } = await import('@neondatabase/serverless'); raceSql = neon(cs); }
+        const existing = await readExistingPayment(raceSql, requestId);
         if (existing) return res.status(200).json({ ok: true, payment: serialize(existing, null, true) });
       } catch { /* fall through to generic failure below */ }
     }
