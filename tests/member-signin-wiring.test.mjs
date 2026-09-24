@@ -11,20 +11,28 @@ test('member sign-in does not expose the synthetic preview-member bypass', () =>
   assert.doesNotMatch(auth, /loadPreview/);
 });
 
-test('member sign-in uses identity then authoritative membership resolution', () => {
-  assert.match(auth, /\/api\/identity-subject/);
+test('member sign-in uses a phone-challenge session, not the legacy OIDC identity-subject probe', () => {
+  assert.doesNotMatch(auth, /\/api\/identity-subject/);
+  assert.match(auth, /\/api\/member-auth-challenge/);
+  assert.match(auth, /\/api\/member-auth-verify/);
   assert.match(auth, /\/api\/membership-status/);
-  assert.match(auth, /status\.memberAccessAvailable===true/);
-  assert.match(auth, /status\.accessState==='ACTIVE_CURRENT'/);
-  assert.match(auth, /status\.route==='MEMBER'/);
+  assert.match(auth, /memberAccess = body\.memberAccessAvailable === true/);
 });
 
-test('member UI exposes governed non-member states', () => {
-  for (const route of ['APPLICATION_STATUS','SUBSCRIPTION_DUE','RESTRICTED','NON_MEMBER']) assert.match(auth, new RegExp(`route==='${route}'`));
+test('member UI gates on the authoritative membership-status response, not a client-guessed route', () => {
+  assert.match(auth, /status\?\.accessState/);
+  assert.match(auth, /status\?\.invoice/);
+  assert.match(auth, /status\?\.sandboxPaymentAvailable/);
 });
 
 test('member shell keeps employee authority out of member auth controller', () => {
-  assert.match(auth, /operatorAccessAvailable:false/);
-  assert.match(auth, /superUserAccessAvailable:false/);
+  assert.match(auth, /operatorAccessAvailable: false/);
+  assert.match(auth, /superUserAccessAvailable: false/);
   assert.match(html, /Member sign in/);
+});
+
+test('a member who loses their Member Number has a self-service recovery path', () => {
+  assert.match(auth, /\/api\/member-number-recovery-start/);
+  assert.match(auth, /\/api\/member-number-recovery-verify/);
+  assert.match(auth, /Forgot your Member Number/);
 });
