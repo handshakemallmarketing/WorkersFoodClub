@@ -41,14 +41,26 @@ test('RC3 enabled commitment canonical records bind to authenticated actor', asy
   assert.doesNotMatch(commit, /SELECT \$\{obligationId\}, \$\{requestId\}, \$\{PREVIEW_PARTICIPANT_ID\}/);
 });
 
-test('RC3 sandbox payment is unavailable before any durable mutation', async () => {
+test('RC3 sandbox payment mutation generates neutral durable IDs and runtime ownership, like commitment mutation', async () => {
   const pay = await source(files[1]);
 
   assert.match(pay, /requireApplicationAuth/);
-  assert.match(pay, /PREVIEW_PAYMENT_ATOMICITY_NOT_CERTIFIED/);
   assert.match(pay, /SANDBOX_PAYMENT_REQUIRES_PREVIEW/);
-  assert.doesNotMatch(pay, /INSERT INTO preview_sandbox_payment/);
-  assert.doesNotMatch(pay, /UPDATE preview_member_commitment/);
-  assert.doesNotMatch(pay, /INSERT INTO canonical_event/);
-  assert.doesNotMatch(pay, /durableId\('payment'\)/);
+  assert.match(pay, /durableId\('sandbox-payment'\)/);
+  assert.match(pay, /durableId\('event'\)/);
+  assert.match(pay, /canonicalRuntimeMetadata\(\{\s*principal,\s*environment:\s*runtimeEnvironment\(env\)\s*\}\)/);
+  assert.match(pay, /\$\{runtime\.actorId\}/);
+  assert.doesNotMatch(pay, /`preview:command:\$\{randomUUID\(\)\}`/);
+  assert.doesNotMatch(pay, /'vercel-preview'/);
+  assert.doesNotMatch(pay, /'environment',\s*'preview'/);
+});
+
+test('RC3 sandbox payment writes bind to the authenticated actor, not a hardcoded participant', async () => {
+  const pay = await source(files[1]);
+
+  assert.match(pay, /INSERT INTO preview_sandbox_payment/);
+  assert.match(pay, /UPDATE preview_member_commitment/);
+  assert.match(pay, /INSERT INTO canonical_event/);
+  assert.match(pay, /c\.participant_id=\$\{runtime\.actorId\}/);
+  assert.doesNotMatch(pay, /INSERT INTO preview_sandbox_payment[\s\S]*?\$\{PREVIEW_PARTICIPANT_ID\}/);
 });

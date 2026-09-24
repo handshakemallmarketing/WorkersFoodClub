@@ -237,13 +237,16 @@ test('payment boundary accepts the correct principal but fails closed before dat
   });
 
   await paySandbox(
-    request('POST', bearer),
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${bearer}` },
+      body: { obligationId: 'wfc:obligation:11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222', amountMinor: 1000 },
+    },
     res,
   );
 
   assert.equal(res.result.statusCode, 503);
-  assert.equal(res.result.body?.error, 'PREVIEW_PAYMENT_ATOMICITY_NOT_CERTIFIED');
-  assert.equal(res.result.headers['cache-control'], 'no-store');
+  assert.equal(res.result.body?.error, 'DATABASE_URL_MISSING');
 });
 
 test('payment mutation is restricted to Vercel Preview', async () => {
