@@ -175,6 +175,25 @@ policy-ratified.
       production, the same way owner-bootstrap and the authority-invite flow were each proven with
       one real execution before being trusted.
 
+**UC-08 product-offer payment atomicity (`BLV2-DEC-045`, 2026-09-24) — migration-free deploy.**
+`api/pay-sandbox.js` had been a permanent `503 PREVIEW_PAYMENT_ATOMICITY_NOT_CERTIFIED` stub. The
+full qualification-tier schema it needed (`preview_member_commitment.qualification_state`, the
+30/50/70/100% ladder, `preview_sandbox_payment`, `preview_deadline_fulfillment_plan`,
+`member_prepaid_balance_ledger`) already existed on both `preview` and `production` from migrations
+022/025/027 — only the atomic payment-write application code was missing, which was built and
+merged in PR #155. **No new migration file was added and none needs to be applied to production for
+this change** — production's schema was already current. Note this is unrelated to whether the
+route is *reachable* in production: per §5, `/api/pay-sandbox` remains hard-disabled in production
+(`403 SANDBOX_PAYMENT_DISABLED_IN_PRODUCTION`) regardless of this change, unaffected and
+re-verified — this entry documents schema readiness only, not a production activation.
+
+(This narrative otherwise stops at migration 029, applied 2026-09-22; migrations 030-035 —
+catalog/offer-listing linkage, membership-subscription settlement atomicity, and the
+admin-editable membership fee — were each separately dry-run and applied to production during this
+same engagement, see the decision register `BLV2-DEC-034`/`-035`/`-038`/`-043` for their own
+evidence. This section has not been reconciled to list every migration individually since 029; the
+decision register remains the authoritative, complete record.)
+
 ---
 
 ## 4. Identity and authority seed data (Owner bootstrap)
