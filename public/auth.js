@@ -4,6 +4,8 @@
     '/api/member-orders',
     '/api/member-notifications',
     '/api/operator-orders',
+    '/api/catalog-admin',
+    '/api/catalog-offers',
   ]);
   const previewMemberPaths = new Set([
     '/api/member-orders',
@@ -11,12 +13,16 @@
     '/api/commit-sandbox',
     '/api/pay-sandbox',
     '/api/accept-fulfillment',
+    '/api/fulfillment-release-code',
   ]);
   const previewOperatorPaths = new Set([
     '/api/operator-orders',
     '/api/fulfillment-ready',
     '/api/authorize-refund',
     '/api/complete-refund',
+    '/api/catalog-admin',
+    '/api/catalog-offers',
+    '/api/fulfillment-release-redeem',
   ]);
   const OPERATOR_TIER_ROLES = new Set(['fulfillment', 'finance', 'admin']);
   const PREVIEW_ROLES = ['member', 'fulfillment', 'finance', 'admin'];
