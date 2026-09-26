@@ -6,6 +6,7 @@ const migration=fs.readFileSync(new URL('../../packages/durability/sql/037_consu
 
 test('preflight and enforcement install under one locked transaction',()=>{
   assert.match(migration,/BEGIN;[\s\S]*LOCK TABLE electronic_payment_evidence,[\s\S]*IN SHARE ROW EXCLUSIVE MODE;[\s\S]*COMMIT;/);
+  assert.match(migration,/item_credit_repayment_allocation,\s*cag_deduction_enrollment\s*IN SHARE ROW EXCLUSIVE MODE/);
 });
 
 test('provider event identity is normalized before uniqueness enforcement',()=>{

@@ -13,7 +13,8 @@ LOCK TABLE electronic_payment_evidence,
   membership_subscription_invoice,
   membership_subscription_settlement_allocation,
   item_credit_receivable,
-  item_credit_repayment_allocation
+  item_credit_repayment_allocation,
+  cag_deduction_enrollment
 IN SHARE ROW EXCLUSIVE MODE;
 
 DO $$
