@@ -35,6 +35,10 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
 # Settlement evidence claims and functions must remain replay safe.
 "${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
+"${PSQL[@]}" -f packages/durability/sql/036_membership_renewal_grace_settlement.sql
+"${PSQL[@]}" -f packages/durability/sql/037_consumed_payment_evidence_hardening.sql
+# Evidence hardening is forward-only and must be replay safe before claims exist.
+"${PSQL[@]}" -f packages/durability/sql/037_consumed_payment_evidence_hardening.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -77,36 +81,48 @@ TRUNCATE support_case_transition,support_case,membership_subscription_settlement
 SQL
 
 # Initial annual settlement requires authenticated-member lineage, exact
-# reconciled evidence and a single atomic durable effect.  All fixtures roll
-# back so the remainder of the harness starts from its canonical empty state.
+# reconciled evidence and a single atomic durable effect.
 "${PSQL[@]}" <<'SQL'
 BEGIN;
 INSERT INTO application_participant(participant_id,kind,state)
 VALUES ('participant:settlement','PERSON','ACTIVE'),
        ('participant:suspended','PERSON','ACTIVE'),
-       ('participant:mismatch','PERSON','ACTIVE');
+       ('participant:mismatch','PERSON','ACTIVE'),
+       ('participant:renewal','PERSON','ACTIVE');
 INSERT INTO application_membership(
   membership_id,participant_id,state,standing,member_type,public_member_id,
   established_at,eligibility_policy_version,eligibility_evidence_ids
 ) VALUES
  ('membership:settlement','participant:settlement','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-SETTLEMENT',now(),'test-v1',ARRAY['eligibility:settlement']),
  ('membership:suspended','participant:suspended','SUSPENDED','SUSPENDED','PRIMARY','WFC-SUSPENDED',now(),'test-v1',ARRAY['eligibility:suspended']),
- ('membership:mismatch','participant:mismatch','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-MISMATCH',now(),'test-v1',ARRAY['eligibility:mismatch']);
+ ('membership:mismatch','participant:mismatch','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-MISMATCH',now(),'test-v1',ARRAY['eligibility:mismatch']),
+ ('membership:renewal','participant:renewal','ACTIVE','RESTRICTED','PRIMARY','WFC-RENEWAL',now(),'test-v1',ARRAY['eligibility:renewal']);
 INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
 VALUES ('invoice:settlement','membership:settlement',2026,10000,'GHS','OPEN',now()+interval '1 day'),
        ('invoice:suspended','membership:suspended',2026,10000,'GHS','OPEN',now()+interval '1 day'),
-       ('invoice:mismatch','membership:mismatch',2026,10000,'GHS','OPEN',now()+interval '1 day');
+       ('invoice:mismatch','membership:mismatch',2026,10000,'GHS','OPEN',now()+interval '1 day'),
+       ('invoice:renewal:old','membership:renewal',2026,10000,'GHS','OPEN',now()-interval '1 year'),
+       ('invoice:renewal:new','membership:renewal',2027,10000,'GHS','OPEN',now()-interval '1 day');
 INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
 VALUES ('member-session:settlement','membership:settlement','participant:settlement','ACTIVE',now()+interval '1 hour'),
        ('member-session:suspended','membership:suspended','participant:suspended','ACTIVE',now()+interval '1 hour'),
-       ('member-session:mismatch','membership:mismatch','participant:mismatch','ACTIVE',now()+interval '1 hour');
+       ('member-session:mismatch','membership:mismatch','participant:mismatch','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal','membership:renewal','participant:renewal','ACTIVE',now()+interval '1 hour');
 INSERT INTO electronic_payment_evidence(
   evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
   provider_reference,reconciled_at
 ) VALUES
  ('evidence:settlement','membership:settlement','invoice:settlement','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:settlement',now()),
  ('evidence:suspended','membership:suspended','invoice:suspended','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:suspended',now()),
- ('evidence:mismatch','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',9999,'GHS','provider:mismatch',now());
+ ('evidence:mismatch','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',9999,'GHS','provider:mismatch',now()),
+ ('evidence:renewal:old','membership:renewal','invoice:renewal:old','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal:old',now()),
+ ('evidence:renewal:new','membership:renewal','invoice:renewal:new','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal:new',now());
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES
+ ('evidence:null-obligation','membership:mismatch',NULL,'BANK_TRANSFER','RECONCILED',10000,'GHS','provider:null-obligation',now()),
+ ('evidence:future-reconciliation','membership:mismatch','invoice:mismatch','BANK_TRANSFER','RECONCILED',10000,'GHS','provider:future-reconciliation',now()+interval '1 day');
 DO $$
 DECLARE first_result record; replay_result record;
 BEGIN
@@ -130,6 +146,47 @@ BEGIN
    'invoice:mismatch','evidence:mismatch','member-session:mismatch',
    'audit:mismatch','request:mismatch',now());
  IF FOUND THEN RAISE EXCEPTION 'amount-mismatched evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:null-obligation','member-session:mismatch',
+   'audit:null-obligation','request:null-obligation',now());
+ IF FOUND THEN RAISE EXCEPTION 'NULL-obligation evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:future-reconciliation','member-session:mismatch',
+   'audit:future-reconciliation','request:future-reconciliation',now());
+ IF FOUND THEN RAISE EXCEPTION 'future-reconciled evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:renewal:old','evidence:renewal:old','member-session:renewal',
+   'audit:renewal:old','request:renewal:old',now());
+ IF FOUND THEN RAISE EXCEPTION 'stale renewal invoice restored current standing'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:renewal:new','evidence:renewal:new','member-session:renewal',
+   'audit:renewal:new','request:renewal:new',now());
+ IF FOUND THEN RAISE EXCEPTION 'one renewal invoice restored standing while another remained due'; END IF;
+ BEGIN
+  UPDATE membership_subscription_invoice
+    SET state='PAID',paid_at=now(),settlement_evidence_id='evidence:mismatch'
+    WHERE invoice_id='invoice:mismatch';
+  RAISE EXCEPTION 'direct PAID transition without exact lineage unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='direct PAID transition without exact lineage unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  INSERT INTO membership_subscription_invoice(
+    invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at,paid_at,settlement_evidence_id
+  ) VALUES ('invoice:direct-paid','membership:mismatch',2028,10000,'GHS','PAID',now(),now(),'evidence:mismatch');
+  RAISE EXCEPTION 'direct PAID insert without exact lineage unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='direct PAID insert without exact lineage unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  INSERT INTO electronic_payment_evidence(
+    evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+    provider_reference,reconciled_at
+  ) VALUES ('evidence:normalized-duplicate','membership:settlement','invoice:settlement',
+            'MOBILE_MONEY','RECONCILED',10000,'GHS','  PROVIDER:SETTLEMENT  ',now());
+  RAISE EXCEPTION 'normalized duplicate provider reference unexpectedly succeeded';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
  IF (SELECT count(*) FROM membership_subscription_settlement_allocation)<>1
     OR (SELECT count(*) FROM electronic_payment_evidence_consumption)<>1
     OR (SELECT count(*) FROM application_access_audit WHERE event_type='MEMBERSHIP_SUBSCRIPTION_SETTLED')<>1
@@ -138,7 +195,168 @@ BEGIN
    RAISE EXCEPTION 'settlement adverse paths left partial durable effects';
  END IF;
 END $$;
-ROLLBACK;
+COMMIT;
+SQL
+
+# Credit deposit and repayment claims use the same globally single-use
+# evidence ledger and reject mismatched or mutable bindings in real Postgres.
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:credit','PERSON','ACTIVE'),('participant:credit:other','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES
+ ('membership:credit','participant:credit','ACTIVE','ACTIVE','PRIMARY','WFC-CREDIT',now(),'test-v1',ARRAY['eligibility:credit']),
+ ('membership:credit:other','participant:credit:other','ACTIVE','ACTIVE','PRIMARY','WFC-CREDIT-OTHER',now(),'test-v1',ARRAY['eligibility:credit:other']);
+INSERT INTO cag_deduction_enrollment(enrollment_id,membership_id,state,mandate_reference)
+VALUES ('enrollment:credit','membership:credit','ACTIVE','mandate:credit'),
+       ('enrollment:settlement','membership:settlement','ACTIVE','mandate:settlement');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,provider_reference,reconciled_at
+) VALUES
+ ('evidence:credit:deposit','membership:credit','offer:credit','MOBILE_MONEY','RECONCILED',2000,'GHS','provider:credit:deposit',now()),
+ ('evidence:credit:repayment','membership:credit','receivable:credit','CAGD_PAYROLL','RECONCILED',1000,'GHS','provider:credit:repayment',now()),
+ ('evidence:credit:wrong-member','membership:credit:other','offer:credit','MOBILE_MONEY','RECONCILED',2000,'GHS','provider:credit:wrong-member',now()),
+ ('evidence:credit:null-obligation','membership:credit',NULL,'MOBILE_MONEY','RECONCILED',2000,'GHS','provider:credit:null-obligation',now()),
+ ('evidence:credit:unreconciled','membership:credit','offer:credit','MOBILE_MONEY','RECEIVED',2000,'GHS','provider:credit:unreconciled',NULL),
+ ('evidence:credit:future','membership:credit','offer:credit','MOBILE_MONEY','RECONCILED',2000,'GHS','provider:credit:future',now()+interval '1 day'),
+ ('evidence:credit:amount','membership:credit','offer:credit','MOBILE_MONEY','RECONCILED',1999,'GHS','provider:credit:amount',now()),
+ ('evidence:credit:blank-reference','membership:credit','offer:credit','MOBILE_MONEY','RECONCILED',2000,'GHS','   ',now()),
+ ('evidence:credit:wrong-enrollment','membership:credit','offer:credit','MOBILE_MONEY','RECONCILED',2000,'GHS','provider:credit:wrong-enrollment',now());
+INSERT INTO item_credit_receivable(
+  receivable_id,membership_id,offer_id,principal_minor,outstanding_minor,deposit_minor,
+  deposit_evidence_id,state,enrollment_id
+) VALUES ('receivable:credit','membership:credit','offer:credit',10000,8000,2000,
+          'evidence:credit:deposit','ACTIVE','enrollment:credit');
+INSERT INTO item_credit_repayment_allocation(allocation_id,receivable_id,evidence_id,amount_minor)
+VALUES ('allocation:credit','receivable:credit','evidence:credit:repayment',1000);
+DO $$
+DECLARE bad_id text;
+BEGIN
+ FOREACH bad_id IN ARRAY ARRAY[
+  'evidence:credit:wrong-member','evidence:credit:null-obligation',
+  'evidence:credit:unreconciled','evidence:credit:future',
+  'evidence:credit:amount','evidence:credit:blank-reference'
+ ] LOOP
+  BEGIN
+  INSERT INTO item_credit_receivable(
+    receivable_id,membership_id,offer_id,principal_minor,outstanding_minor,deposit_minor,
+    deposit_evidence_id,state,enrollment_id
+  ) VALUES ('receivable:credit:bad:'||bad_id,'membership:credit','offer:credit',10000,8000,2000,
+            bad_id,'ACTIVE','enrollment:credit');
+   RAISE EXCEPTION 'bad credit evidence unexpectedly succeeded: %',bad_id;
+  EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM LIKE 'bad credit evidence unexpectedly succeeded:%' THEN RAISE; END IF;
+  END;
+ END LOOP;
+ BEGIN
+  INSERT INTO item_credit_receivable(
+    receivable_id,membership_id,offer_id,principal_minor,outstanding_minor,deposit_minor,
+    deposit_evidence_id,state,enrollment_id
+  ) VALUES ('receivable:credit:wrong-enrollment','membership:credit','offer:credit',10000,8000,2000,
+            'evidence:credit:wrong-enrollment','ACTIVE','enrollment:settlement');
+  RAISE EXCEPTION 'cross-member payroll enrollment unexpectedly governed credit';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='cross-member payroll enrollment unexpectedly governed credit' THEN RAISE; END IF;
+ END;
+ BEGIN
+  INSERT INTO item_credit_receivable(
+    receivable_id,membership_id,offer_id,principal_minor,outstanding_minor,deposit_minor,
+    deposit_evidence_id,state,enrollment_id
+  ) VALUES ('receivable:cross-consumer','membership:settlement','invoice:settlement',20000,10000,10000,
+            'evidence:settlement','ACTIVE','enrollment:settlement');
+  RAISE EXCEPTION 'cross-consumer evidence reuse unexpectedly succeeded';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE item_credit_receivable SET receivable_id='receivable:credit:renamed'
+    WHERE receivable_id='receivable:credit';
+  RAISE EXCEPTION 'claimed receivable identifier rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='claimed receivable identifier rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE item_credit_receivable SET enrollment_id='enrollment:settlement'
+    WHERE receivable_id='receivable:credit';
+  RAISE EXCEPTION 'claimed receivable payroll enrollment rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='claimed receivable payroll enrollment rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE item_credit_receivable SET principal_minor=principal_minor+1
+    WHERE receivable_id='receivable:credit';
+  RAISE EXCEPTION 'claimed receivable principal rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='claimed receivable principal rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE item_credit_receivable SET created_at=created_at-interval '1 day'
+    WHERE receivable_id='receivable:credit';
+  RAISE EXCEPTION 'claimed receivable creation timestamp rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='claimed receivable creation timestamp rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  INSERT INTO item_credit_repayment_allocation(allocation_id,receivable_id,evidence_id,amount_minor)
+  VALUES ('allocation:credit:reuse','receivable:credit','evidence:credit:repayment',1000);
+  RAISE EXCEPTION 'credit repayment evidence reuse unexpectedly succeeded';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+ IF (SELECT count(*) FROM electronic_payment_evidence_consumption
+       WHERE evidence_id IN ('evidence:credit:deposit','evidence:credit:repayment'))<>2 THEN
+  RAISE EXCEPTION 'credit evidence did not create exactly two durable claims';
+ END IF;
+END $$;
+COMMIT;
+SQL
+
+# Replay after a committed settlement proves the migration's contradictory-
+# history preflight and DDL are idempotent against durable economic history.
+"${PSQL[@]}" -f packages/durability/sql/037_consumed_payment_evidence_hardening.sql
+"${PSQL[@]}" <<'SQL'
+DO $$
+BEGIN
+ BEGIN
+  UPDATE electronic_payment_evidence SET state='REVERSED' WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'consumed evidence reversal unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='consumed evidence reversal unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE electronic_payment_evidence SET created_at=created_at-interval '1 day'
+    WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'consumed evidence creation timestamp rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='consumed evidence creation timestamp rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  DELETE FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'consumption deletion unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='consumption deletion unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_settlement_allocation SET amount_minor=1 WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'settlement allocation rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='settlement allocation rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_invoice SET state='OPEN' WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'paid invoice reversal unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='paid invoice reversal unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_invoice SET created_at=created_at-interval '1 day'
+    WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'paid invoice creation timestamp rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='paid invoice creation timestamp rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+END $$;
 SQL
 
 # RC3-BIND-001: durable participant, membership and operator authority are independent governed records.
