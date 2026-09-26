@@ -299,6 +299,27 @@ BEGIN
   IF SQLERRM='claimed receivable creation timestamp rewrite unexpectedly succeeded' THEN RAISE; END IF;
  END;
  BEGIN
+  UPDATE cag_deduction_enrollment SET membership_id='membership:credit:other'
+    WHERE enrollment_id='enrollment:credit';
+  RAISE EXCEPTION 'claimed payroll enrollment membership rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='claimed payroll enrollment membership rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE cag_deduction_enrollment SET mandate_reference='mandate:credit:rebound'
+    WHERE enrollment_id='enrollment:credit';
+  RAISE EXCEPTION 'claimed payroll mandate rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='claimed payroll mandate rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE cag_deduction_enrollment SET enrolled_at=enrolled_at-interval '1 day'
+    WHERE enrollment_id='enrollment:credit';
+  RAISE EXCEPTION 'claimed payroll enrollment timestamp rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='claimed payroll enrollment timestamp rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
   INSERT INTO item_credit_repayment_allocation(allocation_id,receivable_id,evidence_id,amount_minor)
   VALUES ('allocation:credit:reuse','receivable:credit','evidence:credit:repayment',1000);
   RAISE EXCEPTION 'credit repayment evidence reuse unexpectedly succeeded';

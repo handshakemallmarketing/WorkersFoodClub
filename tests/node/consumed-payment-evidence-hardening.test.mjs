@@ -54,6 +54,8 @@ test('consumed evidence, claims and paid invoices are immutable',()=>{
   assert.match(migration,/claimed credit receivable binding is immutable/);
   assert.match(migration,/BEFORE UPDATE OF receivable_id,membership_id,offer_id,principal_minor,deposit_minor,deposit_evidence_id,enrollment_id,created_at/);
   assert.match(migration,/credit_repayment_allocation_immutable_trg/);
+  assert.match(migration,/claimed credit payroll authority is immutable/);
+  assert.match(migration,/BEFORE UPDATE OF enrollment_id,membership_id,mandate_reference,enrolled_at/);
 });
 
 test('migration refuses contradictory or orphan historical claims',()=>{

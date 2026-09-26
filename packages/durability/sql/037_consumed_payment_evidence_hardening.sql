@@ -377,6 +377,34 @@ BEFORE DELETE ON item_credit_receivable FOR EACH ROW
 WHEN (OLD.deposit_evidence_id IS NOT NULL)
 EXECUTE FUNCTION reject_claimed_credit_receivable_mutation();
 
+CREATE OR REPLACE FUNCTION reject_claimed_payroll_enrollment_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM item_credit_receivable r
+    WHERE r.enrollment_id=OLD.enrollment_id AND r.deposit_evidence_id IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'claimed credit payroll authority is immutable';
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS claimed_payroll_enrollment_update_immutable_trg ON cag_deduction_enrollment;
+CREATE TRIGGER claimed_payroll_enrollment_update_immutable_trg
+BEFORE UPDATE OF enrollment_id,membership_id,mandate_reference,enrolled_at
+ON cag_deduction_enrollment FOR EACH ROW
+WHEN (OLD.enrollment_id IS DISTINCT FROM NEW.enrollment_id
+   OR OLD.membership_id IS DISTINCT FROM NEW.membership_id
+   OR OLD.mandate_reference IS DISTINCT FROM NEW.mandate_reference
+   OR OLD.enrolled_at IS DISTINCT FROM NEW.enrolled_at)
+EXECUTE FUNCTION reject_claimed_payroll_enrollment_mutation();
+
+DROP TRIGGER IF EXISTS claimed_payroll_enrollment_delete_immutable_trg ON cag_deduction_enrollment;
+CREATE TRIGGER claimed_payroll_enrollment_delete_immutable_trg
+BEFORE DELETE ON cag_deduction_enrollment FOR EACH ROW
+EXECUTE FUNCTION reject_claimed_payroll_enrollment_mutation();
+
 DROP TRIGGER IF EXISTS credit_repayment_allocation_immutable_trg ON item_credit_repayment_allocation;
 CREATE TRIGGER credit_repayment_allocation_immutable_trg
 BEFORE UPDATE OR DELETE ON item_credit_repayment_allocation FOR EACH ROW
