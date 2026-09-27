@@ -9,6 +9,10 @@ on:
       - 'tests/node/sw1-production-access-v2.test.mjs'
       - '.github/workflows/production-access-v2-*.yml'
       - '.github/workflows/production-application-access-activation.yml'
+      - '.github/workflows/production-sha-gate-sync.yml'
+      - 'scripts/check-production-authorization-workflows.mjs'
+      - 'tests/node/production-authorization-boundary.test.mjs'
+      - 'docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json'
       - 'docs/sw1/SW1-PRODUCTION-ACCESS-V2-PERSISTENT-GATE.md'
       - 'docs/traceability/SW1-production-access-v2-*'
   push:
@@ -57,6 +61,8 @@ jobs:
           grep -q 'PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA' "$activation"
           grep -q -- '--arg sha "$ACTIVATION_SHA"' "$activation"
           grep -q -- '--env PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA="$ACTIVATION_SHA"' "$activation"
+      - name: Prove no push can authorize its own commit
+        run: node --test tests/node/production-authorization-boundary.test.mjs
       - name: Prove canonical Vercel binding is consistent
         shell: bash
         run: |
