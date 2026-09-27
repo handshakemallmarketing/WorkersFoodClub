@@ -16,7 +16,7 @@ assert.equal(target.protocol,'https:','PREVIEW_BASE_URL must use https');
 assert.equal(target.pathname,'/','PREVIEW_BASE_URL must be a deployment origin without a path');
 assert.equal(target.search,'','PREVIEW_BASE_URL must not contain a query string');
 assert.equal(target.hash,'','PREVIEW_BASE_URL must not contain a fragment');
-assert.match(target.hostname,/^workers-food-club-[a-z0-9]+-origin-os\.vercel\.app$/,'PREVIEW_BASE_URL must be an immutable WorkersFoodClub deployment in the expected Vercel team');
+assert.match(target.hostname,/^workers-food-club-[a-z0-9]+-hmmktg\.vercel\.app$/,'PREVIEW_BASE_URL must be an immutable WorkersFoodClub deployment in the expected Vercel team');
 const base=target.origin;
 
 function deterministicRequestId(label){

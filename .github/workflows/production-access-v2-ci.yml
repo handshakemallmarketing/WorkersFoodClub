@@ -3,6 +3,7 @@ name: Production Access v2 CI
 on:
   pull_request:
     paths:
+      - '.github/workflows/**'
       - 'lib/production-access-policy.js'
       - 'lib/production-oidc-auth.js'
       - 'lib/application-principal-binding.js'
@@ -54,7 +55,8 @@ jobs:
           grep -q 'production-access-v2-state-transition' "$recovery"
           grep -q 'production-access-v2-state-transition' "$containment"
           grep -q 'production-access-v2-state-transition' "$guard"
-          grep -q "workflows: \['Production Access v2 recovery'\]" "$guard"
+          grep -q 'Production Access v2 recovery' "$guard"
+          grep -q 'Production application access activation' "$guard"
           grep -q "conclusion != 'success'" "$guard"
           grep -q 'PRODUCTION_APPLICATION_ACCESS_ENABLED.*false' "$guard"
           grep -q "grant.get('candidateSha') == os.environ\['ACTIVATION_SHA'\]" "$activation"
@@ -71,7 +73,9 @@ jobs:
             grep -q 'team_WkMSXuSv8kDLoOlGHYtIggZ1' "$file"
             grep -q 'prj_Ti1NOQryzFeImhMSwncMXNxs01I8' "$file"
             grep -q 'workers-food-club.vercel.app' "$file"
+            grep -q 'VERCEL_SCOPE: hmmktg' "$file"
           done
+          ! grep -R -E -- '--scope(=|[[:space:]])(origin-os|food-club)|VERCEL_SCOPE:[[:space:]]*(origin-os|food-club)' .github/workflows
       - name: Prove live-economic-effect authority remains absent
         shell: bash
         run: |

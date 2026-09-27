@@ -14,8 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      VERCEL_ORG_ID: team_wnL0jYsouqFvJ8VJR0jIAhTl
-      VERCEL_PROJECT_ID: prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE
+      VERCEL_ORG_ID: team_WkMSXuSv8kDLoOlGHYtIggZ1
+      VERCEL_PROJECT_ID: prj_Ti1NOQryzFeImhMSwncMXNxs01I8
+      VERCEL_SCOPE: hmmktg
       RC3_PRODUCTION_MEMBER_TOKEN: ${{ secrets.RC3_PRODUCTION_MEMBER_TOKEN }}
       RC3_PRODUCTION_OPERATOR_TOKEN: ${{ secrets.RC3_PRODUCTION_OPERATOR_TOKEN }}
     steps:
@@ -33,7 +34,7 @@ jobs:
       - name: Pull Production environment without exposing values
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
 
       - name: Check required Production identity configuration names
         shell: bash

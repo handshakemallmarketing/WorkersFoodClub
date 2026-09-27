@@ -37,6 +37,7 @@ jobs:
           done < <(find api lib public scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print0)
       - run: pnpm canon:check
       - run: pnpm traceability:check
+      - run: pnpm production-authorization:check
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:kernel
@@ -57,7 +58,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
-          EXPECTED_VERCEL_TARGET_PREFIX: https://vercel.com/origin-os/workers-food-club/
+          EXPECTED_VERCEL_TARGET_PREFIX: https://vercel.com/hmmktg/workers-food-club/
         run: node scripts/wait-for-vercel-status.mjs
       - name: Member-auth exact-head deployment boundary status
         if: github.event_name == 'pull_request' && github.head_ref == 'fix/member-auth-challenge-delivery'

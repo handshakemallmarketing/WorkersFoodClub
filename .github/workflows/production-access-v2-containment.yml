@@ -13,7 +13,7 @@ concurrency:
 env:
   VERCEL_ORG_ID: team_WkMSXuSv8kDLoOlGHYtIggZ1
   VERCEL_PROJECT_ID: prj_Ti1NOQryzFeImhMSwncMXNxs01I8
-  VERCEL_SCOPE: origin-os
+  VERCEL_SCOPE: hmmktg
   PRODUCTION_BASE_URL: https://workers-food-club.vercel.app
 
 jobs:

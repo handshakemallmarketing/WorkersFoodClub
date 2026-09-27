@@ -9,36 +9,63 @@ export const PRODUCTION_MUTATION_WORKFLOW_ALLOWLIST = new Set([
   'production-access-v2-recovery-guard.yml',
   'production-access-v2-recovery.yml',
   ACTIVATION_WORKFLOW,
+  'rc2-preview-http-rehearsal.yml',
   'rc2-paystack-provider-rehearsal.yml',
-  'rc3-bounded-production-canary.yml',
-  'rc3-bounded-production-identity-rehearsal.yml',
   'rc3-production-identity-config-preflight.yml',
   'rc3-production-identity-rehearsal.yml',
   'rc3-residual-binding-deny-rehearsal.yml',
 ]);
 
 export function mainPushTrigger(source) {
-  const inlineOn = source.match(/^on:\s*(.+)$/m)?.[1]?.trim() ?? '';
+  const normalizedSource = source.replace(/^(?:'on'|"on"):/gm, 'on:');
+  const inlineOn = normalizedSource.match(/^on:[ \t]*(.+)$/m)?.[1]?.trim() ?? '';
   if (inlineOn === 'push' || /^\[[^\]]*\bpush\b[^\]]*\]$/.test(inlineOn)) return true;
-  const onBlock = source.match(/^on:\s*\n([\s\S]*?)(?=^[A-Za-z_][A-Za-z0-9_-]*:\s*(?:#.*)?$)/m)?.[1] ?? '';
-  const pushBlock = onBlock.match(/^\s{2}push:\s*(?:#.*)?\n([\s\S]*?)(?=^\s{2}[A-Za-z_][A-Za-z0-9_-]*:\s*(?:#.*)?$|(?![\s\S]))/m)?.[1];
+  if (/^\{[^}]*\bpush\s*:/.test(inlineOn)) return true;
+  const onBlock = normalizedSource.match(/^on:[ \t]*\n([\s\S]*?)(?=^[A-Za-z_][A-Za-z0-9_-]*:[ \t]*(?:#.*)?$)/m)?.[1] ?? '';
+  const pushMatch = onBlock.match(/^[ \t]{2}push:[ \t]*([^\n#]*)?(?:#.*)?(?:\n([\s\S]*?)(?=^[ \t]{2}[A-Za-z_][A-Za-z0-9_-]*:[ \t]*(?:#.*)?$|(?![\s\S])))?/m);
+  const pushInline = pushMatch?.[1]?.trim() ?? '';
+  const pushBlock = pushMatch?.[2];
+  if (/^\{/.test(pushInline)) return true;
   if (pushBlock === undefined) return false;
   if (!/^\s{4}branches:/m.test(pushBlock)) return true;
-  return /^\s{4}branches:\s*\[[^\]]*\bmain\b[^\]]*\]\s*$/m.test(pushBlock)
-    || /^\s{6}-\s*main\s*$/m.test(pushBlock);
+  const branchLines = pushBlock.match(/^[ \t]{4}branches:[ \t]*\[[^\]]*\][ \t]*$/m)?.[0]
+    ?? pushBlock.match(/^[ \t]{4}branches:[ \t]*(?:#.*)?\n(?:^[ \t]{6}-[^\n]+\n?)+/m)?.[0]
+    ?? '';
+  const normalized = branchLines.replace(/[\[\],]/g, ' ').split(/\s+/)
+    .map((token) => token.replace(/^[-'\"]+|['\"]+$/g, ''))
+    .filter(Boolean);
+  return normalized.some((pattern) => pattern === 'main' || pattern.includes('*') || pattern.includes('?'));
 }
 
 export function productionMutationCapability(source) {
-  return /environment:\s*production/.test(source)
-    || /secrets\.VERCEL_TOKEN/.test(source)
-    || /vercel\s+deploy[^\n]*--prod/.test(source)
-    || /api\.vercel\.com\/v\d+\/projects\/[^\n]*\/env/.test(source);
+  return /environment:\s*(?:\n\s+name:\s*)?['"]?production['"]?/.test(source)
+    || /secrets(?:\.VERCEL_TOKEN|\[['"]VERCEL_TOKEN['"]\])/.test(source)
+    || /secrets:\s*inherit/.test(source)
+    || /id-token:\s*write/.test(source)
+    || /uses:\s*[^\n]*\.github\/workflows\//.test(source)
+    || /vercel\s+(?:deploy|env)[\s\S]{0,200}--prod/.test(source)
+    || /api\.vercel\.com\/v\d+\/projects\/[\s\S]{0,300}\/env/.test(source);
 }
 
 export function authorizationPinWriter(source) {
-  return source.split(/\r?\n/).some((line) => !/\bgrep\b/.test(line)
-    && (/"key"\s*:\s*"PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA"/.test(line)
-      || /--env\s+PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA=/.test(line)));
+  return source.split(/\r?\n/).some((line) => {
+    const trimmed = line.trim().replace(/^[-]\s+run:\s*/, '');
+    const pureReadOnlyGrep = /^(?:!\s*)?grep\b/.test(trimmed) && !/[;&|`]/.test(trimmed) && !/\$\(/.test(trimmed);
+    if (pureReadOnlyGrep) return false;
+    return /"key"\s*:\s*"PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA"/.test(line)
+      || /--env\s+PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA=/.test(line)
+      || /vercel\s+env\s+(?:add|update)\s+PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA\b/.test(line);
+  });
+}
+
+export function applicationAccessEnableWriter(source) {
+  return source.split(/\r?\n/).some((line) => {
+    const trimmed = line.trim().replace(/^[-]\s+run:\s*/, '');
+    const pureReadOnlyGrep = /^(?:!\s*)?grep\b/.test(trimmed) && !/[;&|`]/.test(trimmed) && !/\$\(/.test(trimmed);
+    if (pureReadOnlyGrep) return false;
+    return /PRODUCTION_APPLICATION_ACCESS_ENABLED[^\n]{0,40}\btrue\b/.test(line)
+      || /['"]key['"]\s*:\s*['"]PRODUCTION_APPLICATION_ACCESS_ENABLED['"][^\n]*['"]value['"]\s*:\s*['"]true['"]/.test(line);
+  });
 }
 
 export function assertSafeWorkflow({ filename, source, governedSha }) {
@@ -47,6 +74,21 @@ export function assertSafeWorkflow({ filename, source, governedSha }) {
   }
   if (mainPushTrigger(source) && productionMutationCapability(source)) {
     throw new Error(`PUSH_TO_MAIN_PRODUCTION_MUTATION_FORBIDDEN:${filename}`);
+  }
+  if (applicationAccessEnableWriter(source)
+      && filename !== ACTIVATION_WORKFLOW
+      && filename !== 'production-access-v2-recovery.yml') {
+    throw new Error(`UNALLOWLISTED_PRODUCTION_ACCESS_ENABLE_WRITER:${filename}`);
+  }
+
+  if (filename === 'rc2-preview-http-rehearsal.yml'
+      && (/environment:\s*(?:\n\s+name:\s*)?['"]?production['"]?/.test(source)
+        || /secrets(?:\.VERCEL_TOKEN|\[['"]VERCEL_TOKEN['"]\])/.test(source)
+        || /secrets:\s*inherit/.test(source)
+        || /uses:\s*[^\n]*\.github\/workflows\//.test(source)
+        || /vercel\s+(?:deploy|env)[\s\S]{0,200}--prod/.test(source)
+        || /api\.vercel\.com\/v\d+\/projects\/[\s\S]{0,300}\/env/.test(source))) {
+    throw new Error(`PREVIEW_REHEARSAL_PRODUCTION_MUTATION_FORBIDDEN:${filename}`);
   }
 
   if (!authorizationPinWriter(source)) return;
@@ -60,6 +102,13 @@ export function assertSafeWorkflow({ filename, source, governedSha }) {
   }
   if (!source.includes("grant.get('candidateSha') == os.environ['ACTIVATION_SHA']")) {
     throw new Error(`ACTIVATION_GOVERNANCE_COMPARISON_MISSING:${filename}`);
+  }
+  if (!source.includes("grant.get('revoked') is False")) {
+    throw new Error(`ACTIVATION_REVOCATION_CHECK_MISSING:${filename}`);
+  }
+  const activationShaDeclarations = source.match(/^\s+ACTIVATION_SHA:\s*.+$/gm) ?? [];
+  if (activationShaDeclarations.length !== 1 || /ACTIVATION_SHA:\s*.*\$\{\{/.test(source)) {
+    throw new Error(`ACTIVATION_SHA_OVERRIDE_FORBIDDEN:${filename}`);
   }
   if (!source.includes('--arg sha "$ACTIVATION_SHA"')
       || !source.includes('--env PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA="$ACTIVATION_SHA"')) {
