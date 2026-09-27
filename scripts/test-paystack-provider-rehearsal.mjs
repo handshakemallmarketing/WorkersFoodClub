@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 const base=(process.env.PREVIEW_BASE_URL??'').trim().replace(/\/$/,'');
 const expectedSha=(process.env.EXPECTED_COMMIT_SHA??'').trim();
 const vercelToken=process.env.VERCEL_TOKEN??'';
-const vercelScope=(process.env.VERCEL_SCOPE??'food-club').trim();
+const vercelScope=(process.env.VERCEL_SCOPE??'hmmktg').trim();
 if(!/^https:\/\//.test(base)) throw new Error('PREVIEW_BASE_URL_REQUIRED');
 if(!/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error('EXPECTED_COMMIT_SHA_INVALID');
 if(!vercelToken) throw new Error('VERCEL_TOKEN_REQUIRED');

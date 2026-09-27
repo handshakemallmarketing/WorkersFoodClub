@@ -37,7 +37,7 @@ jobs:
           PREVIEW_BASE_URL: ${{ env.TARGET_PREVIEW_URL }}
           EXPECTED_COMMIT_SHA: ${{ env.TARGET_EXPECTED_SHA }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_SCOPE: food-club
+          VERCEL_SCOPE: hmmktg
         shell: bash
         run: |
           set -o pipefail

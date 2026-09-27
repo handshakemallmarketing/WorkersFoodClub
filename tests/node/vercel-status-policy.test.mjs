@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {selectCanonicalVercelStatus} from '../../lib/vercel-status-policy.js';
 
-const canonicalPrefix='https://vercel.com/origin-os/workers-food-club/';
+const canonicalPrefix='https://vercel.com/hmmktg/workers-food-club/';
 
 test('selects the canonical Vercel project and ignores legacy installations',()=>{
   const statuses=[
@@ -28,6 +28,6 @@ test('uses the newest canonical status returned by the GitHub statuses API',()=>
 });
 
 test('fails closed for invalid target-prefix configuration',()=>{
-  assert.throws(()=>selectCanonicalVercelStatus([], 'https://vercel.com/origin-os/workers-food-club'),/ending in/);
+  assert.throws(()=>selectCanonicalVercelStatus([], 'https://vercel.com/hmmktg/workers-food-club'),/ending in/);
   assert.throws(()=>selectCanonicalVercelStatus([], 'https://example.com/'),/EXPECTED_VERCEL_TARGET_PREFIX/);
 });

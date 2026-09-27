@@ -54,12 +54,12 @@ jobs:
       - name: Pull Production project settings
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=hmmktg
 
       - name: Build immutable candidate with Production semantics
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=food-club
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=hmmktg
 
       - name: Deploy bounded Production canary
         id: deploy
@@ -70,7 +70,7 @@ jobs:
           set -euo pipefail
           url="$(vercel deploy --prebuilt --prod --yes \
             --token="$VERCEL_TOKEN" \
-            --scope=food-club \
+            --scope=hmmktg \
             --env PRODUCTION_APPLICATION_ACCESS_ENABLED=false)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Production canary URL: $url"

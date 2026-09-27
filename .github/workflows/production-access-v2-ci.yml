@@ -3,6 +3,7 @@ name: Production Access v2 CI
 on:
   pull_request:
     paths:
+      - '.github/workflows/**'
       - 'lib/production-access-policy.js'
       - 'lib/production-oidc-auth.js'
       - 'lib/application-principal-binding.js'
@@ -71,7 +72,9 @@ jobs:
             grep -q 'team_WkMSXuSv8kDLoOlGHYtIggZ1' "$file"
             grep -q 'prj_Ti1NOQryzFeImhMSwncMXNxs01I8' "$file"
             grep -q 'workers-food-club.vercel.app' "$file"
+            grep -q 'VERCEL_SCOPE: hmmktg' "$file"
           done
+          ! grep -R -E -- '--scope(=|[[:space:]])(origin-os|food-club)|VERCEL_SCOPE:[[:space:]]*(origin-os|food-club)' .github/workflows
       - name: Prove live-economic-effect authority remains absent
         shell: bash
         run: |

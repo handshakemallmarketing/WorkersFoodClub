@@ -33,7 +33,7 @@ jobs:
       - name: Pull Production environment without exposing values
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=food-club
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=hmmktg
 
       - name: Check required Production identity configuration names
         shell: bash
