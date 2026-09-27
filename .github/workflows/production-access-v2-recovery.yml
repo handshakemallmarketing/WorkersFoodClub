@@ -76,14 +76,18 @@ jobs:
           const { requireProductionApplicationAccess } = await import('./lib/production-access-policy.js');
           const expected = process.env.EXPECTED_SHA;
           const mismatch = requireProductionApplicationAccess({
+            VERCEL: '1',
+            VERCEL_ENV: 'production',
             PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
             PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: expected,
             VERCEL_GIT_COMMIT_SHA: '0000000000000000000000000000000000000000',
           });
-          if (mismatch?.ok !== false || mismatch?.status !== 503 || mismatch?.error !== 'PRODUCTION_APPLICATION_ACCESS_SHA_UNVERIFIED') {
+          if (mismatch?.ok !== false || mismatch?.status !== 503 || mismatch?.error !== 'PRODUCTION_APPLICATION_ACCESS_SHA_UNAUTHORIZED') {
             throw new Error('GOVERNED_CANDIDATE_LACKS_EXACT_SHA_ENFORCEMENT');
           }
           const exact = requireProductionApplicationAccess({
+            VERCEL: '1',
+            VERCEL_ENV: 'production',
             PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
             PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: expected,
             VERCEL_GIT_COMMIT_SHA: expected,
