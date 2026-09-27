@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Food Club Ghana — Accept invitation</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body{display:flex;justify-content:center;padding:48px 20px}
+    .bootstrap-shell{max-width:480px;width:100%}
+    .bootstrap-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:var(--shadow)}
+    .bootstrap-card h1{font-size:22px;margin:6px 0 4px;letter-spacing:-.02em}
+    .bootstrap-card p{color:var(--muted);line-height:1.55;margin:0 0 16px}
+    .bootstrap-warning{background:var(--amberbg);color:var(--amber);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.5;margin-bottom:20px}
+    #gsi-target{margin:6px 0 4px}
+    .bootstrap-result{margin-top:18px;border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+    .bootstrap-result.ok{background:var(--green2);color:var(--green)}
+    .bootstrap-result.err{background:var(--redbg);color:var(--red)}
+    .bootstrap-result code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:5px;font-size:12px}
+    .bootstrap-status{color:var(--muted);font-size:13px;margin-top:14px}
+  </style>
+</head>
+<body>
+  <div class="bootstrap-shell">
+    <div class="bootstrap-card">
+      <p class="eyebrow">Food Club Ghana</p>
+      <h1>Accept your invitation</h1>
+      <p>
+        Sign in with the Google account you want this authority bound to. The invitation token
+        never leaves your browser except as part of this one request — it is never logged or
+        stored anywhere as plain text.
+      </p>
+      <div class="bootstrap-warning">
+        Sign in with the account you intend to use for this role going forward. This link works
+        once; after it is accepted (or if it has expired or been cancelled), it stops working.
+      </div>
+      <div id="gsi-target"></div>
+      <p id="status" class="bootstrap-status"></p>
+      <div id="result" class="bootstrap-result" hidden></div>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const statusEl = document.getElementById('status');
+      const resultEl = document.getElementById('result');
+      const gsiTarget = document.getElementById('gsi-target');
+
+      function setStatus(text) {
+        statusEl.textContent = text || '';
+      }
+
+      function showResult(ok, html) {
+        resultEl.hidden = false;
+        resultEl.className = 'bootstrap-result ' + (ok ? 'ok' : 'err');
+        resultEl.innerHTML = html;
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
+      }
+
+      const ERROR_EXPLANATIONS = {
+        INVITATION_NOT_FOUND: 'This invitation link is not recognized. Ask whoever invited you to send a new one.',
+        INVITATION_ALREADY_ACCEPTED: 'This invitation has already been accepted.',
+        INVITATION_REVOKED: 'This invitation was cancelled by whoever sent it.',
+        INVITATION_EXPIRED: 'This invitation has expired. Ask whoever invited you to send a new one.',
+        INVITATION_ALREADY_REDEEMED: 'This invitation was just accepted by someone else, at nearly the same moment. Ask for a new invitation.',
+        AUTHORITY_INVITE_REDEEM_STEP_UP_NOT_FRESH: 'Your Google sign-in was a few seconds too old by the time the request reached the server. Reload this page and try again immediately after signing in.',
+        PRODUCTION_APPLICATION_ACCESS_DISABLED: 'Production application access is currently switched off, so this cannot run yet.',
+        DATABASE_URL_MISSING: 'The server has no database connection configured.',
+        APPLICATION_PRINCIPAL_DISABLED: 'This Google identity is already bound to a disabled participant record. Contact whoever manages this deployment before retrying.',
+        APPLICATION_IDENTITY_BINDING_AMBIGUOUS: 'This Google identity is bound to more than one participant record already, which should never happen. Stop and investigate before retrying.',
+        AUTHENTICATION_REQUIRED: 'No credential reached the server. Try signing in again.',
+        TOKEN_EXPIRED_OR_NOT_YET_VALID: 'Your Google sign-in token had already expired. Reload and try again immediately.',
+      };
+
+      function readToken() {
+        const fragment = window.location.hash.replace(/^#/, '');
+        return fragment ? decodeURIComponent(fragment) : '';
+      }
+
+      async function redeem(credential) {
+        const token = readToken();
+        if (!token) {
+          showResult(false, 'No invitation token found in this link. Ask whoever invited you to resend it.');
+          return;
+        }
+        setStatus('Verifying and accepting the invitation…');
+        try {
+          const response = await fetch('/api/authority-invite-redeem', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + credential, 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ token }),
+          });
+          const body = await response.json().catch(() => null);
+          setStatus('');
+
+          if (response.ok && body && body.ok) {
+            // Clear the token from the URL immediately -- it is single-use and
+            // must not linger in browser history now that it has been spent.
+            history.replaceState(null, '', window.location.pathname);
+            showResult(true,
+              '<strong>Invitation accepted.</strong><br>' +
+              'participantId: <code>' + escapeHtml(body.participantId) + '</code><br>' +
+              'grantId: <code>' + escapeHtml(body.grantId) + '</code><br>' +
+              (body.reusedExistingIdentityBinding
+                ? 'Linked to your existing identity binding.'
+                : 'Created a new identity binding for this Google account.') +
+              '<br><br>You can close this page and continue signing in normally from now on.');
+            return;
+          }
+
+          const code = body && body.error ? body.error : ('HTTP ' + response.status);
+          const explanation = ERROR_EXPLANATIONS[code] || 'See the server logs for details.';
+          showResult(false,
+            '<strong>Not completed:</strong> <code>' + escapeHtml(code) + '</code><br>' + escapeHtml(explanation));
+        } catch (err) {
+          setStatus('');
+          showResult(false, '<strong>Request failed.</strong> Check your connection and try again.');
+        }
+      }
+
+      function loadGoogleScript() {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true;
+          script.defer = true;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('GOOGLE_SCRIPT_LOAD_FAILED'));
+          document.head.appendChild(script);
+        });
+      }
+
+      async function init() {
+        if (!readToken()) {
+          setStatus('');
+          showResult(false, 'This link is missing its invitation token. Ask whoever invited you to resend the link, and open it exactly as sent.');
+          return;
+        }
+
+        setStatus('Loading configuration…');
+        let config;
+        try {
+          const response = await fetch('/api/auth-client-config', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+          config = await response.json();
+        } catch {
+          setStatus('');
+          showResult(false, 'Could not reach the server to load sign-in configuration.');
+          return;
+        }
+
+        if (!config || config.provider !== 'google' || !config.configured || !config.clientId) {
+          setStatus('');
+          showResult(false, 'Google sign-in is not configured on this deployment yet.');
+          return;
+        }
+
+        if (config.productionApplicationAccessEnabled !== true) {
+          setStatus('');
+          showResult(false, 'Production application access is currently disabled, so this cannot run yet.');
+          return;
+        }
+
+        setStatus('Loading Google Sign-In…');
+        try {
+          await loadGoogleScript();
+        } catch {
+          setStatus('');
+          showResult(false, 'Google Sign-In failed to load. Reload the page to retry.');
+          return;
+        }
+
+        setStatus('');
+        window.google.accounts.id.initialize({
+          client_id: config.clientId,
+          callback: (response) => { if (response && response.credential) redeem(response.credential); },
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+        window.google.accounts.id.renderButton(gsiTarget, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: 'signin_with',
+          width: 300,
+        });
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

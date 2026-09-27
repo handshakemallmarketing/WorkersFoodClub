@@ -41,7 +41,21 @@ test('RC2 preview HTTP authorization fails closed in production', () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.status, 403);
-  assert.equal(result.error, 'PREVIEW_AUTH_DISABLED_IN_PRODUCTION');
+  assert.equal(result.error, 'PREVIEW_AUTH_PREVIEW_ONLY');
+});
+
+test('RC2 preview HTTP authorization fails closed on an unset or unrecognized VERCEL_ENV, not just production', () => {
+  process.env.PREVIEW_API_AUTH_SECRET = SECRET;
+  for (const value of [undefined, '', 'staging', 'Production', 'PREVIEW']) {
+    if (value === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = value;
+
+    const result = verifyPreviewApiToken(req(token()), 'member:orders.read', NOW);
+    assert.equal(result.ok, false, `expected VERCEL_ENV=${JSON.stringify(value)} to fail closed`);
+    assert.equal(result.status, 403);
+    assert.equal(result.error, 'PREVIEW_AUTH_PREVIEW_ONLY');
+  }
+  process.env.VERCEL_ENV = 'preview';
 });
 
 test('RC2 HTTP authorization rejects missing credential', () => {

@@ -9,7 +9,7 @@ import {InMemoryRemedyLedger} from '../../dist/packages/remedy/src/index.js';
 import {mapProviderStatus,migrateNullableBoolean,projectLiquidity,resolveDeliveryEvidence} from '../../dist/packages/conformance/src/index.js';
 
 const pid=x=>asId(x),sid=x=>asId(x),oid=x=>asId(x),ofid=x=>asId(x),eid=x=>asId(x),cid=x=>asId(x),lid=x=>asId(x);
-const member={id:'membership:fx',participantId:pid('participant:member'),state:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('e:eligibility')]};
+const member={id:'membership:fx',participantId:pid('participant:member'),state:'ACTIVE',standing:'ACTIVE',establishedAt:'2026-09-01T00:00:00Z',eligibilityPolicyVersion:'worker-v1',eligibilityEvidenceIds:[eid('e:eligibility')]};
 const offer={id:ofid('offer:rice'),offerorId:pid('participant:club'),specificationId:sid('spec:rice'),quantity:quantity(1,'unit'),memberPrice:money(1000n,'GHS'),priceBasis:quantity(1,'unit'),pickupPlace:'pickup:a',validFrom:'2026-09-01T00:00:00Z',validUntil:'2026-09-30T23:59:59Z',priceEvidenceIds:[eid('e:price')],policyVersions:['price:v1']};
 const verifier={isAccepted:(c,e)=>c==='cmd:checkout'&&e==='evt:accepted'};
 const purchase=(overrides={})=>({obligationId:oid('obligation:fx'),participantId:member.participantId,membership:member,offer,quantity:quantity(1,'unit'),authorizedCommandId:cid('cmd:checkout'),authorizedEventId:'evt:accepted',acceptedAt:'2026-09-07T10:00:00Z',policyVersions:['checkout:v1'],...overrides});

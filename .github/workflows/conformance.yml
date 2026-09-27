@@ -29,13 +29,22 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: node --check api/db-health.js && node --check api/member-offers.js && node --check api/member-orders.js && node --check api/member-notifications.js && node --check api/commit-sandbox.js && node --check api/pay-sandbox.js && node --check api/paystack-rehearsal.js && node --check api/operator-orders.js && node --check api/fulfillment-ready.js && node --check api/accept-fulfillment.js && node --check api/authorize-refund.js && node --check api/complete-refund.js && node --check lib/production-access-policy.js && node --check public/auth.js && node --check public/app.js && node --check scripts/wait-for-vercel-status.mjs && node --check scripts/test-preview-http-rehearsal.mjs && node --check scripts/test-paystack-provider-rehearsal.mjs && node --check scripts/test-production-identity-rehearsal.mjs && node --check scripts/test-production-access-rollback.mjs
+      - name: Syntax-check production JavaScript surface
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(find api lib public scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print0)
       - run: pnpm canon:check
       - run: pnpm traceability:check
+      - run: pnpm production-authorization:check
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:kernel
       - run: bash scripts/test-postgres-durability.sh
+      - name: J20 PostgreSQL transaction invariant
+        if: github.head_ref == 'launch-j20-reconcile-current-main' || github.ref_name == 'launch-j20-reconcile-current-main'
+        run: bash scripts/test-j20-postgres-durability.sh
       - run: bash scripts/test-postgres-backup-restore.sh
       - run: pnpm add -Dw --lockfile=false pg@8.13.1
       - run: node scripts/test-postgres-adapter-race.mjs
@@ -43,11 +52,26 @@ jobs:
         if: >-
           github.event_name == 'pull_request' &&
           (github.head_ref == 'sw1-rc2-production-readiness-falsification' ||
-           github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification')
+           github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification' ||
+           github.head_ref == 'launch-j20-reconcile-current-main' ||
+           github.head_ref == 'fix/member-auth-challenge-delivery')
         env:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_VERCEL_TARGET_PREFIX: https://vercel.com/hmmktg/workers-food-club/
         run: node scripts/wait-for-vercel-status.mjs
+      - name: Member-auth exact-head deployment boundary status
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/member-auth-challenge-delivery'
+        run: |
+          echo "Member-auth remediation exact-head Preview deployment is proven by the preceding immutable-SHA Vercel status check."
+          echo "This is deployment identity/readiness proof; it does not activate Production, external services, or live funds."
+          echo "Enrollment/authentication functional behavior remains certified by the enrollment-member-record and constitutional test suites."
+      - name: J20 exact-head deployment boundary status
+        if: github.event_name == 'pull_request' && github.head_ref == 'launch-j20-reconcile-current-main'
+        run: |
+          echo "J20 exact-head Preview deployment status is required and proven by the preceding Vercel status check."
+          echo "This proves deployment identity/readiness only; it is not authenticated catalog runtime proof."
+          echo "Authenticated catalog create/version/update/deactivate/reactivate rehearsal remains required before J20 runtime closure."
       - name: RC2 preview HTTP rehearsal status
         if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc2-production-readiness-falsification'
         run: |
@@ -57,7 +81,7 @@ jobs:
       - name: RC3 exact-head deployment boundary status
         if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification'
         run: |
-          echo "RC3 exact-head Preview deployment status is required and proven by the preceding Vercel status check."
+          echo "RC3 exact-head Preview deployment status is required and proven by the preceding status check."
           echo "Preview deployment proof does not authorize Production application access, Production writes, or live funds."
           echo "Run the RC3 production identity rehearsal workflow against an exact Production deployment with canonical member/operator bindings before closing RC3-ENV-001 or RC3-REHEARSAL-001."
           echo "Run the RC3 production access rollback rehearsal against an exact Production deployment with PRODUCTION_APPLICATION_ACCESS_ENABLED disabled before closing RC3-ROLLBACK-001."

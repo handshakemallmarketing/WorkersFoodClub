@@ -1,62 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolveApplicationPrincipal} from '../../lib/application-principal-binding.js';
-
+import {signEmployeeSessionToken} from '../../lib/employee-session.js';
 const identity={issuer:'https://accounts.google.com',subject:'subject-1',expiresAt:9999999999};
-
-function fakeSql({binding,participant,memberships=[],grants=[]}){
-  return async (strings,...values)=>{
-    const text=strings.join('?');
-    if(text.includes('FROM application_identity_binding')) return binding?[binding]:[];
-    if(text.includes('FROM application_participant')) return participant?[participant]:[];
-    if(text.includes('FROM application_membership')) return memberships;
-    if(text.includes('FROM application_authority_grant')){
-      const requiredScope=values[1];
-      return grants.filter((g)=>Array.isArray(g.actions)&&g.actions.includes(requiredScope)&&g.target_prefix==null&&g.parent_grant_id==null&&!g.revoked).slice(0,1);
-    }
-    throw new Error('UNEXPECTED_QUERY');
-  };
-}
-
-const binding=(scopes)=>({binding_id:'binding:1',participant_id:'participant:1',scopes,state:'ACTIVE'});
-const participant={participant_id:'participant:1',state:'ACTIVE'};
-
-test('RC3 governed member principal requires ACTIVE membership',async()=>{
-  const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[]})});
-  assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_MEMBERSHIP_REQUIRED'});
-
-  const allowed=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[{membership_id:'membership:1'}]})});
-  assert.equal(allowed.ok,true);
-  assert.equal(allowed.principal.actorId,'participant:1');
-  assert.equal(allowed.principal.membershipId,'membership:1');
-  assert.equal(allowed.principal.authorityGrantId,undefined);
-});
-
-test('RC3 governed operator principal requires active route-wide root authority',async()=>{
-  const denied=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({binding:binding(['operator:orders.read']),participant,grants:[]})});
-  assert.deepEqual(denied,{ok:false,status:403,error:'OPERATOR_AUTHORITY_REQUIRED'});
-
-  const allowed=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({binding:binding(['operator:orders.read']),participant,grants:[{grant_id:'grant:operator:1',actions:['operator:orders.read'],target_prefix:null,parent_grant_id:null}]})});
-  assert.equal(allowed.ok,true);
-  assert.equal(allowed.principal.actorId,'participant:1');
-  assert.equal(allowed.principal.authorityGrantId,'grant:operator:1');
-  assert.equal(allowed.principal.membershipId,undefined);
-});
-
-test('RC3 governed principal requires an ACTIVE durable participant',async()=>{
-  const missing=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant:null,memberships:[{membership_id:'membership:1'}]})});
-  assert.deepEqual(missing,{ok:false,status:403,error:'APPLICATION_PARTICIPANT_NOT_FOUND'});
-
-  const disabled=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant:{participant_id:'participant:1',state:'DISABLED'},memberships:[{membership_id:'membership:1'}]})});
-  assert.deepEqual(disabled,{ok:false,status:403,error:'APPLICATION_PARTICIPANT_DISABLED'});
-});
-
-test('RC3 binding scopes remain necessary but are no longer sufficient',async()=>{
-  const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding([]),participant,memberships:[{membership_id:'membership:1'}]})});
-  assert.deepEqual(denied,{ok:false,status:403,error:'AUTHORIZATION_SCOPE_REQUIRED'});
-});
-
-test('RC3 governed principal fails closed for unsupported scope families',async()=>{
-  const denied=await resolveApplicationPrincipal(identity,'admin:audit.read',{sql:fakeSql({binding:binding(['admin:audit.read']),participant})});
-  assert.deepEqual(denied,{ok:false,status:403,error:'AUTHORIZATION_SCOPE_FAMILY_UNSUPPORTED'});
-});
+const EMPLOYEE_SESSION_SECRET='rc3-governed-binding-test-secret-0123456789-abcdef';
+function fakeSql({binding,participant,memberships=[],grants=[],employeeSessions=[]}){return async(strings,...values)=>{const text=strings.join('?');if(text.includes('FROM application_identity_binding'))return binding?[binding]:[];if(text.includes('FROM application_participant'))return participant?[participant]:[];if(text.includes('FROM application_membership'))return memberships.filter(m=>String(m.state||'ACTIVE')==='ACTIVE');if(text.includes('FROM employee_session')){const [sessionId,participantId]=values;return employeeSessions.filter(s=>s.session_id===sessionId&&s.participant_id===participantId&&!s.expired&&!s.revoked).slice(0,1);}if(text.includes('FROM application_authority_grant')){const requiredScope=values[1];return grants.filter(g=>Array.isArray(g.actions)&&g.actions.includes(requiredScope)&&g.target_prefix==null&&!g.revoked&&!g.expired&&!g.notYetValid).slice(0,1);}throw new Error('UNEXPECTED_QUERY');};}
+const binding=scopes=>({binding_id:'binding:1',participant_id:'participant:1',scopes,state:'ACTIVE'});const participant={participant_id:'participant:1',state:'ACTIVE'};
+function withValidEmployeeSession(fixture){const sessionId='session:1';return{...fixture,employeeSessions:[{session_id:sessionId,participant_id:'participant:1'}],employeeSessionSecret:EMPLOYEE_SESSION_SECRET,employeeSessionToken:signEmployeeSessionToken(EMPLOYEE_SESSION_SECRET,sessionId)};}
+test('member principal requires one ACTIVE membership and permits ACTIVE standing',async()=>{const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[]})});assert.deepEqual(denied,{ok:false,status:403,error:'ACTIVE_MEMBERSHIP_REQUIRED'});const allowed=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'ACTIVE'}]})});assert.equal(allowed.ok,true);assert.equal(allowed.principal.membershipId,'membership:1');});
+test('GRACE preserves authenticated member-area access',async()=>{const allowed=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'GRACE'}]})});assert.equal(allowed.ok,true);assert.equal(allowed.principal.membershipId,'membership:1');});
+test('RESTRICTED membership denies member-area access even when binding retains member scope',async()=>{const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'RESTRICTED'}]})});assert.deepEqual(denied,{ok:false,status:403,error:'MEMBERSHIP_ACCESS_RESTRICTED'});});
+test('workforce access is independent of membership standing',async()=>{const fixture=withValidEmployeeSession({binding:binding(['operator:orders.read']),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'RESTRICTED'}],grants:[{grant_id:'grant:operator',actions:['operator:orders.read'],target_prefix:null}]});const allowed=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(fixture),employeeSessionSecret:fixture.employeeSessionSecret,employeeSessionToken:fixture.employeeSessionToken});assert.equal(allowed.ok,true);assert.equal(allowed.principal.authorityGrantId,'grant:operator');});
+test('operator principal requires active route-wide authority and live employee session',async()=>{const denied=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql({binding:binding(['operator:orders.read']),participant,grants:[]})});assert.deepEqual(denied,{ok:false,status:403,error:'OPERATOR_AUTHORITY_REQUIRED'});const fixture=withValidEmployeeSession({binding:binding(['operator:orders.read']),participant,grants:[{grant_id:'grant:operator:1',actions:['operator:orders.read'],target_prefix:null}]});const allowed=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(fixture),employeeSessionSecret:fixture.employeeSessionSecret,employeeSessionToken:fixture.employeeSessionToken});assert.equal(allowed.ok,true);assert.equal(allowed.principal.authorityGrantId,'grant:operator:1');assert.equal(allowed.principal.employeeSessionId,'session:1');});
+test('operator request without a live employee session is denied',async()=>{const grantFixture={binding:binding(['operator:orders.read']),participant,grants:[{grant_id:'grant:operator:1',actions:['operator:orders.read'],target_prefix:null}]};const notConfigured=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(grantFixture)});assert.deepEqual(notConfigured,{ok:false,status:503,error:'EMPLOYEE_SESSION_NOT_CONFIGURED'});const missing=await resolveApplicationPrincipal(identity,'operator:orders.read',{sql:fakeSql(grantFixture),employeeSessionSecret:EMPLOYEE_SESSION_SECRET});assert.deepEqual(missing,{ok:false,status:401,error:'EMPLOYEE_SESSION_REQUIRED'});});
+test('governed principal requires an ACTIVE durable participant',async()=>{const missing=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant:null,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'ACTIVE'}]})});assert.deepEqual(missing,{ok:false,status:403,error:'APPLICATION_PARTICIPANT_NOT_FOUND'});const disabled=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding(['member:orders.read']),participant:{participant_id:'participant:1',state:'DISABLED'},memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'ACTIVE'}]})});assert.deepEqual(disabled,{ok:false,status:403,error:'APPLICATION_PARTICIPANT_DISABLED'});});
+test('binding scopes remain necessary but are no longer sufficient',async()=>{const denied=await resolveApplicationPrincipal(identity,'member:orders.read',{sql:fakeSql({binding:binding([]),participant,memberships:[{membership_id:'membership:1',state:'ACTIVE',standing:'ACTIVE'}]})});assert.deepEqual(denied,{ok:false,status:403,error:'AUTHORIZATION_SCOPE_REQUIRED'});});
+test('unsupported scope families fail closed',async()=>{const denied=await resolveApplicationPrincipal(identity,'admin:audit.read',{sql:fakeSql({binding:binding(['admin:audit.read']),participant})});assert.deepEqual(denied,{ok:false,status:403,error:'AUTHORIZATION_SCOPE_FAMILY_UNSUPPORTED'});});

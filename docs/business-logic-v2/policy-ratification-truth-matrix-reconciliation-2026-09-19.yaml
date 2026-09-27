@@ -1,0 +1,226 @@
+version: "1.0"
+status: CANONICAL_POLICY_RECONCILIATION_ADDENDUM
+as_of_utc: "2026-09-19"
+repository: handshakemallmarketing/WorkersFoodClub
+applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
+authority:
+  - docs/governance/POLICY_RATIFICATION_REGISTER_v1.md
+  - docs/governance/CB00_POLICY_RECONCILIATION_v1.md
+rule: >-
+  This addendum changes only policy-decision disposition. It MUST NOT be read as
+  implementation, runtime, durability, recovery, legal, concurrency, idempotency,
+  or launch proof. Existing evidence gaps remain open unless explicitly stated.
+
+policy_reclassifications:
+  UC-01:
+    objective: Member application
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-01, PR-03]
+    implementation_status: OPEN
+    remaining_requirements:
+      - bounded Guest/non-member application journey
+      - application must not confer membership rights
+      - API/UI/PostgreSQL runtime proof
+
+  UC-02:
+    objective: Membership activation and Member ID
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-02, PR-03, PR-05, PR-32]
+    implementation_status: OPEN
+    remaining_requirements:
+      - approved ordinary applicant + confirmed annual subscription settlement activation
+      - EMPLOYEE_SPONSORED_MEMBERSHIP activation path
+      - authoritative Member ID lifecycle
+      - authentication must not manufacture membership
+
+  UC-03:
+    objective: Household beneficiary invitation and activation
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-12, PR-13, PR-14]
+    implementation_status: OPEN
+    remaining_requirements:
+      - primary member plus maximum two eligible beneficiaries
+      - individual beneficiary identity
+      - sponsor-standing propagation of economic restrictions
+      - API/UI/notification/identity-binding runtime proof
+
+  UC-04:
+    objective: Membership-fee invoicing and good standing
+    prior_policy_gap: fee/grace/restriction policy
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-10, PR-11, PR-32]
+    implementation_status: OPEN
+    final_disposition_override: IMPLEMENTATION_AND_EVIDENCE_REQUIRED
+    remaining_requirements:
+      - 30-day GRACE lifecycle
+      - restricted/suspended behavior after grace
+      - confirmed-settlement restoration
+      - employee-sponsored annual entitlement handling
+      - full runtime lifecycle and recovery proof
+
+  UC-05:
+    objective: Catalog product and SKU management
+    policy_status: CLOSED_BY_POLICY_FOR_OPERATOR_AUTHORIZATION_MODEL
+    authority: [PR-04, PR-06, PR-07, PR-08, PR-09, PR-31]
+    implementation_status: OPEN
+    remaining_requirements:
+      - dedicated workforce step-up
+      - explicit catalog domain/function/action grants
+      - authorized durable operator API/UI
+
+  UC-06:
+    objective: Offer publication
+    policy_status: CLOSED_BY_POLICY_FOR_OPERATOR_AUTHORIZATION_MODEL
+    authority: [PR-06, PR-07, PR-08, PR-09, PR-15, PR-31]
+    implementation_status: OPEN
+    remaining_requirements:
+      - operator publication runtime
+      - offer-specific minimum commitment payment threshold
+      - durable versioned publication evidence
+
+  UC-08:
+    objective: Minimum commitment payment
+    prior_policy_gap: System Owner payment-qualification policy
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-15, PR-16, PR-17, PR-18]
+    implementation_status: OPEN_P0
+    final_disposition_override: IMPLEMENTATION_AND_EVIDENCE_REQUIRED
+    remaining_requirements:
+      - implement offer-specific qualification threshold
+      - cumulative confirmed-settlement qualification
+      - below-threshold UNQUALIFIED behavior
+      - overpayment remedy/credit balance behavior
+      - reversal and out-of-order event behavior
+      - concurrency and idempotency proof
+      - durable PostgreSQL and hosted runtime proof
+    safety_boundary:
+      production_payment_mutations: WITHHELD
+      live_funds: WITHHELD
+
+  UC-10:
+    objective: Demand-pool qualification
+    prior_dependency_gap: UC-08 policy blocker
+    policy_dependency_status: RESOLVED_BY_POLICY
+    authority: [PR-15, PR-16, PR-17, PR-18]
+    implementation_status: OPEN_P0
+    final_disposition_override: IMPLEMENTATION_AND_EVIDENCE_REQUIRED
+    remaining_requirements:
+      - durable concurrent qualification
+      - prove only commitments meeting offer threshold enter qualified demand
+      - reversal removes qualification when policy permits before irreversible downstream activity
+      - replay cannot double-count demand
+
+  UC-11:
+    objective: Item-level credit purchase
+    prior_policy_gap: credit eligibility/limits/terms policy
+    policy_status: WITHHELD_BY_POLICY
+    authority: [PR-19]
+    initial_launch_requirement: NOT_REQUIRED_AND_NOT_AUTHORIZED
+    final_disposition_override: WITHHELD_FOR_INITIAL_LAUNCH
+    remaining_requirements_for_future_activation:
+      - separate System Owner-ratified credit policy
+      - eligibility, limits, terms, receivables, default and recovery model
+      - implementation and evidence
+
+  UC-12:
+    objective: Payroll/CAGD deduction mandate
+    policy_status: WITHHELD_BY_POLICY
+    authority: [PR-20]
+    initial_launch_requirement: NOT_AUTHORIZED_FOR_INITIAL_LIVE_OPERATION
+    final_disposition_override: WITHHELD
+    remaining_requirements_for_future_activation:
+      - separate System Owner activation decision
+      - applicable legal/operational authority
+      - mandate lifecycle
+      - reconciliation and adverse-path proof
+
+  TITLE_RISK_POLICY:
+    objective: Ghana pilot title/risk transfer semantics
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-21, PR-22, PR-23]
+    rule: >-
+      Physical handover establishes custody only. Canonical ACCEPTANCE transfers
+      title and ordinary physical-loss risk for accepted quantity only.
+    implementation_status: EVIDENCE_AND_EXTERNAL_REVIEW_REQUIRED
+    remaining_requirements:
+      - exact policy/version registry binding
+      - quantity-aware runtime conformance
+      - adverse and recovery proof
+      - any required Ghana legal review recorded as external evidence
+
+  REFUNDS_AND_CORRECTIONS:
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-24, PR-25, PR-26]
+    implementation_status: OPEN_WHERE_NOT_PROVEN
+    requirements:
+      - separate REQUEST_REFUND, APPROVE_REFUND and EXECUTE_REFUND authority
+      - additive remedies
+      - no historical canonical mutation
+
+  RECOVERY:
+    prior_global_gap: P1-DB-RECOVERY
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-27]
+    implementation_status: OPEN_P1
+    targets:
+      rpo: "<=1 hour"
+      rto: "<=4 hours"
+    remaining_requirements:
+      - automated backup/snapshot capability
+      - adequate retention
+      - documented recovery procedure
+      - completed periodic restore drill
+      - durable restore evidence
+
+  AUTHENTICATION_AND_WORKFORCE:
+    policy_status: CLOSED_BY_POLICY
+    authority: [PR-01, PR-02, PR-04, PR-05, PR-06, PR-07, PR-08, PR-09, PR-31, PR-32]
+    implementation_status: OPEN_P1_UNTIL_RUNTIME_PROVEN
+    requirements:
+      - Guest area available without authentication
+      - unauthenticated Member receives Guest posture
+      - Member authentication requires pre-existing valid membership
+      - dedicated Employee/Operator step-up
+      - independent membership and workforce state machines
+      - default-deny domain/function/action/task authorization
+      - System Owner appoints/revokes Admin
+      - Admin cannot create System Owner
+      - employee-sponsored membership does not manufacture workforce authority
+      - hosted PostgreSQL happy/adverse/revocation proof
+
+global_gap_reclassifications:
+  P0-GOV-CANON:
+    status: PARTIALLY_RESOLVED
+    resolved:
+      - owner policy Q1-Q32 is formally ratified
+      - all 30 discoverable CB-00 invariants reconciled without conflict
+    remains_open:
+      - substantive historical C0-C10 source text remains undiscovered
+      - constitution/baseline.json must not be promoted to RATIFIED until C0-C10 is recovered or formally superseded by a separately ratified Constitution v1.0
+
+  P1-DB-RECOVERY:
+    policy_status: CLOSED_BY_POLICY
+    implementation_evidence_status: OPEN
+    authority: PR-27
+
+  P1-AUTH-RUNTIME-PROOF:
+    policy_status: CLOSED_BY_POLICY
+    implementation_evidence_status: OPEN
+    authority: [PR-01, PR-02, PR-04, PR-05, PR-06, PR-07, PR-08, PR-09, PR-31, PR-32]
+
+  P1-DECISIONS:
+    status: PARTIALLY_RESOLVED
+    resolved:
+      - Q1-Q32 consolidated in Policy Ratification Register v1.0
+    remains_open:
+      - canonical decision-register index must reference the ratification event and supersede stale open-policy records such as BLV2-DEC-007
+
+safety_boundary:
+  paystack_live_mode: WITHHELD
+  live_paystack_credentials: WITHHELD
+  live_funds: WITHHELD
+  production_payment_mutations: WITHHELD
+  production_refund_mutations: WITHHELD
+  production_fulfillment_mutations: WITHHELD
+  member_credit: WITHHELD
+  cagd_payroll_deduction: WITHHELD

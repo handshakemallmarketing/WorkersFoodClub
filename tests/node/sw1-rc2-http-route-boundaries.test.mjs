@@ -226,3 +226,43 @@ test('operator boundary accepts correct principal past auth gate', async () => {
   assert.equal(res.result.statusCode, 503);
   assert.equal(res.result.body?.error, 'DATABASE_URL_MISSING');
 });
+
+
+test('payment boundary accepts the correct principal but fails closed before database access', async () => {
+  const res = createResponse();
+
+  const bearer = token({
+    actorId: 'preview:member:001',
+    scopes: ['member:payment.execute'],
+  });
+
+  await paySandbox(
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${bearer}` },
+      body: { obligationId: 'wfc:obligation:11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222', amountMinor: 1000 },
+    },
+    res,
+  );
+
+  assert.equal(res.result.statusCode, 503);
+  assert.equal(res.result.body?.error, 'DATABASE_URL_MISSING');
+});
+
+test('payment mutation is restricted to Vercel Preview', async () => {
+  process.env.VERCEL_ENV = 'development';
+  const res = createResponse();
+
+  const bearer = token({
+    actorId: 'preview:member:001',
+    scopes: ['member:payment.execute'],
+  });
+
+  await paySandbox(
+    request('POST', bearer),
+    res,
+  );
+
+  assert.equal(res.result.statusCode, 403);
+  assert.equal(res.result.body?.error, 'SANDBOX_PAYMENT_REQUIRES_PREVIEW');
+});

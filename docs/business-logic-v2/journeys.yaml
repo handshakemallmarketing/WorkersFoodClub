@@ -1,0 +1,143 @@
+version: 0.1
+status: draft
+rule: a journey is not complete until authority, economic/physical truth, adverse cases, audit lineage, and recovery evidence are proven
+journeys:
+  - id: UC-01
+    name: member_application
+    owner: A2
+    depends_on: [identity]
+    states: [draft, submitted, under_review, approved, rejected, withdrawn]
+  - id: UC-02
+    name: membership_activation_and_id
+    owner: A2
+    depends_on: [UC-01]
+    states: [approved, activation_pending, active, suspended, terminated]
+  - id: UC-03
+    name: household_beneficiary_invitation_activation
+    owner: A2
+    depends_on: [UC-02, notifications]
+    states: [invited, accepted, activated, revoked, expired]
+  - id: UC-04
+    name: membership_fee_invoice_and_good_standing
+    owner: A2
+    depends_on: [UC-02, economic_obligation]
+    states: [current, invoice_due, past_due, restricted, restored]
+  - id: UC-05
+    name: catalog_product_and_sku_management
+    owner: A3
+    depends_on: [operator_authority]
+  - id: UC-06
+    name: offer_publication
+    owner: A3
+    depends_on: [UC-05, operator_authority]
+  - id: UC-07
+    name: basket_and_commitment
+    owner: A3
+    depends_on: [UC-02, UC-06, UC-04]
+    invariant: basket_is_not_commitment
+  - id: UC-08
+    name: minimum_commitment_payment
+    owner: A4
+    depends_on: [UC-07]
+    invariant: payment_intent_is_not_settlement
+  - id: UC-09
+    name: min_max_order_quantity
+    owner: A3
+    depends_on: [UC-06]
+  - id: UC-10
+    name: demand_pool_qualification
+    owner: A5
+    depends_on: [UC-07, UC-08]
+    invariant: only_qualified_commitment_counts_toward_authoritative_pool
+  - id: UC-11
+    name: item_credit_purchase
+    owner: A4
+    depends_on: [UC-07, receivables]
+  - id: UC-12
+    name: payroll_deduction_mandate
+    owner: A4
+    depends_on: [UC-02, employer_administration]
+    invariant: mandate_is_not_deduction_settlement
+  - id: UC-13
+    name: third_party_release_code
+    owner: A7
+    depends_on: [fulfillment, identity]
+    invariant: release_code_confers_only_bounded_single_release_authority
+  - id: UC-14
+    name: product_request_survey
+    owner: A8
+    depends_on: [UC-02]
+    invariant: survey_interest_is_not_commitment
+  - id: UC-15
+    name: referral_reward
+    owner: A8
+    depends_on: [UC-02]
+    invariant: reward_requires_proven_qualifying_event
+  - id: UC-16
+    name: system_owner_and_backup_owner_governance
+    owner: A9
+    depends_on: [operator_authority]
+    invariant: no_unbounded_superuser_bypass
+  - id: UC-17
+    name: limited_operator_roles
+    owner: A9
+    depends_on: [UC-16]
+  - id: UC-18
+    name: proximity_delivery_notification
+    owner: A8
+    depends_on: [delivery, communication_preferences]
+    invariant: proximity_signal_does_not_prove_delivery
+  - id: UC-19
+    name: supplier_rfq_and_quote
+    owner: A6
+    depends_on: [UC-10]
+  - id: UC-20
+    name: procurement_and_purchase_order
+    owner: A6
+    depends_on: [UC-19, operator_authority]
+  - id: UC-21
+    name: owned_farm_and_grower_supply
+    owner: A6
+    depends_on: [UC-10]
+    invariant: expected_harvest_is_not_inventory
+  - id: UC-22
+    name: physical_receipt_and_inventory_lot
+    owner: A7
+    depends_on: [UC-20]
+    invariant: only_accepted_receipt_creates_inventory
+  - id: UC-23
+    name: allocation_and_reservation
+    owner: A7
+    depends_on: [UC-22, UC-07]
+  - id: UC-24
+    name: pickup_fulfillment
+    owner: A7
+    depends_on: [UC-23]
+  - id: UC-25
+    name: delivery_fulfillment
+    owner: A7
+    depends_on: [UC-23]
+  - id: UC-26
+    name: shortfall_refund_remedy
+    owner: A4
+    depends_on: [UC-24]
+    invariant: remedy_uses_actual_accepted_quantity_and_authoritative_settlement
+  - id: UC-27
+    name: member_savings_evidence
+    owner: A10
+    depends_on: [UC-24]
+    invariant: savings_claim_requires_reproducible_comparison_evidence
+  - id: UC-28
+    name: support_and_exception_case
+    owner: A10
+    depends_on: [UC-02]
+  - id: UC-29
+    name: operational_control_tower
+    owner: A10
+    depends_on: [audit_lineage]
+    invariant: dashboard_projection_is_not_source_of_truth
+  - id: UC-30
+    name: cross_domain_reconciliation_and_recovery
+    owner: A11
+    depends_on: [audit_lineage]
+    invariant: recovery_must_preserve_idempotency_authority_and_economic_truth

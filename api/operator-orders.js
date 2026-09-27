@@ -1,7 +1,15 @@
 import { requireApplicationAuth } from '../lib/application-auth.js';
+import { ORDERS_READ_CAPABLE_OPERATORS, isAdminOperator } from '../lib/operator-tiers.js';
 
-const PREVIEW_OPERATOR_ID = 'preview:operator:001';
 const PREVIEW_PICKUP_PLACE = 'preview:pickup:001';
+
+function safeErrorDiagnostic(error) {
+  return {
+    name: typeof error?.name === 'string' ? error.name : 'UnknownError',
+    code: typeof error?.code === 'string' || typeof error?.code === 'number' ? String(error.code) : null,
+    causeCode: typeof error?.cause?.code === 'string' || typeof error?.cause?.code === 'number' ? String(error.cause.code) : null,
+  };
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -13,7 +21,7 @@ export default async function handler(req, res) {
     req,
     res,
     'operator:orders.read',
-    PREVIEW_OPERATOR_ID,
+    ORDERS_READ_CAPABLE_OPERATORS,
   );
   if (!principal) return;
 
@@ -77,10 +85,11 @@ export default async function handler(req, res) {
       ok: true,
       source: 'neon-server',
       operatorActorId: principal.actorId,
+      isSuperUser: isAdminOperator(principal.scopes),
       orders,
     });
   } catch (error) {
-    console.error('Operator order query failed', { name: error?.name, message: error?.message });
+    console.error('operator-orders: neon projection failed', safeErrorDiagnostic(error));
     return res.status(503).json({ ok: false, error: 'OPERATOR_ORDERS_FETCH_FAILED' });
   }
 }

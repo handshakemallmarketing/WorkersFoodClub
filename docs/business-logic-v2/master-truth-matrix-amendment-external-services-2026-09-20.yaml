@@ -1,0 +1,122 @@
+version: "1.12"
+status: CANONICAL_MASTER_TRUTH_MATRIX_AMENDMENT
+as_of_utc: "2026-09-21"
+applies_to: docs/business-logic-v2/master-journey-truth-matrix.yaml
+canonical_entry_truth:
+  guest_enrollment:
+    authentication_required_to_submit_application: false
+    google_required: false
+    employment_agency_required: true
+    ux_entry_mode: FORM_FIRST_SELF_SERVICE
+    provisioning: AUTO_UNLESS_GOVERNED_MANUAL_REVIEW
+    canonical_sequence: PROSPECT_INFORMATION_TO_MEMBERSHIP_RECORD_TO_MEMBER_NUMBER_TO_ANNUAL_INVOICE_TO_AUTHENTICATION_TO_SETTLEMENT_TO_ACTIVE_MEMBERSHIP
+    membership_creation_dependency_on_fee_configuration: NONE
+    successful_application_billing_effect: TRIGGER_FIRST_ANNUAL_SUBSCRIPTION_INVOICE_AFTER_NUMBERED_MEMBERSHIP_EXISTS
+    invoice_failure_effect: PRESERVE_MEMBERSHIP_IDENTITY_AND_SURFACE_BILLING_PENDING_OR_ERROR
+    member_number_notification:
+      required_business_effect: ATTEMPT_AFTER_DURABLE_MEMBER_NUMBER_CREATION
+      channels: [EMAIL, PHONE]
+      delivery_failure_effect: NEVER_ROLL_BACK_MEMBERSHIP_OR_CHANGE_MEMBER_NUMBER
+      invoice_dependency: NONE
+  member_number:
+    issuance: DURING_MEMBERSHIP_RECORD_PROVISIONING_BEFORE_ANNUAL_INVOICE
+    authority: SERVER_ONLY
+    immutable: true
+    new_issuance_format: EXACTLY_12_ASCII_DECIMAL_DIGITS
+    prefix: NONE
+    separators: NONE
+    sensitive_information_encoded: NONE
+    active_rights_conferred_by_issuance: false
+    authentication_eligibility_conferred_after_invoice: true
+    invoice_linkage: INVOICE_REFERENCES_NUMBERED_MEMBERSHIP
+    preserved_across: [INITIAL_BILLING, AUTHENTICATION, SETTLEMENT, EXPIRY, RENEWAL, RESTORATION, RECOVERY]
+    recovery:
+      available_regardless_of_subscription_standing: true
+      pre_verification_disclosure: PROHIBITED
+      lookup_input: REGISTERED_EMAIL_OR_PHONE
+      verification: SINGLE_USE_CONTACT_OTP
+      generic_pre_verification_response: REQUIRED_TO_PREVENT_ACCOUNT_ENUMERATION
+      successful_effect: DISCLOSE_EXISTING_IMMUTABLE_MEMBER_NUMBER
+      may_create_or_replace_membership: false
+      may_change_standing_or_rights: false
+      challenge_ttl_minutes: 10
+      max_attempts: 5
+      rate_limit: 5_PER_MEMBERSHIP_PER_15_MINUTES
+  annual_subscription_billing:
+    authoritative_invoice_service: ONE_SHARED_SERVICE_FOR_INITIAL_AND_RENEWAL_BILLING
+    initial_invoice_trigger: SUCCESSFUL_NEW_MEMBER_APPLICATION_AFTER_MEMBERSHIP_AND_MEMBER_NUMBER_CREATION
+    renewal_invoice_trigger: MEMBERSHIP_EXPIRY_OR_CANONICAL_RENEWAL_DUE_CONDITION
+    renewal_identity: EXISTING_MEMBERSHIP_AND_EXISTING_MEMBER_NUMBER
+    idempotency_key: MEMBERSHIP_PLUS_SUBSCRIPTION_YEAR
+    authoritative_invoice_cardinality: AT_MOST_ONE_PER_MEMBERSHIP_PER_SUBSCRIPTION_YEAR
+    retry_and_race_behavior: MUST_NOT_CREATE_DUPLICATE_AUTHORITATIVE_INVOICES
+    invoice_is_membership_identity_authority: false
+    invoice_may_mutate_member_number: false
+  member_authentication:
+    lifecycle_position_initial_membership: AFTER_MEMBER_NUMBER_AND_ANNUAL_INVOICE_BEFORE_SETTLEMENT
+    purpose: VERIFY_IDENTITY_NOT_GRANT_MEMBERSHIP_RIGHTS
+    initial_fee_due_authentication_allowed: true
+    initial_fee_due_authenticated_access_state: MEMBERSHIP_PAYMENT_REQUIRED
+    initial_fee_due_member_area_access: false
+    primary: MEMBER_NUMBER_PLUS_REGISTERED_CONTACT_CHALLENGE
+    session: SERVER_BACKED
+    google: OPTIONAL_EXPLICITLY_BOUND_PROVIDER
+    authentication_may_create_membership: false
+    authentication_may_settle_invoice: false
+    authentication_may_activate_membership: false
+external_service_control_plane:
+  principle: CONFIGURE_DEPLOY_TEST_EXPLICITLY_ACTIVATE_FAIL_CLOSED
+  delegated_management_capability: workforce:settings.manage
+  owner_capability: authority:owner
+  secret_storage: DEPLOYMENT_SECRET_STORE_ONLY
+  database_secret_storage: PROHIBITED
+  secret_readback: PROHIBITED
+  services:
+    payments:
+      initial_provider: PAYSTACK
+      activation_authority: SYSTEM_OWNER
+      additional_global_live_funds_gate: NONE
+      bounded_transaction_authority: PRESERVED
+    email:
+      initial_provider: MAILERLITE
+      activation_authority: SETTINGS_MANAGE_CAPABILITY_OR_SYSTEM_OWNER
+      transactional_member_otp_delivery: UNSUPPORTED_UNTIL_TRANSACTIONAL_EMAIL_ADAPTER_EXISTS
+      member_number_notification: UNSUPPORTED_UNTIL_TRANSACTIONAL_EMAIL_ADAPTER_EXISTS
+    sms:
+      provider_selection: SETTINGS_REGISTRY_DRIVEN
+      supported_providers: [TWILIO, HUBTEL, AFRICASTALKING, ARKESEL]
+      authentication_dependency: PROVIDER_NEUTRAL_SMS_OTP_INTERFACE
+      activation_authority: SETTINGS_MANAGE_CAPABILITY_OR_SYSTEM_OWNER
+      delivery_precondition: SERVICE_ACTIVE_AND_LAST_TEST_PASSED
+      recipient_format: E164
+      default_local_country_code: GHANA_233_CONFIGURABLE_BY_MEMBER_PHONE_DEFAULT_COUNTRY_CODE
+      malformed_or_ambiguous_recipient_effect: FAIL_CLOSED
+      failed_delivery_effect: REVOKE_CREATED_CHALLENGE_AND_FAIL_CLOSED
+bootstrap_control_plane:
+  database:
+    initial_provider: NEON
+    secret: DATABASE_URL
+    activation_authority: SYSTEM_OWNER
+    management: DEPLOYMENT_CONTROL_PLANE_ONLY
+fail_closed_invariants:
+  - guest_enrollment_is_form_first_self_service_and_does_not_require_google_or_prior_authentication
+  - newly_issued_member_numbers_are_exactly_12_ascii_decimal_digits_without_prefix_or_separator
+  - membership_identity_creation_does_not_depend_on_subscription_fee_configuration
+  - successful_new_member_application_triggers_billing_only_after_numbered_membership_exists
+  - invoice_generation_failure_never_erases_or_replaces_membership_identity
+  - member_number_notification_failure_never_rolls_back_membership_identity
+  - member_number_recovery_never_depends_on_payment_or_subscription_standing
+  - recovery_never_discloses_member_number_before_registered_contact_verification
+  - recovery_start_uses_generic_response_to_resist_account_enumeration
+  - recovery_challenges_are_single_use_expiring_attempt_limited_and_rate_limited
+  - recovery_never_creates_replaces_or_mutates_membership_identity
+  - authentication_never_creates_membership_settles_invoice_or_activates_membership
+  - confirmed_settlement_not_authentication_is_the_ordinary_activation_boundary
+  - sms_otp_delivery_is_provider_neutral
+  - sms_otp_recipient_is_normalized_to_e164_before_provider_delivery
+  - failed_sms_delivery_revokes_the_new_challenge
+  - transactional_email_otp_fails_closed_until_a_transactional_email_adapter_is_configured
+  - missing_credentials_means_not_active
+  - configured_does_not_mean_active
+  - production_enablement_does_not_implicitly_activate_external_services
+  - payment_service_activation_never_bypasses_bounded_transaction_authority

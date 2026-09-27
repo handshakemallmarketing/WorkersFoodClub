@@ -1,0 +1,88 @@
+name: Production Access v2 CI
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'lib/production-access-policy.js'
+      - 'lib/production-oidc-auth.js'
+      - 'lib/application-principal-binding.js'
+      - 'tests/node/sw1-production-access-v2.test.mjs'
+      - '.github/workflows/production-access-v2-*.yml'
+      - '.github/workflows/production-application-access-activation.yml'
+      - '.github/workflows/production-sha-gate-sync.yml'
+      - 'scripts/check-production-authorization-workflows.mjs'
+      - 'tests/node/production-authorization-boundary.test.mjs'
+      - 'docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json'
+      - 'docs/sw1/SW1-PRODUCTION-ACCESS-V2-PERSISTENT-GATE.md'
+      - 'docs/traceability/SW1-production-access-v2-*'
+  push:
+    branches:
+      - sw1-production-access-v2-clean
+
+permissions:
+  contents: read
+
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove token-independent Production access and OIDC verifier controls
+        run: node --test tests/node/sw1-production-access-v2.test.mjs
+      - name: Prove recovery authorization and containment invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          recovery=.github/workflows/production-access-v2-recovery.yml
+          containment=.github/workflows/production-access-v2-containment.yml
+          guard=.github/workflows/production-access-v2-recovery-guard.yml
+          activation=.github/workflows/production-application-access-activation.yml
+          ! grep -q 'RC3_PRODUCTION_MEMBER_TOKEN' "$recovery"
+          ! grep -q 'RC3_PRODUCTION_OPERATOR_TOKEN' "$recovery"
+          ! grep -q -- '--env PRODUCTION_APPLICATION_ACCESS_ENABLED=true' "$recovery"
+          grep -q 'ACTIVE_BOUNDED_AUTHORIZATION' "$recovery"
+          grep -q 'candidateShaFormat' "$recovery"
+          grep -q 'git merge-base --is-ancestor' "$recovery"
+          grep -q 'git checkout --detach' "$recovery"
+          grep -q 'EXPECTED_SHA.*authorization.outputs.candidate_sha' "$recovery"
+          ! grep -q "candidateSha.*GITHUB_SHA" "$recovery"
+          grep -q 'attempted=true' "$recovery"
+          test "$(grep -n "attempted=true" "$recovery" | head -1 | cut -d: -f1)" -lt "$(grep -n 'request POST' "$recovery" | head -1 | cut -d: -f1)"
+          grep -q 'production-access-v2-state-transition' "$recovery"
+          grep -q 'production-access-v2-state-transition' "$containment"
+          grep -q 'production-access-v2-state-transition' "$guard"
+          grep -q 'Production Access v2 recovery' "$guard"
+          grep -q 'Production application access activation' "$guard"
+          grep -q "conclusion != 'success'" "$guard"
+          grep -q 'PRODUCTION_APPLICATION_ACCESS_ENABLED.*false' "$guard"
+          grep -q "grant.get('candidateSha') == os.environ\['ACTIVATION_SHA'\]" "$activation"
+          grep -q 'PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA' "$activation"
+          grep -q -- '--arg sha "$ACTIVATION_SHA"' "$activation"
+          grep -q -- '--env PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA="$ACTIVATION_SHA"' "$activation"
+      - name: Prove no push can authorize its own commit
+        run: node --test tests/node/production-authorization-boundary.test.mjs
+      - name: Prove canonical Vercel binding is consistent
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in .github/workflows/production-access-v2-recovery.yml .github/workflows/production-access-v2-containment.yml .github/workflows/production-access-v2-recovery-guard.yml; do
+            grep -q 'team_WkMSXuSv8kDLoOlGHYtIggZ1' "$file"
+            grep -q 'prj_Ti1NOQryzFeImhMSwncMXNxs01I8' "$file"
+            grep -q 'workers-food-club.vercel.app' "$file"
+            grep -q 'VERCEL_SCOPE: hmmktg' "$file"
+          done
+          ! grep -R -E -- '--scope(=|[[:space:]])(origin-os|food-club)|VERCEL_SCOPE:[[:space:]]*(origin-os|food-club)' .github/workflows
+      - name: Prove live-economic-effect authority remains absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          recovery=.github/workflows/production-access-v2-recovery.yml
+          grep -q 'liveFundsWithheld' "$recovery"
+          grep -q 'paystackLiveWithheld' "$recovery"
+          grep -q 'paymentMutationWithheld' "$recovery"
+          files=(.github/workflows/production-access-v2-recovery.yml .github/workflows/production-access-v2-containment.yml .github/workflows/production-access-v2-recovery-guard.yml)
+          ! grep -Eiq 'PAYSTACK_(LIVE_)?SECRET|PAYSTACK_SECRET_KEY|sk_live_' "${files[@]}"

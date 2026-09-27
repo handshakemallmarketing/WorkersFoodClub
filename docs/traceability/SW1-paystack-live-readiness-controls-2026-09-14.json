@@ -1,0 +1,46 @@
+{
+  "evidenceId": "SW1-PAYSTACK-LIVE-READINESS-CONTROLS-2026-09-14",
+  "parentGate": "SW1-PAYSTACK-LIVE-ACTIVATION-READINESS",
+  "startingMainCommit": "1995b2d3a86b9efa3bb56d77b81eb5a4693ce441",
+  "scope": "NON_LIVE_READINESS_CONTROLS_ONLY",
+  "implemented": {
+    "defaultOffControlState": true,
+    "exactCandidateShaBinding": true,
+    "runtimeShaEqualityRequired": true,
+    "merchantAccountBindingRequired": true,
+    "boundedAuthorizationExpiryRequired": true,
+    "callerAuthorizationAssertionsAreInsufficient": true,
+    "independentAuthorityEvidenceVerifierRequired": true,
+    "independentWatchdogEvidenceVerifierRequired": true,
+    "watchdogExpiryEvaluatedOnTrustedStateObservation": true,
+    "singleApprovedTransactionBinding": ["reference","actorId","amountMinor","currency"],
+    "secondOrSubstitutedTransactionRejected": true,
+    "transactionOutcomeIncidentStickyAcrossDisable": true,
+    "containmentUnprovenIncidentStickyAcrossDisable": true,
+    "exactReferenceReconciliation": true,
+    "canonicalAndProviderAgreementRequiredForResolution": ["providerReference","amount","terminalStatus"],
+    "perAttemptReconciliationTimeoutBounded": true,
+    "blindRetryAllowed": false,
+    "providerReferenceRebindingHardFailure": true
+  },
+  "authorization": {
+    "productionApplicationAccess": true,
+    "paystackLiveMode": false,
+    "liveFunds": false,
+    "livePaystackCredentialsAccessedOrProvisioned": false,
+    "liveProviderTransactionExecuted": false
+  },
+  "remainingBeforeAnyFutureLiveActivation": [
+    "approved live credential provisioning path",
+    "exact production merchant/account binding evidence",
+    "runtime test/live isolation proof for live adapter",
+    "durable governed live-authorization evidence verifier implementation",
+    "independently deployed watchdog/expiry containment implementation and evidence verifier",
+    "live webhook endpoint registration and handler readiness",
+    "explicit bounded live activation and live funds authorization",
+    "approved immutable minimal live transaction plan",
+    "authentic live merchant webhook delivery proof from bounded transaction",
+    "post-activation adversarial falsification and reconciliation"
+  ],
+  "currentVerdict": "CONTINUE_PAYSTACK_LIVE_READINESS_ACTIVATION_WITHHELD"
+}

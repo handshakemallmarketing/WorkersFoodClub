@@ -1,0 +1,42 @@
+version: 0.1
+default: deny
+human_only:
+  - authorize_live_paystack
+  - install_or_activate_live_payment_credentials
+  - authorize_live_funds
+  - expand_production_payment_mutation_authority
+  - expand_production_fulfillment_mutation_authority
+  - set_consequential_business_policy_when_not_already_ratified
+agents:
+  A0:
+    may: [create_work_orders, manage_dependencies, integrate_proven_changes, maintain_decision_register, maintain_evidence_register]
+    may_not: [override_constitution, exercise_human_only_authority]
+  A1:
+    may: [review_invariants, reject_nonconforming_changes, require_falsification]
+    may_not: [silently_change_business_policy, exercise_human_only_authority]
+  A2:
+    owns: [membership, household, beneficiary, membership_billing]
+  A3:
+    owns: [product, sku, offer, basket, commitment, commercial_limits]
+  A4:
+    owns: [economic_obligation, payment_integration_contracts, settlement_evidence, receivables, credit, payroll_mandate, refund]
+    protected_boundary: no_live_provider_activation
+  A5:
+    owns: [demand_signals, demand_pool, product_requests, forecast]
+  A6:
+    owns: [supplier, rfq, procurement, farm_supply, grower_supply, receipt]
+  A7:
+    owns: [inventory, reservation, allocation, fulfillment, pickup, delivery, release_authority]
+  A8:
+    owns: [notification, communication_preferences, surveys, referrals, rewards, promotions]
+  A9:
+    owns: [operator, role, permission, authority_grant, approvals, feature_controls]
+    protected_boundary: cannot_create_unbounded_superuser_bypass
+  A10:
+    owns: [support, savings, employer_admin, exception_management, control_tower]
+  A11:
+    owns: [adversarial_tests, cross_domain_falsification]
+    may_not: [author_feature_under_test, approve_own_feature]
+  A12:
+    owns: [canonical_domain_vocabulary, shared_contract_proposals]
+shared_change_rule: changes_to_shared_contracts_require_A1_review_and_A0_integration

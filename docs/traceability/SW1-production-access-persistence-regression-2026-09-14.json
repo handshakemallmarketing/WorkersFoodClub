@@ -1,0 +1,46 @@
+{
+  "evidenceId": "SW1-PRODUCTION-ACCESS-PERSISTENCE-REGRESSION-2026-09-14",
+  "status": "CONTAINED_FAIL_CLOSED_REMEDIATION_IN_PROGRESS",
+  "authorizedIntent": {
+    "productionApplicationAccessEnabled": true,
+    "liveFundsAuthorized": false,
+    "paystackLiveModeAuthorized": false,
+    "livePaystackCredentialOperationsAuthorized": false
+  },
+  "observedRegression": {
+    "mainCommit": "dded810ee37a38c61afab0f647b701b3fac57805",
+    "postMergeConformanceRunId": 34904649859,
+    "postMergeConformanceResult": "SUCCESS",
+    "vercelCommitStatus": "SUCCESS",
+    "canonicalMemberRouteObservedHttpStatus": 503,
+    "canonicalMemberRouteObservedError": "PRODUCTION_APPLICATION_ACCESS_DISABLED",
+    "expectedAuthorizedSteadyStateHttpStatus": 401,
+    "classification": "AUTHORIZED_PRODUCTION_ACCESS_NOT_PERSISTED_ACROSS_SUBSEQUENT_PRODUCTION_DEPLOYMENTS"
+  },
+  "boundedRecoveryAttempt": {
+    "activationWorkflowRunId": 34902403050,
+    "rerunJobId": 104178830442,
+    "immutableActivationCandidate": "81ca013cc8f6706bc4aeee6669345ff1fb7b3755",
+    "enabledDeployment": "https://workers-food-club-a7o8xfrqj-food-club.vercel.app",
+    "canonicalEnabledBoundaryObserved": 401,
+    "falsificationFailure": "RC3_PRODUCTION_MEMBER_TOKEN expired before governed-member check",
+    "governedMemberObservedHttpStatus": 401,
+    "governedMemberObservedError": "TOKEN_EXPIRED_OR_NOT_YET_VALID",
+    "rollbackDeployment": "https://workers-food-club-ce3hfxfse-food-club.vercel.app",
+    "rollbackResult": "SUCCESS",
+    "canonicalFailClosedReproven": true
+  },
+  "remediation": {
+    "tokenLifetimePreflightBeforeAnyProductionDeploy": true,
+    "tokenLifetimeRecheckImmediatelyBeforeDeploy": true,
+    "minimumRemainingCanaryTokenLifetimeSeconds": 900,
+    "persistProjectLevelProductionAccessOnlyAfterFullRuntimeFalsification": true,
+    "independentProjectEnvironmentRereadRequired": true,
+    "rollbackPersistsProjectLevelSwitchFalse": true,
+    "rollbackReprovesCanonical503": true
+  },
+  "currentProductionApplicationAccess": "OFF_FAIL_CLOSED_PENDING_FRESH_CANARY_CREDENTIALS_AND_REPROOF",
+  "liveFunds": "UNAUTHORIZED",
+  "paystackLiveMode": "UNAUTHORIZED",
+  "livePaystackCredentials": "UNTOUCHED_UNAUTHORIZED"
+}
