@@ -25,10 +25,18 @@ test('push-main workflows cannot receive Production mutation capability', () => 
       const source = `${trigger}\njobs:\n  mutate:\n${capability}\n`;
       assert.throws(
         () => assertSafeWorkflow({ filename: 'attack.yml', source, governedSha }),
-        /PUSH_TO_MAIN_PRODUCTION_MUTATION_FORBIDDEN/,
+        /UNALLOWLISTED_PRODUCTION_MUTATION_WORKFLOW|PUSH_TO_MAIN_PRODUCTION_MUTATION_FORBIDDEN/,
       );
     }
   }
+});
+
+test('a new workflow cannot acquire Production mutation capability by indirection', () => {
+  const source = `on:\n  workflow_dispatch:\njobs:\n  mutate:\n    environment: production\n    steps:\n      - env:\n          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}\n        run: node scripts/indirect-production-mutation.mjs`;
+  assert.throws(
+    () => assertSafeWorkflow({ filename: 'alternate-production-path.yml', source, governedSha }),
+    /UNALLOWLISTED_PRODUCTION_MUTATION_WORKFLOW/,
+  );
 });
 
 test('only the governed activation workflow may write the Production SHA pin', () => {

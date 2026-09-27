@@ -4,6 +4,18 @@ import { fileURLToPath } from 'node:url';
 
 export const ACTIVATION_WORKFLOW = 'production-application-access-activation.yml';
 export const REMOVED_AUTOMATIC_SYNC = 'production-sha-gate-sync.yml';
+export const PRODUCTION_MUTATION_WORKFLOW_ALLOWLIST = new Set([
+  'production-access-v2-containment.yml',
+  'production-access-v2-recovery-guard.yml',
+  'production-access-v2-recovery.yml',
+  ACTIVATION_WORKFLOW,
+  'rc2-paystack-provider-rehearsal.yml',
+  'rc3-bounded-production-canary.yml',
+  'rc3-bounded-production-identity-rehearsal.yml',
+  'rc3-production-identity-config-preflight.yml',
+  'rc3-production-identity-rehearsal.yml',
+  'rc3-residual-binding-deny-rehearsal.yml',
+]);
 
 export function mainPushTrigger(source) {
   const inlineOn = source.match(/^on:\s*(.+)$/m)?.[1]?.trim() ?? '';
@@ -30,6 +42,9 @@ export function authorizationPinWriter(source) {
 }
 
 export function assertSafeWorkflow({ filename, source, governedSha }) {
+  if (productionMutationCapability(source) && !PRODUCTION_MUTATION_WORKFLOW_ALLOWLIST.has(filename)) {
+    throw new Error(`UNALLOWLISTED_PRODUCTION_MUTATION_WORKFLOW:${filename}`);
+  }
   if (mainPushTrigger(source) && productionMutationCapability(source)) {
     throw new Error(`PUSH_TO_MAIN_PRODUCTION_MUTATION_FORBIDDEN:${filename}`);
   }
@@ -70,8 +85,12 @@ export async function checkProductionAuthorizationWorkflows(root = process.cwd()
   if (!/^[0-9a-f]{40}$/.test(governedSha ?? '')) {
     throw new Error('GOVERNED_PRODUCTION_AUTHORIZATION_SHA_INVALID');
   }
-  if (governance?.grant?.revoked !== false || governance?.status !== 'ACTIVE_BOUNDED_AUTHORIZATION') {
-    throw new Error('GOVERNED_PRODUCTION_AUTHORIZATION_NOT_ACTIVE');
+  const revoked = governance?.grant?.revoked;
+  if (revoked !== true && revoked !== false) {
+    throw new Error('GOVERNED_PRODUCTION_AUTHORIZATION_REVOCATION_INVALID');
+  }
+  if (revoked === false && governance?.status !== 'ACTIVE_BOUNDED_AUTHORIZATION') {
+    throw new Error('GOVERNED_PRODUCTION_AUTHORIZATION_ACTIVE_STATUS_INVALID');
   }
 
   const workflowFiles = (await readdir(workflowDirectory))
