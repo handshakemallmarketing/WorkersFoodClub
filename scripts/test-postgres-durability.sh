@@ -35,6 +35,10 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
 # Settlement evidence claims and functions must remain replay safe.
 "${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
+"${PSQL[@]}" -f packages/durability/sql/036_membership_renewal_grace_settlement.sql
+"${PSQL[@]}" -f packages/durability/sql/037_membership_subscription_evidence_hardening.sql
+# Subscription-only lineage hardening is forward-only and replay safe.
+"${PSQL[@]}" -f packages/durability/sql/037_membership_subscription_evidence_hardening.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -106,7 +110,9 @@ INSERT INTO electronic_payment_evidence(
 ) VALUES
  ('evidence:settlement','membership:settlement','invoice:settlement','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:settlement',now()),
  ('evidence:suspended','membership:suspended','invoice:suspended','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:suspended',now()),
- ('evidence:mismatch','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',9999,'GHS','provider:mismatch',now());
+ ('evidence:mismatch','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',9999,'GHS','provider:mismatch',now()),
+ ('evidence:null-obligation','membership:mismatch',NULL,'MOBILE_MONEY','RECONCILED',10000,'GHS','provider:null-obligation',now()),
+ ('evidence:future','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:future',now()+interval '1 hour');
 DO $$
 DECLARE first_result record; replay_result record;
 BEGIN
@@ -130,6 +136,39 @@ BEGIN
    'invoice:mismatch','evidence:mismatch','member-session:mismatch',
    'audit:mismatch','request:mismatch',now());
  IF FOUND THEN RAISE EXCEPTION 'amount-mismatched evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:null-obligation','member-session:mismatch',
+   'audit:null-obligation','request:null-obligation',now());
+ IF FOUND THEN RAISE EXCEPTION 'null-obligation evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:future','member-session:mismatch',
+   'audit:future','request:future',now());
+ IF FOUND THEN RAISE EXCEPTION 'future-reconciled evidence settled an invoice'; END IF;
+ BEGIN
+  UPDATE electronic_payment_evidence SET state='REVERSED' WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'consumed subscription evidence rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='consumed subscription evidence rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  DELETE FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'subscription consumption deletion unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='subscription consumption deletion unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_settlement_allocation SET amount_minor=1
+    WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'subscription allocation rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='subscription allocation rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_invoice SET state='OPEN' WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'paid subscription reversal unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='paid subscription reversal unexpectedly succeeded' THEN RAISE; END IF;
+ END;
  IF (SELECT count(*) FROM membership_subscription_settlement_allocation)<>1
     OR (SELECT count(*) FROM electronic_payment_evidence_consumption)<>1
     OR (SELECT count(*) FROM application_access_audit WHERE event_type='MEMBERSHIP_SUBSCRIPTION_SETTLED')<>1
