@@ -128,6 +128,7 @@ jobs:
               'liveFundsWithheld': exclusions.get('liveFundsAuthorized') is False,
               'paystackLiveWithheld': exclusions.get('paystackLiveModeAuthorized') is False,
               'liveCredentialsWithheld': exclusions.get('livePaystackCredentialsAuthorized') is False,
+              'paymentMutationWithheld': exclusions.get('paymentOrFulfillmentMutationAuthorityGranted') is False,
           }
           failed = [name for name, ok in checks.items() if not ok]
           if failed:
@@ -149,6 +150,33 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$ACTIVATION_SHA"
           echo "Production access activation candidate: $actual"
+
+      - name: Prove governed candidate enforces its exact runtime SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const { requireProductionApplicationAccess } = await import('./lib/production-access-policy.js');
+          const expected = process.env.ACTIVATION_SHA;
+          const mismatch = requireProductionApplicationAccess({
+            VERCEL: '1',
+            VERCEL_ENV: 'production',
+            PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
+            PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: expected,
+            VERCEL_GIT_COMMIT_SHA: '0000000000000000000000000000000000000000',
+          });
+          if (mismatch?.ok !== false || mismatch?.status !== 503 || mismatch?.error !== 'PRODUCTION_APPLICATION_ACCESS_SHA_UNAUTHORIZED') {
+            throw new Error('GOVERNED_CANDIDATE_LACKS_EXACT_SHA_ENFORCEMENT');
+          }
+          const exact = requireProductionApplicationAccess({
+            VERCEL: '1',
+            VERCEL_ENV: 'production',
+            PRODUCTION_APPLICATION_ACCESS_ENABLED: 'true',
+            PRODUCTION_APPLICATION_ACCESS_AUTHORIZED_SHA: expected,
+            VERCEL_GIT_COMMIT_SHA: expected,
+          });
+          if (exact?.ok !== true) throw new Error('GOVERNED_CANDIDATE_REJECTS_ITS_AUTHORIZED_SHA');
+          NODE
 
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@59.11.7
