@@ -37,6 +37,7 @@ jobs:
           done < <(find api lib public scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print0)
       - run: pnpm canon:check
       - run: pnpm traceability:check
+      - run: pnpm migrations:verify
       - run: pnpm production-authorization:check
       - run: pnpm typecheck
       - run: pnpm test
