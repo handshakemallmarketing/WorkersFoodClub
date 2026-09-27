@@ -11,7 +11,6 @@ export const PRODUCTION_MUTATION_WORKFLOW_ALLOWLIST = new Set([
   ACTIVATION_WORKFLOW,
   'rc2-preview-http-rehearsal.yml',
   'rc2-paystack-provider-rehearsal.yml',
-  'rc3-bounded-production-canary.yml',
   'rc3-production-identity-config-preflight.yml',
   'rc3-production-identity-rehearsal.yml',
   'rc3-residual-binding-deny-rehearsal.yml',
@@ -64,8 +63,8 @@ export function applicationAccessEnableWriter(source) {
     const trimmed = line.trim().replace(/^[-]\s+run:\s*/, '');
     const pureReadOnlyGrep = /^(?:!\s*)?grep\b/.test(trimmed) && !/[;&|`]/.test(trimmed) && !/\$\(/.test(trimmed);
     if (pureReadOnlyGrep) return false;
-    return /PRODUCTION_APPLICATION_ACCESS_ENABLED=true/.test(line)
-      || /"key"\s*:\s*"PRODUCTION_APPLICATION_ACCESS_ENABLED"[^\n]*"value"\s*:\s*"true"/.test(line);
+    return /PRODUCTION_APPLICATION_ACCESS_ENABLED[^\n]{0,40}\btrue\b/.test(line)
+      || /['"]key['"]\s*:\s*['"]PRODUCTION_APPLICATION_ACCESS_ENABLED['"][^\n]*['"]value['"]\s*:\s*['"]true['"]/.test(line);
   });
 }
 

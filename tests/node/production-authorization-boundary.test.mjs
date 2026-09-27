@@ -81,12 +81,19 @@ test('alternate Vercel CLI syntax cannot write the authorization pin', () => {
 });
 
 test('only governed activation and recovery may enable Production application access', () => {
-  const source = 'on: workflow_dispatch\njobs:\n  mutate:\n    steps:\n      - run: vercel deploy --prod --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true';
-  assert.equal(applicationAccessEnableWriter(source), true);
-  assert.throws(
-    () => assertSafeWorkflow({ filename: 'rc3-bounded-production-identity-rehearsal.yml', source, governedSha }),
-    /UNALLOWLISTED_PRODUCTION_MUTATION_WORKFLOW|UNALLOWLISTED_PRODUCTION_ACCESS_ENABLE_WRITER/,
-  );
+  for (const command of [
+    'vercel deploy --prod --env PRODUCTION_APPLICATION_ACCESS_ENABLED=true',
+    'vercel deploy --prod --env PRODUCTION_APPLICATION_ACCESS_ENABLED=\\"true\\"',
+    'vercel deploy --prod --env=PRODUCTION_APPLICATION_ACCESS_ENABLED=true',
+    `curl example --data "{'key':'PRODUCTION_APPLICATION_ACCESS_ENABLED','value':'true'}"`,
+  ]) {
+    const source = `on: workflow_dispatch\njobs:\n  mutate:\n    steps:\n      - run: ${command}`;
+    assert.equal(applicationAccessEnableWriter(source), true);
+    assert.throws(
+      () => assertSafeWorkflow({ filename: 'rc3-bounded-production-identity-rehearsal.yml', source, governedSha }),
+      /UNALLOWLISTED_PRODUCTION_MUTATION_WORKFLOW|UNALLOWLISTED_PRODUCTION_ACCESS_ENABLE_WRITER/,
+    );
+  }
 });
 
 test('activation writer rejects trigger-derived and governance-mismatched candidates', () => {
