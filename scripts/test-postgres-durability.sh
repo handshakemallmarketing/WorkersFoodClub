@@ -35,6 +35,10 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 "${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
 # Settlement evidence claims and functions must remain replay safe.
 "${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
+"${PSQL[@]}" -f packages/durability/sql/036_membership_renewal_grace_settlement.sql
+"${PSQL[@]}" -f packages/durability/sql/037_membership_subscription_evidence_hardening.sql
+# Subscription-only lineage hardening is forward-only and replay safe.
+"${PSQL[@]}" -f packages/durability/sql/037_membership_subscription_evidence_hardening.sql
 
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
@@ -59,6 +63,77 @@ BEGIN
  SELECT * INTO configured FROM external_service_configuration WHERE service_id='sms';
  IF configured.state <> 'DISABLED' OR configured.last_test_state <> 'NOT_TESTED' OR configured.credential_fields <> '{}'::text[] OR configured.last_tested_at IS NOT NULL OR configured.activated_at IS NOT NULL THEN
   RAISE EXCEPTION 'external service configuration defaults are not fail closed';
+ END IF;
+END $$;
+ROLLBACK;
+SQL
+
+# Renewal settlement must restore both ratified delinquency standings while
+# refusing to guess which obligation a member intended to pay when more than
+# one subscription invoice is overdue.
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:renewal-grace','PERSON','ACTIVE'),
+       ('participant:renewal-restricted','PERSON','ACTIVE'),
+       ('participant:renewal-ambiguous','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids,
+  grace_started_at,grace_ends_at
+) VALUES
+ ('membership:renewal-grace','participant:renewal-grace','ACTIVE','GRACE','PRIMARY','WFC-RENEW-GRACE',now()-interval '1 year','test-v1',ARRAY['eligibility:renewal-grace'],now()-interval '10 days',now()+interval '20 days'),
+ ('membership:renewal-restricted','participant:renewal-restricted','ACTIVE','RESTRICTED','PRIMARY','WFC-RENEW-RESTRICTED',now()-interval '1 year','test-v1',ARRAY['eligibility:renewal-restricted'],NULL,NULL),
+ ('membership:renewal-ambiguous','participant:renewal-ambiguous','ACTIVE','GRACE','PRIMARY','WFC-RENEW-AMBIGUOUS',now()-interval '2 years','test-v1',ARRAY['eligibility:renewal-ambiguous'],now()-interval '10 days',now()+interval '20 days');
+INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
+VALUES ('invoice:renewal-grace','membership:renewal-grace',2026,10000,'GHS','OPEN',now()-interval '2 days'),
+       ('invoice:renewal-restricted','membership:renewal-restricted',2026,10000,'GHS','OPEN',now()-interval '40 days'),
+       ('invoice:renewal-ambiguous-old','membership:renewal-ambiguous',2026,10000,'GHS','OPEN',now()-interval '1 year'),
+       ('invoice:renewal-ambiguous-new','membership:renewal-ambiguous',2027,10000,'GHS','OPEN',now()-interval '2 days');
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES ('member-session:renewal-grace','membership:renewal-grace','participant:renewal-grace','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal-restricted','membership:renewal-restricted','participant:renewal-restricted','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal-ambiguous','membership:renewal-ambiguous','participant:renewal-ambiguous','ACTIVE',now()+interval '1 hour');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES
+ ('evidence:renewal-grace','membership:renewal-grace','invoice:renewal-grace','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-grace',now()),
+ ('evidence:renewal-restricted','membership:renewal-restricted','invoice:renewal-restricted','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-restricted',now()),
+ ('evidence:renewal-ambiguous','membership:renewal-ambiguous','invoice:renewal-ambiguous-new','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-ambiguous',now());
+DO $$
+DECLARE grace_result record; restricted_result record; ambiguous_count integer;
+BEGIN
+ SELECT * INTO grace_result FROM settle_membership_subscription(
+   'invoice:renewal-grace','evidence:renewal-grace','member-session:renewal-grace',
+   'audit:renewal-grace','request:renewal-grace',now());
+ IF NOT FOUND OR grace_result.idempotent OR grace_result.membership_state<>'ACTIVE'
+    OR grace_result.standing<>'ACTIVE' THEN
+   RAISE EXCEPTION 'GRACE renewal settlement did not restore ACTIVE standing';
+ END IF;
+
+ SELECT * INTO restricted_result FROM settle_membership_subscription(
+   'invoice:renewal-restricted','evidence:renewal-restricted','member-session:renewal-restricted',
+   'audit:renewal-restricted','request:renewal-restricted',now());
+ IF NOT FOUND OR restricted_result.idempotent OR restricted_result.membership_state<>'ACTIVE'
+    OR restricted_result.standing<>'ACTIVE' THEN
+   RAISE EXCEPTION 'RESTRICTED renewal settlement did not restore ACTIVE standing';
+ END IF;
+
+ SELECT count(*) INTO ambiguous_count FROM settle_membership_subscription(
+   'invoice:renewal-ambiguous-new','evidence:renewal-ambiguous','member-session:renewal-ambiguous',
+   'audit:renewal-ambiguous','request:renewal-ambiguous',now());
+ IF ambiguous_count<>0
+    OR (SELECT standing FROM application_membership WHERE membership_id='membership:renewal-ambiguous')<>'GRACE'
+    OR (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:renewal-ambiguous-new')<>'OPEN'
+    OR EXISTS (SELECT 1 FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:renewal-ambiguous') THEN
+   RAISE EXCEPTION 'multi-overdue renewal did not fail closed without durable effects';
+ END IF;
+
+ IF (SELECT count(*) FROM application_access_audit
+       WHERE event_type='MEMBERSHIP_RENEWAL_SETTLED'
+         AND membership_id IN ('membership:renewal-grace','membership:renewal-restricted'))<>2 THEN
+   RAISE EXCEPTION 'renewal settlement audit lineage is incomplete';
  END IF;
 END $$;
 ROLLBACK;
@@ -106,7 +181,9 @@ INSERT INTO electronic_payment_evidence(
 ) VALUES
  ('evidence:settlement','membership:settlement','invoice:settlement','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:settlement',now()),
  ('evidence:suspended','membership:suspended','invoice:suspended','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:suspended',now()),
- ('evidence:mismatch','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',9999,'GHS','provider:mismatch',now());
+ ('evidence:mismatch','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',9999,'GHS','provider:mismatch',now()),
+ ('evidence:null-obligation','membership:mismatch',NULL,'MOBILE_MONEY','RECONCILED',10000,'GHS','provider:null-obligation',now()),
+ ('evidence:future','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:future',now()+interval '1 hour');
 DO $$
 DECLARE first_result record; replay_result record;
 BEGIN
@@ -130,6 +207,39 @@ BEGIN
    'invoice:mismatch','evidence:mismatch','member-session:mismatch',
    'audit:mismatch','request:mismatch',now());
  IF FOUND THEN RAISE EXCEPTION 'amount-mismatched evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:null-obligation','member-session:mismatch',
+   'audit:null-obligation','request:null-obligation',now());
+ IF FOUND THEN RAISE EXCEPTION 'null-obligation evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:future','member-session:mismatch',
+   'audit:future','request:future',now());
+ IF FOUND THEN RAISE EXCEPTION 'future-reconciled evidence settled an invoice'; END IF;
+ BEGIN
+  UPDATE electronic_payment_evidence SET state='REVERSED' WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'consumed subscription evidence rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='consumed subscription evidence rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  DELETE FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'subscription consumption deletion unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='subscription consumption deletion unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_settlement_allocation SET amount_minor=1
+    WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'subscription allocation rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='subscription allocation rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_invoice SET state='OPEN' WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'paid subscription reversal unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='paid subscription reversal unexpectedly succeeded' THEN RAISE; END IF;
+ END;
  IF (SELECT count(*) FROM membership_subscription_settlement_allocation)<>1
     OR (SELECT count(*) FROM electronic_payment_evidence_consumption)<>1
     OR (SELECT count(*) FROM application_access_audit WHERE event_type='MEMBERSHIP_SUBSCRIPTION_SETTLED')<>1
@@ -409,5 +519,81 @@ consent=$("${PSQL[@]}" -Atc "SELECT consent_version||':'||promotional_opt_in FRO
 if "${PSQL[@]}" -c "INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count) VALUES('communication:duplicate','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','dup','dup','QUEUED',now(),now(),0)" >/dev/null 2>&1; then echo "communication durable dedupe unexpectedly allowed duplicate" >&2; exit 1; fi
 claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
 [[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
+
+# Subscription settlement is serialized under independent database sessions.
+# A same-evidence retry becomes one durable settlement plus one idempotent replay.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:renewal-same-race','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids,
+  grace_started_at,grace_ends_at
+) VALUES ('membership:renewal-same-race','participant:renewal-same-race','ACTIVE','GRACE','PRIMARY','WFC-RENEW-SAME-RACE',now()-interval '1 year','test-v1',ARRAY['eligibility:renewal-same-race'],now()-interval '10 days',now()+interval '20 days');
+INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
+VALUES ('invoice:renewal-same-race','membership:renewal-same-race',2026,10000,'GHS','OPEN',now()-interval '2 days');
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES ('member-session:renewal-same-race:a','membership:renewal-same-race','participant:renewal-same-race','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal-same-race:b','membership:renewal-same-race','participant:renewal-same-race','ACTIVE',now()+interval '1 hour');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES ('evidence:renewal-same-race','membership:renewal-same-race','invoice:renewal-same-race','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-same-race',now());
+SQL
+renewal_same_a=$(mktemp)
+renewal_same_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT CASE WHEN idempotent THEN 'replay' ELSE 'settled' END FROM settle_membership_subscription('invoice:renewal-same-race','evidence:renewal-same-race','member-session:renewal-same-race:a','audit:renewal-same-race:a','request:renewal-same-race:a',now())" >"$renewal_same_a" &
+renewal_same_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT CASE WHEN idempotent THEN 'replay' ELSE 'settled' END FROM settle_membership_subscription('invoice:renewal-same-race','evidence:renewal-same-race','member-session:renewal-same-race:b','audit:renewal-same-race:b','request:renewal-same-race:b',now())" >"$renewal_same_b" &
+renewal_same_pid_b=$!
+wait "$renewal_same_pid_a"
+wait "$renewal_same_pid_b"
+renewal_same_results=$(sort "$renewal_same_a" "$renewal_same_b" | paste -sd, -)
+rm -f "$renewal_same_a" "$renewal_same_b"
+renewal_same_effects=$("${PSQL[@]}" -Atc "SELECT
+  (SELECT count(*) FROM membership_subscription_settlement_allocation WHERE invoice_id='invoice:renewal-same-race')||':'||
+  (SELECT count(*) FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:renewal-same-race')||':'||
+  (SELECT count(*) FROM application_access_audit WHERE membership_id='membership:renewal-same-race' AND event_type='MEMBERSHIP_RENEWAL_SETTLED')||':'||
+  (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:renewal-same-race')||':'||
+  (SELECT standing FROM application_membership WHERE membership_id='membership:renewal-same-race')")
+[[ "$renewal_same_results" == "replay,settled" && "$renewal_same_effects" == "1:1:1:PAID:ACTIVE" ]] || { echo "same-evidence renewal race was not exactly-once with idempotent replay" >&2; exit 1; }
+
+# Competing exact evidence for one invoice may produce only one winner; the
+# losing evidence must remain unused and may not create a second audit effect.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:renewal-competing-race','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES ('membership:renewal-competing-race','participant:renewal-competing-race','ACTIVE','RESTRICTED','PRIMARY','WFC-RENEW-COMPETING-RACE',now()-interval '1 year','test-v1',ARRAY['eligibility:renewal-competing-race']);
+INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
+VALUES ('invoice:renewal-competing-race','membership:renewal-competing-race',2026,10000,'GHS','OPEN',now()-interval '40 days');
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES ('member-session:renewal-competing-race:a','membership:renewal-competing-race','participant:renewal-competing-race','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal-competing-race:b','membership:renewal-competing-race','participant:renewal-competing-race','ACTIVE',now()+interval '1 hour');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES ('evidence:renewal-competing-race:a','membership:renewal-competing-race','invoice:renewal-competing-race','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-competing-race:a',now()),
+         ('evidence:renewal-competing-race:b','membership:renewal-competing-race','invoice:renewal-competing-race','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-competing-race:b',now());
+SQL
+renewal_competing_a=$(mktemp)
+renewal_competing_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM settle_membership_subscription('invoice:renewal-competing-race','evidence:renewal-competing-race:a','member-session:renewal-competing-race:a','audit:renewal-competing-race:a','request:renewal-competing-race:a',now())" >"$renewal_competing_a" &
+renewal_competing_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM settle_membership_subscription('invoice:renewal-competing-race','evidence:renewal-competing-race:b','member-session:renewal-competing-race:b','audit:renewal-competing-race:b','request:renewal-competing-race:b',now())" >"$renewal_competing_b" &
+renewal_competing_pid_b=$!
+wait "$renewal_competing_pid_a"
+wait "$renewal_competing_pid_b"
+renewal_competing_total=$(( $(cat "$renewal_competing_a") + $(cat "$renewal_competing_b") ))
+rm -f "$renewal_competing_a" "$renewal_competing_b"
+renewal_competing_effects=$("${PSQL[@]}" -Atc "SELECT
+  (SELECT count(*) FROM membership_subscription_settlement_allocation WHERE invoice_id='invoice:renewal-competing-race')||':'||
+  (SELECT count(*) FROM electronic_payment_evidence_consumption WHERE evidence_id IN ('evidence:renewal-competing-race:a','evidence:renewal-competing-race:b'))||':'||
+  (SELECT count(*) FROM application_access_audit WHERE membership_id='membership:renewal-competing-race' AND event_type='MEMBERSHIP_RENEWAL_SETTLED')||':'||
+  (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:renewal-competing-race')||':'||
+  (SELECT standing FROM application_membership WHERE membership_id='membership:renewal-competing-race')")
+[[ "$renewal_competing_total" == "1" && "$renewal_competing_effects" == "1:1:1:PAID:ACTIVE" ]] || { echo "competing-evidence renewal race produced more than one economic effect" >&2; exit 1; }
 
 echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications, A2 membership/credit and A10 support lifecycle proof passed"
