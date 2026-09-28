@@ -88,8 +88,8 @@ INSERT INTO application_membership(
 INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
 VALUES ('invoice:renewal-grace','membership:renewal-grace',2026,10000,'GHS','OPEN',now()-interval '2 days'),
        ('invoice:renewal-restricted','membership:renewal-restricted',2026,10000,'GHS','OPEN',now()-interval '40 days'),
-       ('invoice:renewal-ambiguous-old','membership:renewal-ambiguous',2025,10000,'GHS','OPEN',now()-interval '1 year'),
-       ('invoice:renewal-ambiguous-new','membership:renewal-ambiguous',2026,10000,'GHS','OPEN',now()-interval '2 days');
+       ('invoice:renewal-ambiguous-old','membership:renewal-ambiguous',2026,10000,'GHS','OPEN',now()-interval '1 year'),
+       ('invoice:renewal-ambiguous-new','membership:renewal-ambiguous',2027,10000,'GHS','OPEN',now()-interval '2 days');
 INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
 VALUES ('member-session:renewal-grace','membership:renewal-grace','participant:renewal-grace','ACTIVE',now()+interval '1 hour'),
        ('member-session:renewal-restricted','membership:renewal-restricted','participant:renewal-restricted','ACTIVE',now()+interval '1 hour'),
