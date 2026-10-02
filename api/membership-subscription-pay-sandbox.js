@@ -53,14 +53,10 @@ export default async function handler(req, res, options = {}) {
     const requestId = req.headers?.['x-request-id'] || null;
 
     const rows = await sql`
-      WITH evidence AS (
-        INSERT INTO electronic_payment_evidence(evidence_id, membership_id, obligation_id, rail, state, amount_minor, currency, provider_reference, reconciled_at)
-        VALUES (${evidenceId}, ${membershipId}, ${invoiceId}, ${rail}, 'RECONCILED', ${invoice.amount_minor}, ${invoice.currency}, ${providerReference}, ${nowIso})
-        RETURNING evidence_id
-      ), settled AS (
-        SELECT * FROM settle_membership_subscription(${invoiceId}, (SELECT evidence_id FROM evidence), ${sessionId}, ${auditId}, ${requestId}, ${nowIso})
-      )
-      SELECT * FROM settled`;
+      SELECT * FROM simulate_and_settle_membership_subscription(
+        ${invoiceId}, ${membershipId}, ${evidenceId}, ${rail},
+        ${providerReference}, ${sessionId}, ${auditId}, ${requestId}, ${nowIso}
+      )`;
 
     if (rows.length !== 1) return res.status(409).json({ ok: false, error: 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE' });
     const result = rows[0];
