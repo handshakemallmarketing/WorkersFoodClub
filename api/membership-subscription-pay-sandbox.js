@@ -52,11 +52,28 @@ export default async function handler(req, res, options = {}) {
     const auditId = `audit:subscription:sandbox:${randomUUID()}`;
     const requestId = req.headers?.['x-request-id'] || null;
 
-    const rows = await sql`
-      SELECT * FROM simulate_and_settle_membership_subscription(
-        ${invoiceId}, ${membershipId}, ${evidenceId}, ${rail},
-        ${providerReference}, ${sessionId}, ${auditId}, ${requestId}, ${nowIso}
-      )`;
+    if (typeof sql.transaction !== 'function') return res.status(503).json({ ok: false, error: 'DATABASE_TRANSACTION_UNAVAILABLE' });
+    const [, rows] = await sql.transaction([
+      sql`
+        INSERT INTO electronic_payment_evidence(
+          evidence_id, membership_id, obligation_id, rail, state, amount_minor,
+          currency, provider_reference, reconciled_at
+        ) VALUES (
+          ${evidenceId}, ${membershipId}, ${invoiceId}, ${rail}, 'RECONCILED',
+          ${invoice.amount_minor}, ${invoice.currency}, ${providerReference}, ${nowIso}
+        )
+        RETURNING evidence_id`,
+      sql`
+        SELECT * FROM settle_membership_subscription(
+          ${invoiceId}, ${evidenceId}, ${sessionId}, ${auditId}, ${requestId}, ${nowIso}
+        )`,
+      sql`
+        SELECT 1 / (
+          SELECT count(*)::integer
+          FROM membership_subscription_settlement_allocation
+          WHERE invoice_id=${invoiceId} AND evidence_id=${evidenceId}
+        ) AS settlement_guard`,
+    ]);
 
     if (rows.length !== 1) return res.status(409).json({ ok: false, error: 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE' });
     const result = rows[0];
@@ -73,6 +90,7 @@ export default async function handler(req, res, options = {}) {
       standing: String(result.standing),
     });
   } catch (error) {
+    if (error?.code === '22012') return res.status(409).json({ ok: false, error: 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE' });
     console.error('Sandbox membership subscription payment failed', { name: error?.name, code: error?.code, message: error?.message });
     return res.status(503).json({ ok: false, error: 'SANDBOX_SUBSCRIPTION_PAYMENT_FAILED' });
   }

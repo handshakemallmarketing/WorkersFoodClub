@@ -11,14 +11,13 @@ test('migration rejects every contradictory historical paid-state marker',()=>{
 });
 
 test('Preview evidence synthesis and settlement share one rollback boundary',()=>{
-  assert.match(migration,/CREATE OR REPLACE FUNCTION simulate_and_settle_membership_subscription/);
-  assert.match(migration,/SELECT \* INTO inv[\s\S]*FOR UPDATE/);
-  assert.match(migration,/INSERT INTO electronic_payment_evidence/);
-  assert.match(migration,/RETURN QUERY[\s\S]*settle_membership_subscription/);
-  assert.match(migration,/GET DIAGNOSTICS changed=ROW_COUNT/);
-  assert.match(migration,/sandbox subscription settlement rejected after evidence synthesis/);
-  assert.match(endpoint,/SELECT \* FROM simulate_and_settle_membership_subscription/);
-  assert.doesNotMatch(endpoint,/WITH evidence AS/);
+  assert.match(endpoint,/sql\.transaction\(\[/);
+  assert.match(endpoint,/INSERT INTO electronic_payment_evidence/);
+  assert.match(endpoint,/SELECT \* FROM settle_membership_subscription/);
+  assert.match(endpoint,/membership_subscription_settlement_allocation/);
+  assert.match(endpoint,/count\(\*\)::integer/);
+  assert.match(endpoint,/error\?\.code === '22012'/);
+  assert.doesNotMatch(migration,/simulate_and_settle_membership_subscription/);
 });
 
 test('scope remains Preview-only and excludes blocked economic and authority surfaces',()=>{

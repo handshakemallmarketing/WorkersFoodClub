@@ -44,34 +44,46 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 # This deliberately manufactures a pre-038 historical row by temporarily
 # disabling only the migration-037 insert trigger in the isolated CI database.
 "${PSQL[@]}" <<'SQL'
+BEGIN;
 INSERT INTO application_participant(participant_id,kind,state)
-VALUES ('participant:legacy-paid-at','PERSON','ACTIVE');
+VALUES ('participant:legacy-paid-at','PERSON','ACTIVE'),
+       ('participant:legacy-void-paid-at','PERSON','ACTIVE');
 INSERT INTO application_membership(
   membership_id,participant_id,state,standing,member_type,public_member_id,
   established_at,eligibility_policy_version,eligibility_evidence_ids
-) VALUES (
+) VALUES
+(
   'membership:legacy-paid-at','participant:legacy-paid-at','INACTIVE',
   'INITIAL_FEE_DUE','PRIMARY','WFC-LEGACY-PAID-AT',now(),'test-v1',
   ARRAY['eligibility:legacy-paid-at']
+),(
+  'membership:legacy-void-paid-at','participant:legacy-void-paid-at','INACTIVE',
+  'INITIAL_FEE_DUE','PRIMARY','WFC-LEGACY-VOID-PAID-AT',now(),'test-v1',
+  ARRAY['eligibility:legacy-void-paid-at']
 );
 ALTER TABLE membership_subscription_invoice DISABLE TRIGGER paid_subscription_insert_lineage_trg;
 INSERT INTO membership_subscription_invoice(
   invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at,paid_at
-) VALUES (
+) VALUES
+(
   'invoice:legacy-paid-at','membership:legacy-paid-at',2026,10000,'GHS','OPEN',now(),now()
+),(
+  'invoice:legacy-void-paid-at','membership:legacy-void-paid-at',2026,10000,'GHS','VOID',now(),now()
 );
 ALTER TABLE membership_subscription_invoice ENABLE TRIGGER paid_subscription_insert_lineage_trg;
+COMMIT;
 SQL
 if "${PSQL[@]}" -f packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql >/dev/null 2>&1; then
   echo "migration 038 accepted contradictory historical paid_at state" >&2
   exit 1
 fi
-postmerge_wrapper_after_rejection=$("${PSQL[@]}" -Atc "SELECT to_regprocedure('simulate_and_settle_membership_subscription(text,text,text,text,text,text,text,text,timestamptz)') IS NOT NULL")
-[[ "$postmerge_wrapper_after_rejection" == "f" ]] || { echo "failed migration 038 left a partial wrapper function" >&2; exit 1; }
 "${PSQL[@]}" <<'SQL'
-DELETE FROM membership_subscription_invoice WHERE invoice_id='invoice:legacy-paid-at';
-DELETE FROM application_membership WHERE membership_id='membership:legacy-paid-at';
-DELETE FROM application_participant WHERE participant_id='participant:legacy-paid-at';
+DELETE FROM membership_subscription_invoice
+WHERE invoice_id IN ('invoice:legacy-paid-at','invoice:legacy-void-paid-at');
+DELETE FROM application_membership
+WHERE membership_id IN ('membership:legacy-paid-at','membership:legacy-void-paid-at');
+DELETE FROM application_participant
+WHERE participant_id IN ('participant:legacy-paid-at','participant:legacy-void-paid-at');
 SQL
 "${PSQL[@]}" -f packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql
 # The wrapper and stricter preflight are forward-only and replay safe.
@@ -165,23 +177,6 @@ BEGIN
     OR (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:renewal-ambiguous-new')<>'OPEN'
     OR EXISTS (SELECT 1 FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:renewal-ambiguous') THEN
    RAISE EXCEPTION 'multi-overdue renewal did not fail closed without durable effects';
- END IF;
-
- BEGIN
-   PERFORM * FROM simulate_and_settle_membership_subscription(
-     'invoice:renewal-ambiguous-new','membership:renewal-ambiguous',
-     'evidence:renewal-ambiguous-sandbox','MOBILE_MONEY',
-     'provider:renewal-ambiguous-sandbox','member-session:renewal-ambiguous',
-     'audit:renewal-ambiguous-sandbox','request:renewal-ambiguous-sandbox',now());
-   RAISE EXCEPTION 'ambiguous sandbox settlement unexpectedly succeeded';
- EXCEPTION WHEN raise_exception THEN
-   IF SQLERRM='ambiguous sandbox settlement unexpectedly succeeded' THEN RAISE; END IF;
- END;
- IF EXISTS (
-   SELECT 1 FROM electronic_payment_evidence
-   WHERE evidence_id='evidence:renewal-ambiguous-sandbox'
- ) THEN
-   RAISE EXCEPTION 'rejected sandbox settlement leaked synthesized evidence';
  END IF;
 
  IF (SELECT count(*) FROM application_access_audit

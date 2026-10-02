@@ -21,9 +21,12 @@ function fakeSql({ session, invoice, settled } = {}) {
     calls.push({ text, values });
     if (text.includes('FROM member_session')) { assert.equal(values[0], SESSION_ID); return session ? [session] : []; }
     if (text.includes('FROM membership_subscription_invoice')) return invoice ? [invoice] : [];
-    if (text.includes('simulate_and_settle_membership_subscription')) return settled ? [settled] : [];
+    if (text.includes('INSERT INTO electronic_payment_evidence')) return [{ evidence_id: 'evidence:test' }];
+    if (text.includes('settle_membership_subscription')) return settled ? [settled] : [];
+    if (text.includes('AS settlement_guard')) return [{ settlement_guard: 1 }];
     throw new Error('UNEXPECTED_QUERY: ' + text);
   };
+  sql.transaction = async queries => Promise.all(queries);
   sql.calls = calls;
   return sql;
 }
@@ -109,10 +112,13 @@ test('simulates a reconciled payment and settles the invoice atomically', async 
   assert.equal(res.result.body.sandboxSimulated, true);
   assert.equal(res.result.body.publicMemberId, '555555555001');
   assert.equal(res.result.body.membershipState, 'ACTIVE');
-  const settleCall = sql.calls.find(c => c.text.includes('simulate_and_settle_membership_subscription'));
+  const settleCall = sql.calls.find(c => c.text.includes('settle_membership_subscription'));
   assert.ok(settleCall);
-  assert.ok(settleCall.values.includes('membership:1'));
   assert.ok(settleCall.values.includes('invoice:1'));
+  const evidenceCall = sql.calls.find(c => c.text.includes('INSERT INTO electronic_payment_evidence'));
+  assert.ok(evidenceCall.values.includes(openInvoice.amount_minor));
+  assert.ok(evidenceCall.values.includes(openInvoice.currency));
+  assert.ok(sql.calls.some(c => c.text.includes('AS settlement_guard')));
 });
 
 test('rejects an unknown rail by defaulting to MOBILE_MONEY rather than failing', async () => {
@@ -120,8 +126,8 @@ test('rejects an unknown rail by defaulting to MOBILE_MONEY rather than failing'
   const sql = fakeSql({ session: activeSession, invoice: openInvoice, settled });
   const res = response();
   await handler(req({ invoiceId: 'invoice:1', rail: 'NOT_A_REAL_RAIL' }), res, { env: PREVIEW_ENV, now: NOW, sql });
-  const settleCall = sql.calls.find(c => c.text.includes('simulate_and_settle_membership_subscription'));
-  assert.ok(settleCall.values.includes('MOBILE_MONEY'));
+  const evidenceCall = sql.calls.find(c => c.text.includes('INSERT INTO electronic_payment_evidence'));
+  assert.ok(evidenceCall.values.includes('MOBILE_MONEY'));
 });
 
 test('reports settlement not applicable when the atomic function settles nothing', async () => {
@@ -130,4 +136,27 @@ test('reports settlement not applicable when the atomic function settles nothing
   await handler(req({ invoiceId: 'invoice:1' }), res, { env: PREVIEW_ENV, now: NOW, sql });
   assert.equal(res.result.statusCode, 409);
   assert.equal(res.result.body.error, 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE');
+});
+
+test('maps the transaction rollback guard to settlement not applicable', async () => {
+  const sql = fakeSql({ session: activeSession, invoice: openInvoice });
+  sql.transaction = async () => {
+    const error = new Error('division by zero');
+    error.code = '22012';
+    throw error;
+  };
+  const res = response();
+  await handler(req({ invoiceId: 'invoice:1' }), res, { env: PREVIEW_ENV, now: NOW, sql });
+  assert.equal(res.result.statusCode, 409);
+  assert.equal(res.result.body.error, 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE');
+});
+
+test('fails closed when the database adapter cannot provide a transaction boundary', async () => {
+  const sql = fakeSql({ session: activeSession, invoice: openInvoice });
+  delete sql.transaction;
+  const res = response();
+  await handler(req({ invoiceId: 'invoice:1' }), res, { env: PREVIEW_ENV, now: NOW, sql });
+  assert.equal(res.result.statusCode, 503);
+  assert.equal(res.result.body.error, 'DATABASE_TRANSACTION_UNAVAILABLE');
+  assert.equal(sql.calls.length, 2);
 });
