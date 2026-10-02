@@ -5,6 +5,7 @@ import handler from '../../api/membership-subscription-pay-sandbox.js';
 
 const NOW = Date.parse('2026-09-23T12:00:00Z');
 const TOKEN = 'wfc_test_member_session';
+const REQUEST_ID = 'request:subscription:test-1';
 const SESSION_ID = 'member-session:' + createHash('sha256').update(TOKEN).digest('hex');
 const PREVIEW_ENV = { VERCEL_ENV: 'preview', DATABASE_URL: 'postgres://test' };
 
@@ -12,18 +13,28 @@ function response() {
   const result = { statusCode: null, body: null, headers: {} };
   return { result, setHeader(n, v) { result.headers[String(n).toLowerCase()] = v; return this; }, status(c) { result.statusCode = c; return this; }, json(b) { result.body = b; return this; } };
 }
-function req(body, token = TOKEN) { return { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {}, body }; }
+function req(body, token = TOKEN, requestId = REQUEST_ID) {
+  const headers = token ? { authorization: `Bearer ${token}` } : {};
+  if (requestId) headers['x-request-id'] = requestId;
+  return { method: 'POST', headers, body };
+}
 
-function fakeSql({ session, invoice, settled } = {}) {
+function fakeSql({ session, invoice, settled, durable = settled, requestAccepted = true, completed = true } = {}) {
   const calls = [];
   const sql = async (strings, ...values) => {
     const text = strings.join('?');
     calls.push({ text, values });
     if (text.includes('FROM member_session')) { assert.equal(values[0], SESSION_ID); return session ? [session] : []; }
     if (text.includes('FROM membership_subscription_invoice')) return invoice ? [invoice] : [];
+    if (text.includes('INSERT INTO membership_subscription_sandbox_request')) return requestAccepted ? [{ request_id: REQUEST_ID }] : [];
     if (text.includes('INSERT INTO electronic_payment_evidence')) return [{ evidence_id: 'evidence:test' }];
     if (text.includes('settle_membership_subscription')) return settled ? [settled] : [];
-    if (text.includes('AS settlement_guard')) return [{ settlement_guard: 1 }];
+    if (text.includes('UPDATE membership_subscription_sandbox_request')) return completed ? [{
+      request_id: REQUEST_ID,
+      result_public_member_id: durable?.public_member_id,
+      result_membership_state: durable?.membership_state,
+      result_standing: durable?.standing,
+    }] : [];
     throw new Error('UNEXPECTED_QUERY: ' + text);
   };
   sql.transaction = async queries => Promise.all(queries);
@@ -68,6 +79,15 @@ test('requires an invoiceId', async () => {
   assert.equal(res.result.body.error, 'INVOICE_ID_REQUIRED');
 });
 
+test('requires a bounded request id before database access', async () => {
+  const sql = fakeSql();
+  const res = response();
+  await handler(req({ invoiceId: 'invoice:1' }, TOKEN, null), res, { env: PREVIEW_ENV, now: NOW, sql });
+  assert.equal(res.result.statusCode, 400);
+  assert.equal(res.result.body.error, 'REQUEST_ID_REQUIRED');
+  assert.equal(sql.calls.length, 0);
+});
+
 test('rejects an invalid or expired session before touching the invoice', async () => {
   const sql = fakeSql({ session: null });
   const res = response();
@@ -85,13 +105,13 @@ test('404s when the invoice does not belong to this membership', async () => {
   assert.equal(res.result.body.error, 'INVOICE_NOT_FOUND');
 });
 
-test('refuses an already-settled invoice without creating new evidence', async () => {
+test('refuses an already-settled invoice under a different request identity', async () => {
   const sql = fakeSql({ session: activeSession, invoice: { ...openInvoice, state: 'PAID' } });
   const res = response();
   await handler(req({ invoiceId: 'invoice:1' }), res, { env: PREVIEW_ENV, now: NOW, sql });
   assert.equal(res.result.statusCode, 409);
-  assert.equal(res.result.body.error, 'INVOICE_ALREADY_SETTLED');
-  assert.equal(sql.calls.length, 2);
+  assert.equal(res.result.body.error, 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE');
+  assert.ok(sql.calls.some(c => c.text.includes('INSERT INTO membership_subscription_sandbox_request')));
 });
 
 test('refuses a non-OPEN invoice', async () => {
@@ -118,7 +138,7 @@ test('simulates a reconciled payment and settles the invoice atomically', async 
   const evidenceCall = sql.calls.find(c => c.text.includes('INSERT INTO electronic_payment_evidence'));
   assert.ok(evidenceCall.values.includes(openInvoice.amount_minor));
   assert.ok(evidenceCall.values.includes(openInvoice.currency));
-  assert.ok(sql.calls.some(c => c.text.includes('AS settlement_guard')));
+  assert.ok(sql.calls.some(c => c.text.includes('UPDATE membership_subscription_sandbox_request')));
 });
 
 test('rejects an unknown rail by defaulting to MOBILE_MONEY rather than failing', async () => {
@@ -141,8 +161,9 @@ test('reports settlement not applicable when the atomic function settles nothing
 test('maps the transaction rollback guard to settlement not applicable', async () => {
   const sql = fakeSql({ session: activeSession, invoice: openInvoice });
   sql.transaction = async () => {
-    const error = new Error('division by zero');
-    error.code = '22012';
+    const error = new Error('sandbox request completion check');
+    error.code = '23514';
+    error.constraint = 'membership_subscription_sandbox_request_state_ck';
     throw error;
   };
   const res = response();
@@ -159,4 +180,40 @@ test('fails closed when the database adapter cannot provide a transaction bounda
   assert.equal(res.result.statusCode, 503);
   assert.equal(res.result.body.error, 'DATABASE_TRANSACTION_UNAVAILABLE');
   assert.equal(sql.calls.length, 2);
+});
+
+test('exact request replay deterministically reuses evidence and provider identity', async () => {
+  const settled = { membership_id: 'membership:1', public_member_id: '555555555001', membership_state: 'ACTIVE', standing: 'ACTIVE', idempotent: true };
+  const sql = fakeSql({ session: activeSession, invoice: { ...openInvoice, state: 'PAID' }, settled });
+  const first = response(), second = response();
+  await handler(req({ invoiceId: 'invoice:1' }), first, { env: PREVIEW_ENV, now: NOW, sql });
+  await handler(req({ invoiceId: 'invoice:1' }), second, { env: PREVIEW_ENV, now: NOW + 1000, sql });
+  assert.equal(first.result.statusCode, 200);
+  assert.equal(second.result.statusCode, 200);
+  assert.equal(first.result.body.evidenceId, second.result.body.evidenceId);
+  assert.equal(second.result.body.idempotent, true);
+  const registryCalls = sql.calls.filter(c => c.text.includes('INSERT INTO membership_subscription_sandbox_request'));
+  assert.equal(registryCalls.length, 2);
+  assert.equal(registryCalls[0].values[6], registryCalls[1].values[6]);
+  assert.equal(registryCalls[0].values[7], registryCalls[1].values[7]);
+});
+
+test('replay returns the immutable original result rather than later membership state', async () => {
+  const durable = { public_member_id: '555555555001', membership_state: 'ACTIVE', standing: 'ACTIVE' };
+  const settled = { membership_id: 'membership:1', public_member_id: '555555555001', membership_state: 'SUSPENDED', standing: 'SUSPENDED', idempotent: true };
+  const sql = fakeSql({ session: activeSession, invoice: { ...openInvoice, state: 'PAID' }, settled, durable });
+  const res = response();
+  await handler(req({ invoiceId: 'invoice:1' }), res, { env: PREVIEW_ENV, now: NOW, sql });
+  assert.equal(res.result.statusCode, 200);
+  assert.equal(res.result.body.membershipState, 'ACTIVE');
+  assert.equal(res.result.body.standing, 'ACTIVE');
+});
+
+test('request rebound fails closed without reporting settlement success', async () => {
+  const settled = { membership_id: 'membership:1', public_member_id: '555555555001', membership_state: 'ACTIVE', standing: 'ACTIVE', idempotent: true };
+  const sql = fakeSql({ session: activeSession, invoice: openInvoice, settled, requestAccepted: false });
+  const res = response();
+  await handler(req({ invoiceId: 'invoice:1' }), res, { env: PREVIEW_ENV, now: NOW, sql });
+  assert.equal(res.result.statusCode, 409);
+  assert.equal(res.result.body.error, 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE');
 });
