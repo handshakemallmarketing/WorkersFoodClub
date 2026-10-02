@@ -1,1 +1,653 @@
-m«ë
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${DATABASE_URL:=postgresql://postgres:postgres@localhost:5432/foodclub_test}"
+PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
+
+"${PSQL[@]}" -f packages/durability/sql/001_durable_command_execution.sql
+"${PSQL[@]}" -f packages/durability/sql/002_canonical_event_store.sql
+"${PSQL[@]}" -f packages/durability/sql/003_command_fencing.sql
+"${PSQL[@]}" -f packages/durability/sql/004_physical_lineage.sql
+"${PSQL[@]}" -f packages/durability/sql/005_member_communications.sql
+"${PSQL[@]}" -f packages/durability/sql/006_application_identity_binding.sql
+"${PSQL[@]}" -f packages/durability/sql/007_application_authority_membership.sql
+"${PSQL[@]}" -f packages/durability/sql/008_identity_binding_referential_integrity.sql
+"${PSQL[@]}" -f packages/durability/sql/009_preview_runtime_schema.sql
+"${PSQL[@]}" -f packages/durability/sql/011_preview_runtime_timestamp_defaults.sql
+"${PSQL[@]}" -f packages/durability/sql/012_membership_business_logic_v2.sql
+"${PSQL[@]}" -f packages/durability/sql/013_membership_shopping_credit_accounting.sql
+"${PSQL[@]}" -f packages/durability/sql/014_wave2_support_case.sql
+"${PSQL[@]}" -f packages/durability/sql/017_membership_application.sql
+"${PSQL[@]}" -f packages/durability/sql/018_entry_journey_activation.sql
+"${PSQL[@]}" -f packages/durability/sql/019_membership_lifecycle_v3.sql
+"${PSQL[@]}" -f packages/durability/sql/020_guest_membership_enrollment.sql
+"${PSQL[@]}" -f packages/durability/sql/029_member_auth_runtime_consistency.sql
+"${PSQL[@]}" -f packages/durability/sql/022_external_service_configuration.sql
+# Migration 022 is additive and must remain safe to replay during deployment recovery.
+"${PSQL[@]}" -f packages/durability/sql/022_external_service_configuration.sql
+"${PSQL[@]}" -f packages/durability/sql/030_member_number_recovery.sql
+# Recovery schema is also forward-only and safe to replay.
+"${PSQL[@]}" -f packages/durability/sql/030_member_number_recovery.sql
+"${PSQL[@]}" -f packages/durability/sql/031_member_auth_challenge_atomicity.sql
+# Native authentication race constraints and functions must also replay safely.
+"${PSQL[@]}" -f packages/durability/sql/031_member_auth_challenge_atomicity.sql
+"${PSQL[@]}" -f packages/durability/sql/023_credit_payroll_promotions_v1.sql
+"${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
+# Settlement evidence claims and functions must remain replay safe.
+"${PSQL[@]}" -f packages/durability/sql/032_membership_subscription_evidence_atomicity.sql
+"${PSQL[@]}" -f packages/durability/sql/036_membership_renewal_grace_settlement.sql
+"${PSQL[@]}" -f packages/durability/sql/037_membership_subscription_evidence_hardening.sql
+# Subscription-only lineage hardening is forward-only and replay safe.
+"${PSQL[@]}" -f packages/durability/sql/037_membership_subscription_evidence_hardening.sql
+
+# Migration 038 must reject contradictory legacy paid_at history atomically.
+# This deliberately manufactures a pre-038 historical row by temporarily
+# disabling only the migration-037 insert trigger in the isolated CI database.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:legacy-paid-at','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES (
+  'membership:legacy-paid-at','participant:legacy-paid-at','INACTIVE',
+  'INITIAL_FEE_DUE','PRIMARY','WFC-LEGACY-PAID-AT',now(),'test-v1',
+  ARRAY['eligibility:legacy-paid-at']
+);
+ALTER TABLE membership_subscription_invoice DISABLE TRIGGER paid_subscription_insert_lineage_trg;
+INSERT INTO membership_subscription_invoice(
+  invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at,paid_at
+) VALUES (
+  'invoice:legacy-paid-at','membership:legacy-paid-at',2026,10000,'GHS','OPEN',now(),now()
+);
+ALTER TABLE membership_subscription_invoice ENABLE TRIGGER paid_subscription_insert_lineage_trg;
+SQL
+if "${PSQL[@]}" -f packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql >/dev/null 2>&1; then
+  echo "migration 038 accepted contradictory historical paid_at state" >&2
+  exit 1
+fi
+postmerge_wrapper_after_rejection=$("${PSQL[@]}" -Atc "SELECT to_regprocedure('simulate_and_settle_membership_subscription(text,text,text,text,text,text,text,text,timestamptz)') IS NOT NULL")
+[[ "$postmerge_wrapper_after_rejection" == "f" ]] || { echo "failed migration 038 left a partial wrapper function" >&2; exit 1; }
+"${PSQL[@]}" <<'SQL'
+DELETE FROM membership_subscription_invoice WHERE invoice_id='invoice:legacy-paid-at';
+DELETE FROM application_membership WHERE membership_id='membership:legacy-paid-at';
+DELETE FROM application_participant WHERE participant_id='participant:legacy-paid-at';
+SQL
+"${PSQL[@]}" -f packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql
+# The wrapper and stricter preflight are forward-only and replay safe.
+"${PSQL[@]}" -f packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql
+
+preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
+[[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
+a2_membership_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('member_application','beneficiary_invitation','membership_invoice','membership_invoice_settlement')")
+[[ "$a2_membership_tables" == "4" ]] || { echo "A2 membership schema is not reproducible from migrations" >&2; exit 1; }
+a2_credit_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('membership_shopping_credit_lot','membership_shopping_credit_entry')")
+[[ "$a2_credit_tables" == "2" ]] || { echo "A2 shopping-credit schema is not reproducible from migrations" >&2; exit 1; }
+a10_support_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('support_case','support_case_transition')")
+[[ "$a10_support_tables" == "2" ]] || { echo "A10 support schema is not reproducible from migrations" >&2; exit 1; }
+external_service_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('external_service_configuration','external_service_configuration_event')")
+[[ "$external_service_tables" == "2" ]] || { echo "external service configuration schema is not reproducible from migration 022" >&2; exit 1; }
+member_recovery_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='member_number_recovery_challenge'")
+[[ "$member_recovery_tables" == "1" ]] || { echo "member number recovery schema is not reproducible from migration 030" >&2; exit 1; }
+secret_columns=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='external_service_configuration' AND column_name ~* '(secret|token|password|api_key|auth_key)'")
+[[ "$secret_columns" == "0" ]] || { echo "external service configuration must not persist provider secrets" >&2; exit 1; }
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO external_service_configuration(service_id,provider) VALUES('sms','TWILIO');
+DO $$
+DECLARE configured external_service_configuration%ROWTYPE;
+BEGIN
+ SELECT * INTO configured FROM external_service_configuration WHERE service_id='sms';
+ IF configured.state <> 'DISABLED' OR configured.last_test_state <> 'NOT_TESTED' OR configured.credential_fields <> '{}'::text[] OR configured.last_tested_at IS NOT NULL OR configured.activated_at IS NOT NULL THEN
+  RAISE EXCEPTION 'external service configuration defaults are not fail closed';
+ END IF;
+END $$;
+ROLLBACK;
+SQL
+
+# Renewal settlement must restore both ratified delinquency standings while
+# refusing to guess which obligation a member intended to pay when more than
+# one subscription invoice is overdue.
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:renewal-grace','PERSON','ACTIVE'),
+       ('participant:renewal-restricted','PERSON','ACTIVE'),
+       ('participant:renewal-ambiguous','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids,
+  grace_started_at,grace_ends_at
+) VALUES
+ ('membership:renewal-grace','participant:renewal-grace','ACTIVE','GRACE','PRIMARY','WFC-RENEW-GRACE',now()-interval '1 year','test-v1',ARRAY['eligibility:renewal-grace'],now()-interval '10 days',now()+interval '20 days'),
+ ('membership:renewal-restricted','participant:renewal-restricted','ACTIVE','RESTRICTED','PRIMARY','WFC-RENEW-RESTRICTED',now()-interval '1 year','test-v1',ARRAY['eligibility:renewal-restricted'],NULL,NULL),
+ ('membership:renewal-ambiguous','participant:renewal-ambiguous','ACTIVE','GRACE','PRIMARY','WFC-RENEW-AMBIGUOUS',now()-interval '2 years','test-v1',ARRAY['eligibility:renewal-ambiguous'],now()-interval '10 days',now()+interval '20 days');
+INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
+VALUES ('invoice:renewal-grace','membership:renewal-grace',2026,10000,'GHS','OPEN',now()-interval '2 days'),
+       ('invoice:renewal-restricted','membership:renewal-restricted',2026,10000,'GHS','OPEN',now()-interval '40 days'),
+       ('invoice:renewal-ambiguous-old','membership:renewal-ambiguous',2026,10000,'GHS','OPEN',now()-interval '1 year'),
+       ('invoice:renewal-ambiguous-new','membership:renewal-ambiguous',2027,10000,'GHS','OPEN',now()-interval '2 days');
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES ('member-session:renewal-grace','membership:renewal-grace','participant:renewal-grace','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal-restricted','membership:renewal-restricted','participant:renewal-restricted','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal-ambiguous','membership:renewal-ambiguous','participant:renewal-ambiguous','ACTIVE',now()+interval '1 hour');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES
+ ('evidence:renewal-grace','membership:renewal-grace','invoice:renewal-grace','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-grace',now()),
+ ('evidence:renewal-restricted','membership:renewal-restricted','invoice:renewal-restricted','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-restricted',now()),
+ ('evidence:renewal-ambiguous','membership:renewal-ambiguous','invoice:renewal-ambiguous-new','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-ambiguous',now());
+DO $$
+DECLARE grace_result record; restricted_result record; ambiguous_count integer;
+BEGIN
+ SELECT * INTO grace_result FROM settle_membership_subscription(
+   'invoice:renewal-grace','evidence:renewal-grace','member-session:renewal-grace',
+   'audit:renewal-grace','request:renewal-grace',now());
+ IF NOT FOUND OR grace_result.idempotent OR grace_result.membership_state<>'ACTIVE'
+    OR grace_result.standing<>'ACTIVE' THEN
+   RAISE EXCEPTION 'GRACE renewal settlement did not restore ACTIVE standing';
+ END IF;
+
+ SELECT * INTO restricted_result FROM settle_membership_subscription(
+   'invoice:renewal-restricted','evidence:renewal-restricted','member-session:renewal-restricted',
+   'audit:renewal-restricted','request:renewal-restricted',now());
+ IF NOT FOUND OR restricted_result.idempotent OR restricted_result.membership_state<>'ACTIVE'
+    OR restricted_result.standing<>'ACTIVE' THEN
+   RAISE EXCEPTION 'RESTRICTED renewal settlement did not restore ACTIVE standing';
+ END IF;
+
+ SELECT count(*) INTO ambiguous_count FROM settle_membership_subscription(
+   'invoice:renewal-ambiguous-new','evidence:renewal-ambiguous','member-session:renewal-ambiguous',
+   'audit:renewal-ambiguous','request:renewal-ambiguous',now());
+ IF ambiguous_count<>0
+    OR (SELECT standing FROM application_membership WHERE membership_id='membership:renewal-ambiguous')<>'GRACE'
+    OR (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:renewal-ambiguous-new')<>'OPEN'
+    OR EXISTS (SELECT 1 FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:renewal-ambiguous') THEN
+   RAISE EXCEPTION 'multi-overdue renewal did not fail closed without durable effects';
+ END IF;
+
+ BEGIN
+   PERFORM * FROM simulate_and_settle_membership_subscription(
+     'invoice:renewal-ambiguous-new','membership:renewal-ambiguous',
+     'evidence:renewal-ambiguous-sandbox','MOBILE_MONEY',
+     'provider:renewal-ambiguous-sandbox','member-session:renewal-ambiguous',
+     'audit:renewal-ambiguous-sandbox','request:renewal-ambiguous-sandbox',now());
+   RAISE EXCEPTION 'ambiguous sandbox settlement unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM='ambiguous sandbox settlement unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ IF EXISTS (
+   SELECT 1 FROM electronic_payment_evidence
+   WHERE evidence_id='evidence:renewal-ambiguous-sandbox'
+ ) THEN
+   RAISE EXCEPTION 'rejected sandbox settlement leaked synthesized evidence';
+ END IF;
+
+ IF (SELECT count(*) FROM application_access_audit
+       WHERE event_type='MEMBERSHIP_RENEWAL_SETTLED'
+         AND membership_id IN ('membership:renewal-grace','membership:renewal-restricted'))<>2 THEN
+   RAISE EXCEPTION 'renewal settlement audit lineage is incomplete';
+ END IF;
+END $$;
+ROLLBACK;
+SQL
+if "${PSQL[@]}" -c "INSERT INTO external_service_configuration(service_id,provider,state) VALUES('invalid-state','TWILIO','ACTIVE_WITHOUT_TEST')" >/dev/null 2>&1; then echo "invalid external service state unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO external_service_configuration_event(event_id,service_id,event_type,actor_id) VALUES('invalid-event','sms','ROTATE','actor:test')" >/dev/null 2>&1; then echo "invalid external service event type unexpectedly succeeded" >&2; exit 1; fi
+accepted_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_member_commitment' AND column_name='accepted_at'")
+[[ "$accepted_at_contract" == NO:* && "$accepted_at_contract" != "NO:" ]] || { echo "preview_member_commitment.accepted_at must remain NOT NULL with a database default" >&2; exit 1; }
+recorded_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_sandbox_payment' AND column_name='recorded_at'")
+[[ "$recorded_at_contract" == NO:* && "$recorded_at_contract" != "NO:" ]] || { echo "preview_sandbox_payment.recorded_at must remain NOT NULL with a database default" >&2; exit 1; }
+refund_unique_constraints=$("${PSQL[@]}" -Atc "SELECT count(*) FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='preview_refund_remedy' AND con.contype='u' AND con.conname IN ('preview_refund_remedy_source_exception_id_key','preview_refund_remedy_authorize_request_id_key','preview_refund_remedy_authorize_command_id_key','preview_refund_remedy_authorize_event_id_key','preview_refund_remedy_complete_request_id_key','preview_refund_remedy_complete_command_id_key','preview_refund_remedy_completion_event_id_key','preview_refund_remedy_provider_reference_key')")
+[[ "$refund_unique_constraints" == "8" ]] || { echo "preview refund idempotency constraints are incomplete" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+TRUNCATE support_case_transition,support_case,membership_subscription_settlement_allocation,electronic_payment_evidence_consumption,item_credit_repayment_allocation,item_credit_receivable,electronic_payment_evidence,cag_deduction_enrollment,member_session,member_auth_challenge,member_number_recovery_challenge,application_access_audit,membership_subscription_invoice,household_beneficiary_invitation,membership_application,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+SQL
+
+# Initial annual settlement requires authenticated-member lineage, exact
+# reconciled evidence and a single atomic durable effect.  All fixtures roll
+# back so the remainder of the harness starts from its canonical empty state.
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:settlement','PERSON','ACTIVE'),
+       ('participant:suspended','PERSON','ACTIVE'),
+       ('participant:mismatch','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES
+ ('membership:settlement','participant:settlement','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-SETTLEMENT',now(),'test-v1',ARRAY['eligibility:settlement']),
+ ('membership:suspended','participant:suspended','SUSPENDED','SUSPENDED','PRIMARY','WFC-SUSPENDED',now(),'test-v1',ARRAY['eligibility:suspended']),
+ ('membership:mismatch','participant:mismatch','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-MISMATCH',now(),'test-v1',ARRAY['eligibility:mismatch']);
+INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
+VALUES ('invoice:settlement','membership:settlement',2026,10000,'GHS','OPEN',now()+interval '1 day'),
+       ('invoice:suspended','membership:suspended',2026,10000,'GHS','OPEN',now()+interval '1 day'),
+       ('invoice:mismatch','membership:mismatch',2026,10000,'GHS','OPEN',now()+interval '1 day');
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES ('member-session:settlement','membership:settlement','participant:settlement','ACTIVE',now()+interval '1 hour'),
+       ('member-session:suspended','membership:suspended','participant:suspended','ACTIVE',now()+interval '1 hour'),
+       ('member-session:mismatch','membership:mismatch','participant:mismatch','ACTIVE',now()+interval '1 hour');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES
+ ('evidence:settlement','membership:settlement','invoice:settlement','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:settlement',now()),
+ ('evidence:suspended','membership:suspended','invoice:suspended','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:suspended',now()),
+ ('evidence:mismatch','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',9999,'GHS','provider:mismatch',now()),
+ ('evidence:null-obligation','membership:mismatch',NULL,'MOBILE_MONEY','RECONCILED',10000,'GHS','provider:null-obligation',now()),
+ ('evidence:future','membership:mismatch','invoice:mismatch','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:future',now()+interval '1 hour');
+DO $$
+DECLARE first_result record; replay_result record;
+BEGIN
+ SELECT * INTO first_result FROM settle_membership_subscription(
+   'invoice:settlement','evidence:settlement','member-session:settlement',
+   'audit:settlement','request:settlement',now());
+ IF NOT FOUND OR first_result.idempotent OR first_result.membership_state<>'ACTIVE' THEN
+   RAISE EXCEPTION 'exact authenticated settlement did not produce one activation';
+ END IF;
+ SELECT * INTO replay_result FROM settle_membership_subscription(
+   'invoice:settlement','evidence:settlement','member-session:settlement',
+   'audit:settlement','request:settlement',now());
+ IF NOT FOUND OR NOT replay_result.idempotent THEN
+   RAISE EXCEPTION 'lost-response settlement replay is not idempotent';
+ END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:suspended','evidence:suspended','member-session:suspended',
+   'audit:suspended','request:suspended',now());
+ IF FOUND THEN RAISE EXCEPTION 'generic suspension was cleared by settlement'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:mismatch','member-session:mismatch',
+   'audit:mismatch','request:mismatch',now());
+ IF FOUND THEN RAISE EXCEPTION 'amount-mismatched evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:null-obligation','member-session:mismatch',
+   'audit:null-obligation','request:null-obligation',now());
+ IF FOUND THEN RAISE EXCEPTION 'null-obligation evidence settled an invoice'; END IF;
+ PERFORM * FROM settle_membership_subscription(
+   'invoice:mismatch','evidence:future','member-session:mismatch',
+   'audit:future','request:future',now());
+ IF FOUND THEN RAISE EXCEPTION 'future-reconciled evidence settled an invoice'; END IF;
+ BEGIN
+  UPDATE electronic_payment_evidence SET state='REVERSED' WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'consumed subscription evidence rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='consumed subscription evidence rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  DELETE FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:settlement';
+  RAISE EXCEPTION 'subscription consumption deletion unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='subscription consumption deletion unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_settlement_allocation SET amount_minor=1
+    WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'subscription allocation rewrite unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='subscription allocation rewrite unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ BEGIN
+  UPDATE membership_subscription_invoice SET state='OPEN' WHERE invoice_id='invoice:settlement';
+  RAISE EXCEPTION 'paid subscription reversal unexpectedly succeeded';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM='paid subscription reversal unexpectedly succeeded' THEN RAISE; END IF;
+ END;
+ IF (SELECT count(*) FROM membership_subscription_settlement_allocation)<>1
+    OR (SELECT count(*) FROM electronic_payment_evidence_consumption)<>1
+    OR (SELECT count(*) FROM application_access_audit WHERE event_type='MEMBERSHIP_SUBSCRIPTION_SETTLED')<>1
+    OR (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:suspended')<>'OPEN'
+    OR (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:mismatch')<>'OPEN' THEN
+   RAISE EXCEPTION 'settlement adverse paths left partial durable effects';
+ END IF;
+END $$;
+ROLLBACK;
+SQL
+
+# RC3-BIND-001: durable participant, membership and operator authority are independent governed records.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state) VALUES ('participant:member','PERSON','ACTIVE'),('participant:operator','PERSON','ACTIVE'),('participant:system','SYSTEM','ACTIVE');
+INSERT INTO application_membership(membership_id,participant_id,state,standing,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:live','participant:member','ACTIVE','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:1']);
+INSERT INTO application_authority_grant(grant_id,grantor_id,actor_id,actions,valid_from) VALUES('grant:operator:orders','participant:system','participant:operator',ARRAY['operator:orders.read'],now()-interval '1 minute');
+SQL
+participant=$("${PSQL[@]}" -Atc "SELECT participant_id||':'||state FROM application_participant WHERE participant_id='participant:member'")
+[[ "$participant" == "participant:member:ACTIVE" ]] || { echo "application participant did not survive connection boundary" >&2; exit 1; }
+membership=$("${PSQL[@]}" -Atc "SELECT membership_id||':'||state FROM application_membership WHERE participant_id='participant:member'")
+[[ "$membership" == "membership:live:ACTIVE" ]] || { echo "active membership did not survive connection boundary" >&2; exit 1; }
+authority=$("${PSQL[@]}" -Atc "SELECT grant_id FROM application_authority_grant WHERE actor_id='participant:operator' AND 'operator:orders.read'=ANY(actions) AND valid_from<=now() AND (valid_until IS NULL OR valid_until>=now()) AND (revoked_at IS NULL OR revoked_at>now())")
+[[ "$authority" == "grant:operator:orders" ]] || { echo "operator authority did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids) VALUES('membership:duplicate','participant:member','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:eligibility:2'])" >/dev/null 2>&1; then echo "second ACTIVE membership unexpectedly succeeded" >&2; exit 1; fi
+
+# Member Number recovery issuance and verification remain bounded under real PostgreSQL races.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state) VALUES ('participant:recovery','PERSON','ACTIVE');
+INSERT INTO application_membership(membership_id,participant_id,state,established_at,eligibility_policy_version,eligibility_evidence_ids)
+VALUES('membership:recovery','participant:recovery','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:recovery']);
+SQL
+recovery_issuance_outputs=()
+recovery_issuance_pids=()
+for i in $(seq 1 10); do
+  output=$(mktemp)
+  recovery_issuance_outputs+=("$output")
+  "${PSQL[@]}" -Atc "SELECT count(*) FROM create_member_number_recovery_challenge('recovery:issue:$i','membership:recovery','EMAIL','destination-hash','code-hash',now()+interval '10 minutes')" >"$output" &
+  recovery_issuance_pids+=("$!")
+done
+for pid in "${recovery_issuance_pids[@]}"; do wait "$pid"; done
+issued=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_number_recovery_challenge WHERE membership_id='membership:recovery'")
+[[ "$issued" == "5" ]] || { echo "concurrent recovery issuance exceeded five challenges" >&2; exit 1; }
+rm -f "${recovery_issuance_outputs[@]}"
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_number_recovery_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at)
+VALUES('recovery:correct-race','membership:live','EMAIL','destination-hash','good-hash','OPEN',now()+interval '10 minutes');
+SQL
+correct_a=$(mktemp)
+correct_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:correct-race','good-hash',now())" >"$correct_a" &
+correct_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:correct-race','good-hash',now())" >"$correct_b" &
+correct_pid_b=$!
+wait "$correct_pid_a"
+wait "$correct_pid_b"
+correct_total=$(( $(cat "$correct_a") + $(cat "$correct_b") ))
+rm -f "$correct_a" "$correct_b"
+correct_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_number_recovery_challenge WHERE challenge_id='recovery:correct-race'")
+[[ "$correct_total" == "1" && "$correct_state" == "USED:0" ]] || { echo "concurrent correct recovery was not single-use" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_number_recovery_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at)
+VALUES('recovery:wrong-race','membership:live','EMAIL','destination-hash','good-hash','OPEN',now()+interval '10 minutes');
+SQL
+wrong_outputs=()
+wrong_pids=()
+for i in $(seq 1 10); do
+  output=$(mktemp)
+  wrong_outputs+=("$output")
+  "${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:wrong-race','bad-hash',now())" >"$output" &
+  wrong_pids+=("$!")
+done
+for pid in "${wrong_pids[@]}"; do wait "$pid"; done
+rm -f "${wrong_outputs[@]}"
+wrong_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_number_recovery_challenge WHERE challenge_id='recovery:wrong-race'")
+[[ "$wrong_state" == "REVOKED:5" ]] || { echo "concurrent wrong recovery attempts escaped the five-attempt cap" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_number_recovery_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,attempts,expires_at)
+VALUES('recovery:fifth-race','membership:live','EMAIL','destination-hash','good-hash','OPEN',4,now()+interval '10 minutes');
+SQL
+fifth_good=$(mktemp)
+fifth_bad=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:fifth-race','good-hash',now())" >"$fifth_good" &
+fifth_good_pid=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_number_recovery_challenge('recovery:fifth-race','bad-hash',now())" >"$fifth_bad" &
+fifth_bad_pid=$!
+wait "$fifth_good_pid"
+wait "$fifth_bad_pid"
+fifth_total=$(( $(cat "$fifth_good") + $(cat "$fifth_bad") ))
+rm -f "$fifth_good" "$fifth_bad"
+fifth_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_number_recovery_challenge WHERE challenge_id='recovery:fifth-race'")
+[[ "$fifth_total" == "1" && ( "$fifth_state" == "USED:4" || "$fifth_state" == "REVOKED:5" ) ]] || { echo "correct versus fifth-wrong recovery race produced an impossible result" >&2; exit 1; }
+
+# Native member-auth issuance, attempt accounting and session creation remain bounded under real PostgreSQL races.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state) VALUES ('participant:auth','PERSON','ACTIVE');
+INSERT INTO application_membership(membership_id,participant_id,state,standing,established_at,eligibility_policy_version,eligibility_evidence_ids)
+VALUES('membership:auth','participant:auth','ACTIVE','ACTIVE',now(),'founding-worker-v1',ARRAY['evidence:auth']);
+SQL
+auth_issuance_outputs=()
+auth_issuance_pids=()
+for i in $(seq 1 10); do
+  output=$(mktemp)
+  auth_issuance_outputs+=("$output")
+  "${PSQL[@]}" -Atc "SELECT count(*) FROM create_member_auth_challenge('auth:issue:$i','membership:auth','PHONE','destination-hash','code-hash',now()+interval '10 minutes')" >"$output" &
+  auth_issuance_pids+=("$!")
+done
+for pid in "${auth_issuance_pids[@]}"; do wait "$pid"; done
+auth_issued=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_auth_challenge WHERE membership_id='membership:auth'")
+[[ "$auth_issued" == "5" ]] || { echo "concurrent member-auth issuance exceeded five challenges" >&2; exit 1; }
+rm -f "${auth_issuance_outputs[@]}"
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_auth_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at)
+VALUES('auth:correct-race','membership:live','PHONE','destination-hash','good-hash','OPEN',now()+interval '10 minutes');
+SQL
+auth_correct_a=$(mktemp)
+auth_correct_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:correct-race','good-hash',now(),'session:auth:correct:a',now()+interval '12 hours')" >"$auth_correct_a" &
+auth_correct_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:correct-race','good-hash',now(),'session:auth:correct:b',now()+interval '12 hours')" >"$auth_correct_b" &
+auth_correct_pid_b=$!
+wait "$auth_correct_pid_a"
+wait "$auth_correct_pid_b"
+auth_correct_total=$(( $(cat "$auth_correct_a") + $(cat "$auth_correct_b") ))
+rm -f "$auth_correct_a" "$auth_correct_b"
+auth_correct_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_auth_challenge WHERE challenge_id='auth:correct-race'")
+auth_correct_sessions=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_session WHERE session_id LIKE 'session:auth:correct:%'")
+[[ "$auth_correct_total" == "1" && "$auth_correct_state" == "USED:0" && "$auth_correct_sessions" == "1" ]] || { echo "concurrent correct member-auth verification was not single-use" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_auth_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,expires_at)
+VALUES('auth:wrong-race','membership:live','PHONE','destination-hash','good-hash','OPEN',now()+interval '10 minutes');
+SQL
+auth_wrong_outputs=()
+auth_wrong_pids=()
+for i in $(seq 1 10); do
+  output=$(mktemp)
+  auth_wrong_outputs+=("$output")
+  "${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:wrong-race','bad-hash',now(),'session:auth:wrong:$i',now()+interval '12 hours')" >"$output" &
+  auth_wrong_pids+=("$!")
+done
+for pid in "${auth_wrong_pids[@]}"; do wait "$pid"; done
+rm -f "${auth_wrong_outputs[@]}"
+auth_wrong_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_auth_challenge WHERE challenge_id='auth:wrong-race'")
+auth_wrong_sessions=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_session WHERE session_id LIKE 'session:auth:wrong:%'")
+[[ "$auth_wrong_state" == "REVOKED:5" && "$auth_wrong_sessions" == "0" ]] || { echo "concurrent wrong member-auth attempts escaped the five-attempt cap" >&2; exit 1; }
+
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_auth_challenge(challenge_id,membership_id,channel,destination_hash,code_hash,state,attempts,expires_at)
+VALUES('auth:fifth-race','membership:live','PHONE','destination-hash','good-hash','OPEN',4,now()+interval '10 minutes');
+SQL
+auth_fifth_good=$(mktemp)
+auth_fifth_bad=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:fifth-race','good-hash',now(),'session:auth:fifth:good',now()+interval '12 hours')" >"$auth_fifth_good" &
+auth_fifth_good_pid=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM verify_member_auth_challenge('auth:fifth-race','bad-hash',now(),'session:auth:fifth:bad',now()+interval '12 hours')" >"$auth_fifth_bad" &
+auth_fifth_bad_pid=$!
+wait "$auth_fifth_good_pid"
+wait "$auth_fifth_bad_pid"
+auth_fifth_total=$(( $(cat "$auth_fifth_good") + $(cat "$auth_fifth_bad") ))
+rm -f "$auth_fifth_good" "$auth_fifth_bad"
+auth_fifth_state=$("${PSQL[@]}" -Atc "SELECT state||':'||attempts FROM member_auth_challenge WHERE challenge_id='auth:fifth-race'")
+auth_fifth_sessions=$("${PSQL[@]}" -Atc "SELECT count(*) FROM member_session WHERE session_id LIKE 'session:auth:fifth:%'")
+[[ "$auth_fifth_total" == "1" && ( ( "$auth_fifth_state" == "USED:4" && "$auth_fifth_sessions" == "1" ) || ( "$auth_fifth_state" == "REVOKED:5" && "$auth_fifth_sessions" == "0" ) ) ]] || { echo "correct versus fifth-wrong member-auth race produced an impossible result" >&2; exit 1; }
+
+# A10 durable support lifecycle falsification.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO support_case(case_id,participant_id,subject_type,subject_id,category,reason_code,created_by_actor_id,created_by_authn_subject_ref,updated_by_actor_id,updated_by_authn_subject_ref,command_idempotency_key)
+VALUES('case:a10','participant:member','ORDER','order:a10','DELIVERY','LATE','participant:operator','preview-auth:harness','participant:operator','preview-auth:harness','11111111-1111-4111-8111-111111111111');
+INSERT INTO support_case_transition(transition_id,case_id,from_state,to_state,state_version,actor_id,authn_subject_ref,command_idempotency_key)
+VALUES('transition:a10-1','case:a10','OPEN','IN_REVIEW',2,'participant:operator','preview-auth:harness','22222222-2222-4222-8222-222222222222');
+UPDATE support_case SET state='IN_REVIEW',state_version=2,updated_by_actor_id='participant:operator',updated_by_authn_subject_ref='preview-auth:harness' WHERE case_id='case:a10' AND state_version=1;
+SQL
+a10_state=$("${PSQL[@]}" -Atc "SELECT state||':'||state_version FROM support_case WHERE case_id='case:a10'")
+[[ "$a10_state" == "IN_REVIEW:2" ]] || { echo "A10 support state did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO support_case_transition(transition_id,case_id,from_state,to_state,state_version,actor_id,authn_subject_ref,command_idempotency_key) VALUES('transition:a10-same','case:a10','IN_REVIEW','IN_REVIEW',3,'participant:operator','preview-auth:harness','33333333-3333-4333-8333-333333333333')" >/dev/null 2>&1; then echo "A10 same-state transition unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO support_case_transition(transition_id,case_id,from_state,to_state,state_version,actor_id,authn_subject_ref,command_idempotency_key) VALUES('transition:a10-illegal','case:a10','CLOSED','WAITING',3,'participant:operator','preview-auth:harness','44444444-4444-4444-8444-444444444444')" >/dev/null 2>&1; then echo "A10 illegal CLOSED to WAITING transition unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO support_case(case_id,participant_id,subject_type,subject_id,category,reason_code,created_by_actor_id,created_by_authn_subject_ref,updated_by_actor_id,updated_by_authn_subject_ref,command_idempotency_key) VALUES('case:a10-bad','participant:missing','ORDER','order:bad','DELIVERY','LATE','participant:operator','preview-auth:harness','participant:operator','preview-auth:harness','55555555-5555-4555-8555-555555555555')" >/dev/null 2>&1; then echo "A10 participant lineage FK bypass unexpectedly succeeded" >&2; exit 1; fi
+
+# A2 durable membership and shopping-credit falsification.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_application(application_id,legal_name,primary_contact,eligibility_class,eligibility_evidence_ids,communication_consent,state,created_at) VALUES('application:a2','A2 Member','member@example.test','PUBLIC_SECTOR','["evidence:a2"]'::jsonb,true,'DRAFT',now());
+INSERT INTO beneficiary_invitation(invitation_id,sponsor_participant_id,token_digest,state,invited_at,expires_at) VALUES('beneficiary:a2-1','participant:member','digest:a2-1','INVITED',now(),now()+interval '1 day');
+INSERT INTO membership_invoice(invoice_id,participant_id,amount_minor,state,issued_at,due_at) VALUES('invoice:a2','participant:member',10000,'PAST_DUE',now()-interval '20 days',now()-interval '10 days');
+INSERT INTO membership_invoice_settlement(settlement_reference,invoice_id,amount_minor) VALUES('settlement:a2-1','invoice:a2',4000);
+INSERT INTO membership_shopping_credit_lot(id,participant_id,source,funding,applicability,issued_minor,available_minor,issued_at,source_reference,state) VALUES('credit:a2-over','participant:member','SHIPPING_CREDIT','MEMBER_FUNDED','SHIPPING',1000,1000,now(),'membership-overpayment:settlement:a2-over','AVAILABLE');
+SQL
+if "${PSQL[@]}" -c "INSERT INTO membership_invoice_settlement(settlement_reference,invoice_id,amount_minor) VALUES('settlement:a2-1','invoice:a2',4000)" >/dev/null 2>&1; then echo "A2 settlement replay unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO beneficiary_invitation(invitation_id,sponsor_participant_id,token_digest,state,invited_at,expires_at) VALUES('beneficiary:a2-bad','participant:missing','digest:a2-bad','INVITED',now(),now()+interval '1 day')" >/dev/null 2>&1; then echo "A2 beneficiary sponsor FK bypass unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO membership_shopping_credit_lot(id,participant_id,source,funding,applicability,issued_minor,available_minor,issued_at,source_reference,state) VALUES('credit:a2-bad','participant:member','SHIPPING_CREDIT','CLUB_FUNDED','SHIPPING',1000,1000,now(),'bad:a2','AVAILABLE')" >/dev/null 2>&1; then echo "A2 member-funded overpayment invariant bypass unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" -c "INSERT INTO membership_shopping_credit_lot(id,participant_id,source,funding,applicability,issued_minor,available_minor,issued_at,source_reference,state) VALUES('credit:a2-replay','participant:member','SHIPPING_CREDIT','MEMBER_FUNDED','SHIPPING',1000,1000,now(),'membership-overpayment:settlement:a2-over','AVAILABLE')" >/dev/null 2>&1; then echo "A2 shopping-credit source replay unexpectedly succeeded" >&2; exit 1; fi
+
+# RC3-BIND-001: external identity resolves to one durable canonical participant and governed scopes.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:live','https://issuer.example/','subject:1','participant:member',ARRAY['member:orders.read'],'ACTIVE','evidence:identity:1',now(),'participant:operator','grant:operator:orders');
+SQL
+binding=$("${PSQL[@]}" -Atc "SELECT participant_id||':'||state FROM application_identity_binding WHERE issuer='https://issuer.example/' AND subject='subject:1'")
+[[ "$binding" == "participant:member:ACTIVE" ]] || { echo "application identity binding did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO application_identity_binding(binding_id,issuer,subject,participant_id,scopes,state,provider_evidence_id,bound_at,bound_by,authority_grant_id) VALUES('binding:rebind','https://issuer.example/','subject:1','participant:operator',ARRAY['operator:orders.read'],'ACTIVE','evidence:identity:2',now(),'participant:operator','grant:operator:orders')" >/dev/null 2>&1; then echo "external identity was silently rebound" >&2; exit 1; fi
+
+# INV-027: durable result survives a fresh connection.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,created_at,updated_at) VALUES('idem:live','cmd:live','IN_FLIGHT','worker:a',now()+interval '1 minute',1,now(),now());
+UPDATE durable_command_execution SET state='COMMITTED',result_json='{"status":"ACCEPTED","eventIds":["event:live"],"replayed":false}'::jsonb,updated_at=now() WHERE idempotency_key='idem:live' AND command_id='cmd:live' AND owner_token='worker:a' AND fence_generation=1;
+SQL
+result=$("${PSQL[@]}" -Atc "SELECT result_json->>'status' FROM durable_command_execution WHERE idempotency_key='idem:live'")
+[[ "$result" == "ACCEPTED" ]] || { echo "committed command result did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,created_at,updated_at) VALUES('idem:live','cmd:other','IN_FLIGHT','worker:b',now()+interval '1 minute',now(),now())" >/dev/null 2>&1; then echo "duplicate idempotency key unexpectedly succeeded" >&2; exit 1; fi
+
+# RC1-B02: every takeover advances a monotonic fence. A stale owner/fence cannot commit.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO durable_command_execution(idempotency_key,command_id,state,owner_token,lease_until,fence_generation,created_at,updated_at) VALUES('idem:fence','cmd:fence','IN_FLIGHT','worker:a',now()-interval '1 second',1,now()-interval '1 minute',now()-interval '1 minute');
+UPDATE durable_command_execution SET owner_token='worker:b', fence_generation=fence_generation+1, lease_until=now()+interval '1 minute', updated_at=now() WHERE idempotency_key='idem:fence' AND state='IN_FLIGHT' AND lease_until<=now();
+SQL
+fence=$("${PSQL[@]}" -Atc "SELECT fence_generation FROM durable_command_execution WHERE idempotency_key='idem:fence'")
+[[ "$fence" == "2" ]] || { echo "takeover did not advance fence" >&2; exit 1; }
+stale=$("${PSQL[@]}" -Atc "WITH u AS (UPDATE durable_command_execution SET state='COMMITTED',result_json='{}'::jsonb WHERE idempotency_key='idem:fence' AND owner_token='worker:a' AND fence_generation=1 RETURNING 1) SELECT count(*) FROM u")
+[[ "$stale" == "0" ]] || { echo "stale owner/fence committed" >&2; exit 1; }
+"${PSQL[@]}" -c "UPDATE durable_command_execution SET owner_token='worker:a',fence_generation=3,lease_until=now()+interval '1 minute' WHERE idempotency_key='idem:fence'" >/dev/null
+same_owner_stale=$("${PSQL[@]}" -Atc "WITH u AS (UPDATE durable_command_execution SET state='COMMITTED',result_json='{}'::jsonb WHERE idempotency_key='idem:fence' AND owner_token='worker:a' AND fence_generation=1 RETURNING 1) SELECT count(*) FROM u")
+[[ "$same_owner_stale" == "0" ]] || { echo "same-owner stale fence committed" >&2; exit 1; }
+
+# INV-028: aggregate version is a database serialization boundary.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO aggregate_version(aggregate_id,version) VALUES('order:1',0);
+BEGIN ISOLATION LEVEL SERIALIZABLE;
+SELECT version FROM aggregate_version WHERE aggregate_id='order:1' FOR UPDATE;
+INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at) VALUES('event:1','order:1',1,'ORDER_ACCEPTED','{}'::jsonb,now());
+UPDATE aggregate_version SET version=1 WHERE aggregate_id='order:1' AND version=0;
+COMMIT;
+SQL
+version=$("${PSQL[@]}" -Atc "SELECT version FROM aggregate_version WHERE aggregate_id='order:1'")
+[[ "$version" == "1" ]] || { echo "aggregate version did not advance" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at) VALUES('event:stale','order:1',1,'STALE_WRITE','{}'::jsonb,now())" >/dev/null 2>&1; then echo "stale aggregate version unexpectedly succeeded" >&2; exit 1; fi
+if "${PSQL[@]}" <<'SQL' >/dev/null 2>&1
+BEGIN;
+INSERT INTO canonical_event(event_id,aggregate_id,aggregate_version,event_type,payload,occurred_at) VALUES('event:rollback','order:1',2,'SHOULD_ROLLBACK','{}'::jsonb,now());
+UPDATE aggregate_version SET version=2 WHERE aggregate_id='order:1' AND version=1;
+SELECT 1/0;
+COMMIT;
+SQL
+then echo "intentional transaction failure unexpectedly committed" >&2; exit 1; fi
+count=$("${PSQL[@]}" -Atc "SELECT count(*) FROM canonical_event WHERE event_id='event:rollback'")
+version=$("${PSQL[@]}" -Atc "SELECT version FROM aggregate_version WHERE aggregate_id='order:1'")
+[[ "$count" == "0" && "$version" == "1" ]] || { echo "rollback left partial canonical state" >&2; exit 1; }
+
+# INV-007/008 / RC1-B05: durable exact multi-input/multi-output lineage.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO lineage_lot(lot_id,quantity,unit) VALUES('lot:a',40,'kg'),('lot:b',60,'kg');
+SELECT record_lineage_transform('transform:blend','PROCESS','kg',3,'2026-09-08T02:10:00Z','["evidence:blend"]'::jsonb,'[{"lotId":"lot:a","quantity":40},{"lotId":"lot:b","quantity":60}]'::jsonb,'[{"lotId":"lot:c","quantity":70},{"lotId":"lot:d","quantity":27}]'::jsonb);
+SQL
+c=$("${PSQL[@]}" -Atc "SELECT quantity FROM lineage_lot WHERE lot_id='lot:c'")
+d=$("${PSQL[@]}" -Atc "SELECT quantity FROM lineage_lot WHERE lot_id='lot:d'")
+a_used=$("${PSQL[@]}" -Atc "SELECT consumed_quantity FROM lineage_lot WHERE lot_id='lot:a'")
+b_used=$("${PSQL[@]}" -Atc "SELECT consumed_quantity FROM lineage_lot WHERE lot_id='lot:b'")
+[[ "$c" == "70" && "$d" == "27" && "$a_used" == "40" && "$b_used" == "60" ]] || { echo "explicit durable lineage quantities incorrect" >&2; exit 1; }
+inputs=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform_input WHERE transform_id='transform:blend'")
+outputs=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform_output WHERE transform_id='transform:blend'")
+[[ "$inputs" == "2" && "$outputs" == "2" ]] || { echo "durable lineage ancestry ports missing" >&2; exit 1; }
+if "${PSQL[@]}" -c "SELECT record_lineage_transform('transform:bad','REPACK','kg',0,'2026-09-08T02:11:00Z','[\"evidence:bad\"]'::jsonb,'[{\"lotId\":\"lot:c\",\"quantity\":71}]'::jsonb,'[{\"lotId\":\"lot:e\",\"quantity\":71}]'::jsonb)" >/dev/null 2>&1; then echo "lineage overconsumption unexpectedly succeeded" >&2; exit 1; fi
+bad_transform=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_transform WHERE transform_id='transform:bad'")
+bad_output=$("${PSQL[@]}" -Atc "SELECT count(*) FROM lineage_lot WHERE lot_id='lot:e'")
+c_used=$("${PSQL[@]}" -Atc "SELECT consumed_quantity FROM lineage_lot WHERE lot_id='lot:c'")
+[[ "$bad_transform" == "0" && "$bad_output" == "0" && "$c_used" == "0" ]] || { echo "failed lineage transform leaked partial state" >&2; exit 1; }
+
+# RC2-COMMS: preferences/consent survive connection boundaries and the outbox dedupe key is durable.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO member_communication_consent_event(member_id,consent_version,promotional_opt_in,transactional_channels,promotional_channels,suppressed_channels,occurred_at) VALUES('member:live',1,false,ARRAY['IN_APP','EMAIL'],ARRAY['EMAIL'],ARRAY[]::text[],now());
+INSERT INTO member_communication_preferences(member_id,transactional_channels,promotional_opt_in,promotional_channels,suppressed_channels,consent_version,consent_updated_at) VALUES('member:live',ARRAY['IN_APP','EMAIL'],false,ARRAY['EMAIL'],ARRAY[]::text[],1,now());
+INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count) VALUES('communication:live','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','Payment confirmed','GHS 1.00 confirmed','QUEUED',now(),now(),0);
+SQL
+consent=$("${PSQL[@]}" -Atc "SELECT consent_version||':'||promotional_opt_in FROM member_communication_preferences WHERE member_id='member:live'")
+[[ "$consent" == "1:false" ]] || { echo "communication preferences did not survive connection boundary" >&2; exit 1; }
+if "${PSQL[@]}" -c "INSERT INTO communication_outbox(id,dedupe_key,event_id,member_id,subject_id,event_type,communication_class,template_id,template_version,channel,rendered_subject,rendered_body,status,queued_at,available_at,retry_count) VALUES('communication:duplicate','event:payment|WFC-PAYMENT-CONFIRMED|1|IN_APP','event:payment','member:live','order:live','PAYMENT_CONFIRMED','TRANSACTIONAL','WFC-PAYMENT-CONFIRMED',1,'IN_APP','dup','dup','QUEUED',now(),now(),0)" >/dev/null 2>&1; then echo "communication durable dedupe unexpectedly allowed duplicate" >&2; exit 1; fi
+claimed=$("${PSQL[@]}" -Atc "WITH picked AS (SELECT id FROM communication_outbox WHERE status='QUEUED' AND available_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY queued_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE communication_outbox o SET lease_owner='worker:comms',lease_until=now()+interval '30 seconds' FROM picked WHERE o.id=picked.id RETURNING o.id")
+[[ "$claimed" == "communication:live" ]] || { echo "communication outbox row was not claimable" >&2; exit 1; }
+
+# Subscription settlement is serialized under independent database sessions.
+# A same-evidence retry becomes one durable settlement plus one idempotent replay.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:renewal-same-race','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids,
+  grace_started_at,grace_ends_at
+) VALUES ('membership:renewal-same-race','participant:renewal-same-race','ACTIVE','GRACE','PRIMARY','WFC-RENEW-SAME-RACE',now()-interval '1 year','test-v1',ARRAY['eligibility:renewal-same-race'],now()-interval '10 days',now()+interval '20 days');
+INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
+VALUES ('invoice:renewal-same-race','membership:renewal-same-race',2026,10000,'GHS','OPEN',now()-interval '2 days');
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES ('member-session:renewal-same-race:a','membership:renewal-same-race','participant:renewal-same-race','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal-same-race:b','membership:renewal-same-race','participant:renewal-same-race','ACTIVE',now()+interval '1 hour');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES ('evidence:renewal-same-race','membership:renewal-same-race','invoice:renewal-same-race','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-same-race',now());
+SQL
+renewal_same_a=$(mktemp)
+renewal_same_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT CASE WHEN idempotent THEN 'replay' ELSE 'settled' END FROM settle_membership_subscription('invoice:renewal-same-race','evidence:renewal-same-race','member-session:renewal-same-race:a','audit:renewal-same-race:a','request:renewal-same-race:a',now())" >"$renewal_same_a" &
+renewal_same_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT CASE WHEN idempotent THEN 'replay' ELSE 'settled' END FROM settle_membership_subscription('invoice:renewal-same-race','evidence:renewal-same-race','member-session:renewal-same-race:b','audit:renewal-same-race:b','request:renewal-same-race:b',now())" >"$renewal_same_b" &
+renewal_same_pid_b=$!
+wait "$renewal_same_pid_a"
+wait "$renewal_same_pid_b"
+renewal_same_results=$(sort "$renewal_same_a" "$renewal_same_b" | paste -sd, -)
+rm -f "$renewal_same_a" "$renewal_same_b"
+renewal_same_effects=$("${PSQL[@]}" -Atc "SELECT
+  (SELECT count(*) FROM membership_subscription_settlement_allocation WHERE invoice_id='invoice:renewal-same-race')||':'||
+  (SELECT count(*) FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:renewal-same-race')||':'||
+  (SELECT count(*) FROM application_access_audit WHERE membership_id='membership:renewal-same-race' AND event_type='MEMBERSHIP_RENEWAL_SETTLED')||':'||
+  (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:renewal-same-race')||':'||
+  (SELECT standing FROM application_membership WHERE membership_id='membership:renewal-same-race')")
+[[ "$renewal_same_results" == "replay,settled" && "$renewal_same_effects" == "1:1:1:PAID:ACTIVE" ]] || { echo "same-evidence renewal race was not exactly-once with idempotent replay" >&2; exit 1; }
+
+# Competing exact evidence for one invoice may produce only one winner; the
+# losing evidence must remain unused and may not create a second audit effect.
+"${PSQL[@]}" <<'SQL'
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:renewal-competing-race','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES ('membership:renewal-competing-race','participant:renewal-competing-race','ACTIVE','RESTRICTED','PRIMARY','WFC-RENEW-COMPETING-RACE',now()-interval '1 year','test-v1',ARRAY['eligibility:renewal-competing-race']);
+INSERT INTO membership_subscription_invoice(invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at)
+VALUES ('invoice:renewal-competing-race','membership:renewal-competing-race',2026,10000,'GHS','OPEN',now()-interval '40 days');
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES ('member-session:renewal-competing-race:a','membership:renewal-competing-race','participant:renewal-competing-race','ACTIVE',now()+interval '1 hour'),
+       ('member-session:renewal-competing-race:b','membership:renewal-competing-race','participant:renewal-competing-race','ACTIVE',now()+interval '1 hour');
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES ('evidence:renewal-competing-race:a','membership:renewal-competing-race','invoice:renewal-competing-race','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-competing-race:a',now()),
+         ('evidence:renewal-competing-race:b','membership:renewal-competing-race','invoice:renewal-competing-race','MOBILE_MONEY','RECONCILED',10000,'GHS','provider:renewal-competing-race:b',now());
+SQL
+renewal_competing_a=$(mktemp)
+renewal_competing_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT count(*) FROM settle_membership_subscription('invoice:renewal-competing-race','evidence:renewal-competing-race:a','member-session:renewal-competing-race:a','audit:renewal-competing-race:a','request:renewal-competing-race:a',now())" >"$renewal_competing_a" &
+renewal_competing_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT count(*) FROM settle_membership_subscription('invoice:renewal-competing-race','evidence:renewal-competing-race:b','member-session:renewal-competing-race:b','audit:renewal-competing-race:b','request:renewal-competing-race:b',now())" >"$renewal_competing_b" &
+renewal_competing_pid_b=$!
+wait "$renewal_competing_pid_a"
+wait "$renewal_competing_pid_b"
+renewal_competing_total=$(( $(cat "$renewal_competing_a") + $(cat "$renewal_competing_b") ))
+rm -f "$renewal_competing_a" "$renewal_competing_b"
+renewal_competing_effects=$("${PSQL[@]}" -Atc "SELECT
+  (SELECT count(*) FROM membership_subscription_settlement_allocation WHERE invoice_id='invoice:renewal-competing-race')||':'||
+  (SELECT count(*) FROM electronic_payment_evidence_consumption WHERE evidence_id IN ('evidence:renewal-competing-race:a','evidence:renewal-competing-race:b'))||':'||
+  (SELECT count(*) FROM application_access_audit WHERE membership_id='membership:renewal-competing-race' AND event_type='MEMBERSHIP_RENEWAL_SETTLED')||':'||
+  (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:renewal-competing-race')||':'||
+  (SELECT standing FROM application_membership WHERE membership_id='membership:renewal-competing-race')")
+[[ "$renewal_competing_total" == "1" && "$renewal_competing_effects" == "1:1:1:PAID:ACTIVE" ]] || { echo "competing-evidence renewal race produced more than one economic effect" >&2; exit 1; }
+
+echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications, A2 membership/credit and A10 support lifecycle proof passed"
