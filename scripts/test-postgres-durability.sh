@@ -40,6 +40,58 @@ PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q)
 # Subscription-only lineage hardening is forward-only and replay safe.
 "${PSQL[@]}" -f packages/durability/sql/037_membership_subscription_evidence_hardening.sql
 
+# Migration 038 must reject contradictory legacy paid_at history atomically.
+# This deliberately manufactures a pre-038 historical row by temporarily
+# disabling only the migration-037 insert trigger in the isolated CI database.
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:legacy-paid-at','PERSON','ACTIVE'),
+       ('participant:legacy-void-paid-at','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES
+(
+  'membership:legacy-paid-at','participant:legacy-paid-at','INACTIVE',
+  'INITIAL_FEE_DUE','PRIMARY','WFC-LEGACY-PAID-AT',now(),'test-v1',
+  ARRAY['eligibility:legacy-paid-at']
+),(
+  'membership:legacy-void-paid-at','participant:legacy-void-paid-at','INACTIVE',
+  'INITIAL_FEE_DUE','PRIMARY','WFC-LEGACY-VOID-PAID-AT',now(),'test-v1',
+  ARRAY['eligibility:legacy-void-paid-at']
+);
+ALTER TABLE membership_subscription_invoice DISABLE TRIGGER paid_subscription_insert_lineage_trg;
+INSERT INTO membership_subscription_invoice(
+  invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at,paid_at
+) VALUES
+(
+  'invoice:legacy-paid-at','membership:legacy-paid-at',2026,10000,'GHS','OPEN',now(),now()
+),(
+  'invoice:legacy-void-paid-at','membership:legacy-void-paid-at',2026,10000,'GHS','VOID',now(),now()
+);
+ALTER TABLE membership_subscription_invoice ENABLE TRIGGER paid_subscription_insert_lineage_trg;
+COMMIT;
+SQL
+if "${PSQL[@]}" -f packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql >/dev/null 2>&1; then
+  echo "migration 038 accepted contradictory historical paid_at state" >&2
+  exit 1
+fi
+"${PSQL[@]}" <<'SQL'
+DELETE FROM membership_subscription_invoice
+WHERE invoice_id IN ('invoice:legacy-paid-at','invoice:legacy-void-paid-at');
+DELETE FROM application_membership
+WHERE membership_id IN ('membership:legacy-paid-at','membership:legacy-void-paid-at');
+DELETE FROM application_participant
+WHERE participant_id IN ('participant:legacy-paid-at','participant:legacy-void-paid-at');
+SQL
+"${PSQL[@]}" -f packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql
+# The stricter historical preflight is forward-only and replay safe.
+"${PSQL[@]}" -f packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql
+"${PSQL[@]}" -f packages/durability/sql/039_membership_subscription_sandbox_request_replay.sql
+# Preview request binding is additive and replay safe.
+"${PSQL[@]}" -f packages/durability/sql/039_membership_subscription_sandbox_request_replay.sql
+
 preview_runtime_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('preview_member_offer','preview_member_commitment','preview_fulfillment','preview_fulfillment_exception','preview_sandbox_payment','preview_refund_remedy','preview_health')")
 [[ "$preview_runtime_tables" == "7" ]] || { echo "preview runtime schema is not reproducible from migrations" >&2; exit 1; }
 a2_membership_tables=$("${PSQL[@]}" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('member_application','beneficiary_invitation','membership_invoice','membership_invoice_settlement')")
@@ -138,6 +190,108 @@ BEGIN
 END $$;
 ROLLBACK;
 SQL
+
+# A durable Preview request may claim its deterministic evidence/audit identities
+# before they exist, but commit requires the exact deferred lineage. Exact replay
+# is a no-op and the committed result cannot be rewritten.
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+INSERT INTO application_participant(participant_id,kind,state)
+VALUES ('participant:sandbox-replay','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES (
+  'membership:sandbox-replay','participant:sandbox-replay','INACTIVE',
+  'INITIAL_FEE_DUE','PRIMARY','WFC-SANDBOX-REPLAY',now(),'test-v1',
+  ARRAY['eligibility:sandbox-replay']
+);
+INSERT INTO membership_subscription_invoice(
+  invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at
+) VALUES (
+  'invoice:sandbox-replay','membership:sandbox-replay',2026,10000,'GHS','OPEN',now()
+);
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at)
+VALUES (
+  'member-session:sandbox-replay','membership:sandbox-replay',
+  'participant:sandbox-replay','ACTIVE',now()+interval '1 hour'
+);
+INSERT INTO membership_subscription_sandbox_request(
+  request_id,membership_id,invoice_id,rail,amount_minor,currency,evidence_id,
+  provider_reference,audit_id,created_at
+) VALUES (
+  '11111111-1111-4111-8111-111111111111','membership:sandbox-replay','invoice:sandbox-replay',
+  'MOBILE_MONEY',10000,'GHS','evidence:sandbox-replay',
+  'provider:sandbox-replay','audit:sandbox-replay',now()
+);
+INSERT INTO electronic_payment_evidence(
+  evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+  provider_reference,reconciled_at
+) VALUES (
+  'evidence:sandbox-replay','membership:sandbox-replay','invoice:sandbox-replay',
+  'MOBILE_MONEY','RECONCILED',10000,'GHS','provider:sandbox-replay',now()
+);
+DO $$
+DECLARE settled record;
+BEGIN
+  SELECT * INTO settled FROM settle_membership_subscription(
+    'invoice:sandbox-replay','evidence:sandbox-replay','member-session:sandbox-replay',
+    'audit:sandbox-replay','11111111-1111-4111-8111-111111111111',now());
+  IF NOT FOUND OR settled.idempotent THEN
+    RAISE EXCEPTION 'sandbox request fixture did not settle';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  BEGIN
+    UPDATE membership_subscription_sandbox_request
+    SET state='COMMITTED',completed_at=now(),result_public_member_id='FABRICATED',
+        result_membership_state='ACTIVE',result_standing='ACTIVE'
+    WHERE request_id='11111111-1111-4111-8111-111111111111';
+    RAISE EXCEPTION 'fabricated sandbox request lineage was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='fabricated sandbox request lineage was accepted' THEN RAISE; END IF;
+  END;
+END $$;
+UPDATE membership_subscription_sandbox_request r
+SET state='COMMITTED',completed_at=now(),result_public_member_id=m.public_member_id,
+    result_membership_state=m.state,result_standing=m.standing
+FROM application_membership m
+WHERE r.request_id='11111111-1111-4111-8111-111111111111' AND m.membership_id=r.membership_id;
+UPDATE membership_subscription_sandbox_request
+SET request_id=request_id WHERE request_id='11111111-1111-4111-8111-111111111111';
+DO $$
+BEGIN
+  BEGIN
+    UPDATE membership_subscription_sandbox_request SET result_standing='GRACE'
+    WHERE request_id='11111111-1111-4111-8111-111111111111';
+    RAISE EXCEPTION 'committed sandbox replay result was mutable';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='committed sandbox replay result was mutable' THEN RAISE; END IF;
+  END;
+  IF (SELECT state FROM membership_subscription_sandbox_request
+      WHERE request_id='11111111-1111-4111-8111-111111111111')<>'COMMITTED' THEN
+    RAISE EXCEPTION 'sandbox request was not committed';
+  END IF;
+  BEGIN
+    DELETE FROM membership_subscription_sandbox_request
+    WHERE request_id='11111111-1111-4111-8111-111111111111';
+    RAISE EXCEPTION 'committed sandbox request was deletable';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='committed sandbox request was deletable' THEN RAISE; END IF;
+  END;
+  BEGIN
+    UPDATE application_access_audit SET request_id='44444444-4444-4444-8444-444444444444'
+    WHERE audit_id='audit:sandbox-replay';
+    RAISE EXCEPTION 'committed sandbox audit lineage was mutable';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='committed sandbox audit lineage was mutable' THEN RAISE; END IF;
+  END;
+END $$;
+COMMIT;
+SQL
+# Migration replay must remain safe even after committed request history exists.
+"${PSQL[@]}" -f packages/durability/sql/039_membership_subscription_sandbox_request_replay.sql
 if "${PSQL[@]}" -c "INSERT INTO external_service_configuration(service_id,provider,state) VALUES('invalid-state','TWILIO','ACTIVE_WITHOUT_TEST')" >/dev/null 2>&1; then echo "invalid external service state unexpectedly succeeded" >&2; exit 1; fi
 if "${PSQL[@]}" -c "INSERT INTO external_service_configuration_event(event_id,service_id,event_type,actor_id) VALUES('invalid-event','sms','ROTATE','actor:test')" >/dev/null 2>&1; then echo "invalid external service event type unexpectedly succeeded" >&2; exit 1; fi
 accepted_at_contract=$("${PSQL[@]}" -Atc "SELECT is_nullable||':'||COALESCE(column_default,'') FROM information_schema.columns WHERE table_schema='public' AND table_name='preview_member_commitment' AND column_name='accepted_at'")
@@ -148,7 +302,7 @@ refund_unique_constraints=$("${PSQL[@]}" -Atc "SELECT count(*) FROM pg_constrain
 [[ "$refund_unique_constraints" == "8" ]] || { echo "preview refund idempotency constraints are incomplete" >&2; exit 1; }
 
 "${PSQL[@]}" <<'SQL'
-TRUNCATE support_case_transition,support_case,membership_subscription_settlement_allocation,electronic_payment_evidence_consumption,item_credit_repayment_allocation,item_credit_receivable,electronic_payment_evidence,cag_deduction_enrollment,member_session,member_auth_challenge,member_number_recovery_challenge,application_access_audit,membership_subscription_invoice,household_beneficiary_invitation,membership_application,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
+TRUNCATE support_case_transition,support_case,membership_subscription_sandbox_request,membership_subscription_settlement_allocation,electronic_payment_evidence_consumption,item_credit_repayment_allocation,item_credit_receivable,electronic_payment_evidence,cag_deduction_enrollment,member_session,member_auth_challenge,member_number_recovery_challenge,application_access_audit,membership_subscription_invoice,household_beneficiary_invitation,membership_application,membership_shopping_credit_entry,membership_shopping_credit_lot,membership_invoice_settlement,membership_invoice,beneficiary_invitation,member_application,application_identity_binding,application_membership,application_authority_grant,application_participant,communication_outbox,member_communication_consent_event,member_communication_preferences,lineage_transform_output,lineage_transform_input,lineage_transform,lineage_lot,canonical_event,aggregate_version,durable_command_execution RESTART IDENTITY;
 SQL
 
 # Initial annual settlement requires authenticated-member lineage, exact
@@ -595,5 +749,146 @@ renewal_competing_effects=$("${PSQL[@]}" -Atc "SELECT
   (SELECT state FROM membership_subscription_invoice WHERE invoice_id='invoice:renewal-competing-race')||':'||
   (SELECT standing FROM application_membership WHERE membership_id='membership:renewal-competing-race')")
 [[ "$renewal_competing_total" == "1" && "$renewal_competing_effects" == "1:1:1:PAID:ACTIVE" ]] || { echo "competing-evidence renewal race produced more than one economic effect" >&2; exit 1; }
+
+# The Preview request ledger itself is serialized under independent PostgreSQL
+# sessions. The helper below reproduces the endpoint's ordered transaction in a
+# single server transaction so locks, deferred FKs, rollback and trigger checks
+# are exercised by PostgreSQL rather than Promise mocks.
+"${PSQL[@]}" <<'SQL'
+CREATE OR REPLACE FUNCTION test_run_subscription_sandbox_request(
+  requested_request_id text,
+  requested_membership_id text,
+  requested_invoice_id text,
+  requested_session_id text,
+  requested_evidence_id text,
+  requested_provider_reference text,
+  requested_audit_id text
+) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE claimed text; settled record; completed text;
+BEGIN
+  INSERT INTO membership_subscription_sandbox_request(
+    request_id,membership_id,invoice_id,rail,amount_minor,currency,evidence_id,
+    provider_reference,audit_id,created_at
+  ) VALUES (
+    requested_request_id,requested_membership_id,requested_invoice_id,
+    'MOBILE_MONEY',10000,'GHS',requested_evidence_id,
+    requested_provider_reference,requested_audit_id,now()
+  )
+  ON CONFLICT DO NOTHING;
+  SELECT request_id INTO claimed
+  FROM membership_subscription_sandbox_request
+  WHERE request_id=requested_request_id
+    AND membership_id=requested_membership_id
+    AND invoice_id=requested_invoice_id
+    AND rail='MOBILE_MONEY' AND amount_minor=10000 AND currency='GHS'
+    AND evidence_id=requested_evidence_id
+    AND provider_reference=requested_provider_reference
+    AND audit_id=requested_audit_id;
+  INSERT INTO electronic_payment_evidence(
+    evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
+    provider_reference,reconciled_at
+  ) SELECT
+    r.evidence_id,r.membership_id,r.invoice_id,r.rail,'RECONCILED',
+    r.amount_minor,r.currency,r.provider_reference,r.created_at
+  FROM membership_subscription_sandbox_request r
+  WHERE r.request_id=requested_request_id
+    AND r.membership_id=requested_membership_id
+    AND r.invoice_id=requested_invoice_id
+    AND r.rail='MOBILE_MONEY' AND r.amount_minor=10000 AND r.currency='GHS'
+    AND r.evidence_id=requested_evidence_id
+    AND r.provider_reference=requested_provider_reference
+    AND r.audit_id=requested_audit_id
+  ON CONFLICT (evidence_id) DO NOTHING;
+
+  SELECT * INTO settled FROM settle_membership_subscription(
+    requested_invoice_id,requested_evidence_id,requested_session_id,
+    requested_audit_id,requested_request_id,now()
+  );
+  IF NOT FOUND THEN
+    IF claimed IS NULL THEN RETURN 'rebound'; END IF;
+    RAISE EXCEPTION 'sandbox settlement did not apply';
+  END IF;
+
+  UPDATE membership_subscription_sandbox_request r
+  SET state='COMMITTED',completed_at=COALESCE(r.completed_at,now()),
+      result_public_member_id=CASE WHEN r.state='COMMITTED' THEN r.result_public_member_id ELSE m.public_member_id END,
+      result_membership_state=CASE WHEN r.state='COMMITTED' THEN r.result_membership_state ELSE m.state END,
+      result_standing=CASE WHEN r.state='COMMITTED' THEN r.result_standing ELSE m.standing END
+  FROM application_membership m
+  WHERE r.request_id=requested_request_id
+    AND r.membership_id=requested_membership_id
+    AND r.invoice_id=requested_invoice_id
+    AND r.evidence_id=requested_evidence_id
+    AND m.membership_id=r.membership_id
+  RETURNING r.state INTO completed;
+  IF completed<>'COMMITTED' THEN RAISE EXCEPTION 'sandbox request did not commit'; END IF;
+  RETURN CASE WHEN settled.idempotent THEN 'replay' ELSE 'settled' END;
+END $$;
+
+INSERT INTO application_participant(participant_id,kind,state) VALUES
+ ('participant:sandbox-race','PERSON','ACTIVE'),
+ ('participant:sandbox-rebound:a','PERSON','ACTIVE'),
+ ('participant:sandbox-rebound:b','PERSON','ACTIVE');
+INSERT INTO application_membership(
+  membership_id,participant_id,state,standing,member_type,public_member_id,
+  established_at,eligibility_policy_version,eligibility_evidence_ids
+) VALUES
+ ('membership:sandbox-race','participant:sandbox-race','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-SANDBOX-RACE',now(),'test-v1',ARRAY['eligibility:sandbox-race']),
+ ('membership:sandbox-rebound:a','participant:sandbox-rebound:a','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-SANDBOX-REBOUND-A',now(),'test-v1',ARRAY['eligibility:sandbox-rebound:a']),
+ ('membership:sandbox-rebound:b','participant:sandbox-rebound:b','INACTIVE','INITIAL_FEE_DUE','PRIMARY','WFC-SANDBOX-REBOUND-B',now(),'test-v1',ARRAY['eligibility:sandbox-rebound:b']);
+INSERT INTO membership_subscription_invoice(
+  invoice_id,membership_id,subscription_year,amount_minor,currency,state,due_at
+) VALUES
+ ('invoice:sandbox-race','membership:sandbox-race',2026,10000,'GHS','OPEN',now()),
+ ('invoice:sandbox-rebound:a','membership:sandbox-rebound:a',2026,10000,'GHS','OPEN',now()),
+ ('invoice:sandbox-rebound:b','membership:sandbox-rebound:b',2026,10000,'GHS','OPEN',now());
+INSERT INTO member_session(session_id,membership_id,participant_id,state,expires_at) VALUES
+ ('session:sandbox-race','membership:sandbox-race','participant:sandbox-race','ACTIVE',now()+interval '1 hour'),
+ ('session:sandbox-rebound:a','membership:sandbox-rebound:a','participant:sandbox-rebound:a','ACTIVE',now()+interval '1 hour'),
+ ('session:sandbox-rebound:b','membership:sandbox-rebound:b','participant:sandbox-rebound:b','ACTIVE',now()+interval '1 hour');
+SQL
+
+sandbox_race_a=$(mktemp)
+sandbox_race_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT test_run_subscription_sandbox_request('22222222-2222-4222-8222-222222222222','membership:sandbox-race','invoice:sandbox-race','session:sandbox-race','evidence:sandbox-race','provider:sandbox-race','audit:sandbox-race')" >"$sandbox_race_a" &
+sandbox_race_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT test_run_subscription_sandbox_request('22222222-2222-4222-8222-222222222222','membership:sandbox-race','invoice:sandbox-race','session:sandbox-race','evidence:sandbox-race','provider:sandbox-race','audit:sandbox-race')" >"$sandbox_race_b" &
+sandbox_race_pid_b=$!
+wait "$sandbox_race_pid_a"
+wait "$sandbox_race_pid_b"
+sandbox_race_results=$(sort "$sandbox_race_a" "$sandbox_race_b" | paste -sd, -)
+rm -f "$sandbox_race_a" "$sandbox_race_b"
+sandbox_race_effects=$("${PSQL[@]}" -Atc "SELECT
+  (SELECT count(*) FROM membership_subscription_sandbox_request WHERE request_id='22222222-2222-4222-8222-222222222222' AND state='COMMITTED')||':'||
+  (SELECT count(*) FROM membership_subscription_settlement_allocation WHERE invoice_id='invoice:sandbox-race')||':'||
+  (SELECT count(*) FROM electronic_payment_evidence_consumption WHERE evidence_id='evidence:sandbox-race')||':'||
+  (SELECT count(*) FROM application_access_audit WHERE request_id='22222222-2222-4222-8222-222222222222')")
+[[ "$sandbox_race_results" == "replay,settled" && "$sandbox_race_effects" == "1:1:1:1" ]] || { echo "same-request sandbox race was not exactly-once with durable replay" >&2; exit 1; }
+
+# A later legitimate lifecycle transition must not invalidate the immutable
+# settlement-time result. Exercise the real PostgreSQL trigger and the same
+# helper path used by the concurrency test, rather than relying on mocked SQL.
+"${PSQL[@]}" -c "UPDATE application_membership SET state='SUSPENDED',standing='SUSPENDED',suspended_at=now() WHERE membership_id='membership:sandbox-race'"
+sandbox_later_state_replay=$("${PSQL[@]}" -Atc "SELECT test_run_subscription_sandbox_request('22222222-2222-4222-8222-222222222222','membership:sandbox-race','invoice:sandbox-race','session:sandbox-race','evidence:sandbox-race','provider:sandbox-race','audit:sandbox-race')")
+sandbox_later_state_snapshot=$("${PSQL[@]}" -Atc "SELECT result_membership_state||':'||result_standing FROM membership_subscription_sandbox_request WHERE request_id='22222222-2222-4222-8222-222222222222'")
+[[ "$sandbox_later_state_replay" == "replay" && "$sandbox_later_state_snapshot" == "ACTIVE:ACTIVE" ]] || { echo "later membership lifecycle state invalidated durable sandbox replay" >&2; exit 1; }
+
+sandbox_rebound_a=$(mktemp)
+sandbox_rebound_b=$(mktemp)
+"${PSQL[@]}" -Atc "SELECT test_run_subscription_sandbox_request('33333333-3333-4333-8333-333333333333','membership:sandbox-rebound:a','invoice:sandbox-rebound:a','session:sandbox-rebound:a','evidence:sandbox-rebound:a','provider:sandbox-rebound:a','audit:sandbox-rebound:a')" >"$sandbox_rebound_a" &
+sandbox_rebound_pid_a=$!
+"${PSQL[@]}" -Atc "SELECT test_run_subscription_sandbox_request('33333333-3333-4333-8333-333333333333','membership:sandbox-rebound:b','invoice:sandbox-rebound:b','session:sandbox-rebound:b','evidence:sandbox-rebound:b','provider:sandbox-rebound:b','audit:sandbox-rebound:b')" >"$sandbox_rebound_b" &
+sandbox_rebound_pid_b=$!
+wait "$sandbox_rebound_pid_a"
+wait "$sandbox_rebound_pid_b"
+sandbox_rebound_results=$(sort "$sandbox_rebound_a" "$sandbox_rebound_b" | paste -sd, -)
+rm -f "$sandbox_rebound_a" "$sandbox_rebound_b"
+sandbox_rebound_effects=$("${PSQL[@]}" -Atc "SELECT
+  (SELECT count(*) FROM membership_subscription_sandbox_request WHERE request_id='33333333-3333-4333-8333-333333333333' AND state='COMMITTED')||':'||
+  (SELECT count(*) FROM membership_subscription_settlement_allocation WHERE invoice_id IN ('invoice:sandbox-rebound:a','invoice:sandbox-rebound:b'))||':'||
+  (SELECT count(*) FROM electronic_payment_evidence_consumption WHERE evidence_id IN ('evidence:sandbox-rebound:a','evidence:sandbox-rebound:b'))||':'||
+  (SELECT count(*) FROM application_access_audit WHERE request_id='33333333-3333-4333-8333-333333333333')||':'||
+  (SELECT count(*) FROM electronic_payment_evidence WHERE evidence_id IN ('evidence:sandbox-rebound:a','evidence:sandbox-rebound:b'))")
+[[ "$sandbox_rebound_results" == "rebound,settled" && "$sandbox_rebound_effects" == "1:1:1:1:1" ]] || { echo "request rebound race left more than one durable economic effect" >&2; exit 1; }
 
 echo "live PostgreSQL durability, fencing, governed identity binding, explicit lineage, preview runtime schema, communications, A2 membership/credit and A10 support lifecycle proof passed"

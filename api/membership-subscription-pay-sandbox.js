@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
 const RAILS = ['MOBILE_MONEY', 'BANK_TRANSFER', 'CAGD_PAYROLL'];
 const sha = v => createHash('sha256').update(String(v)).digest('hex');
@@ -7,7 +7,7 @@ const sha = v => createHash('sha256').update(String(v)).digest('hex');
  * Sandbox-only simulator for the payment-evidence step no real provider
  * integration exists for yet: inserts a RECONCILED electronic_payment_evidence
  * row for the caller's own OPEN annual invoice, then calls the already-atomic
- * settle_membership_subscription in the SAME statement, so the evidence and
+ * settle_membership_subscription in one database transaction, so the evidence and
  * the settlement either both land or neither does. No real funds move.
  * Structurally cannot run outside preview (mirrors commit-sandbox.js/pay-sandbox.js).
  */
@@ -22,7 +22,11 @@ export default async function handler(req, res, options = {}) {
 
   const invoiceId = typeof req.body?.invoiceId === 'string' ? req.body.invoiceId.trim() : '';
   if (!invoiceId) return res.status(400).json({ ok: false, error: 'INVOICE_ID_REQUIRED' });
-  const rail = RAILS.includes(req.body?.rail) ? req.body.rail : 'MOBILE_MONEY';
+  const requestedRail = req.body?.rail;
+  const rail = requestedRail == null || requestedRail === '' ? 'MOBILE_MONEY' : requestedRail;
+  if (!RAILS.includes(rail)) return res.status(400).json({ ok: false, error: 'PAYMENT_RAIL_INVALID' });
+  const requestId = typeof req.headers?.['x-request-id'] === 'string' ? req.headers['x-request-id'].trim() : '';
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) return res.status(400).json({ ok: false, error: 'REQUEST_ID_REQUIRED' });
 
   const cs = options.databaseUrl || env.DATABASE_URL;
   if (!cs && !options.sql) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
@@ -44,26 +48,73 @@ export default async function handler(req, res, options = {}) {
     const invoices = await sql`SELECT invoice_id, state, amount_minor, currency FROM membership_subscription_invoice WHERE invoice_id=${invoiceId} AND membership_id=${membershipId} LIMIT 1`;
     if (invoices.length !== 1) return res.status(404).json({ ok: false, error: 'INVOICE_NOT_FOUND' });
     const invoice = invoices[0];
-    if (String(invoice.state) === 'PAID') return res.status(409).json({ ok: false, error: 'INVOICE_ALREADY_SETTLED' });
-    if (String(invoice.state) !== 'OPEN') return res.status(409).json({ ok: false, error: 'INVOICE_NOT_OPEN' });
+    if (!['OPEN', 'PAID'].includes(String(invoice.state))) return res.status(409).json({ ok: false, error: 'INVOICE_NOT_OPEN' });
 
-    const evidenceId = `evidence:sandbox:${randomUUID()}`;
-    const providerReference = `sandbox:${randomUUID()}`;
-    const auditId = `audit:subscription:sandbox:${randomUUID()}`;
-    const requestId = req.headers?.['x-request-id'] || null;
+    const requestDigest = sha(`${membershipId}\u0000${requestId}`);
+    const evidenceId = `evidence:sandbox:${requestDigest}`;
+    const providerReference = `sandbox:${requestDigest}`;
+    const auditId = `audit:subscription:sandbox:${requestDigest}`;
 
-    const rows = await sql`
-      WITH evidence AS (
-        INSERT INTO electronic_payment_evidence(evidence_id, membership_id, obligation_id, rail, state, amount_minor, currency, provider_reference, reconciled_at)
-        VALUES (${evidenceId}, ${membershipId}, ${invoiceId}, ${rail}, 'RECONCILED', ${invoice.amount_minor}, ${invoice.currency}, ${providerReference}, ${nowIso})
-        RETURNING evidence_id
-      ), settled AS (
-        SELECT * FROM settle_membership_subscription(${invoiceId}, (SELECT evidence_id FROM evidence), ${sessionId}, ${auditId}, ${requestId}, ${nowIso})
-      )
-      SELECT * FROM settled`;
+    if (typeof sql.transaction !== 'function') return res.status(503).json({ ok: false, error: 'DATABASE_TRANSACTION_UNAVAILABLE' });
+    const [, bindingRows, , rows, completionRows] = await sql.transaction([
+      sql`
+        INSERT INTO membership_subscription_sandbox_request(
+          request_id, membership_id, invoice_id, rail, amount_minor, currency,
+          evidence_id, provider_reference, audit_id, created_at
+        ) VALUES (
+          ${requestId}, ${membershipId}, ${invoiceId}, ${rail},
+          ${invoice.amount_minor}, ${invoice.currency}, ${evidenceId},
+          ${providerReference}, ${auditId}, ${nowIso}
+        )
+        ON CONFLICT DO NOTHING
+        RETURNING request_id`,
+      sql`
+        SELECT request_id FROM membership_subscription_sandbox_request
+        WHERE request_id=${requestId} AND membership_id=${membershipId}
+          AND invoice_id=${invoiceId} AND rail=${rail}
+          AND amount_minor=${invoice.amount_minor} AND currency=${invoice.currency}
+          AND evidence_id=${evidenceId} AND provider_reference=${providerReference}
+          AND audit_id=${auditId}
+        LIMIT 1`,
+      sql`
+        INSERT INTO electronic_payment_evidence(
+          evidence_id, membership_id, obligation_id, rail, state, amount_minor,
+          currency, provider_reference, reconciled_at
+        ) SELECT
+          r.evidence_id, r.membership_id, r.invoice_id, r.rail, 'RECONCILED',
+          r.amount_minor, r.currency, r.provider_reference, r.created_at
+        FROM membership_subscription_sandbox_request r
+        WHERE r.request_id=${requestId} AND r.membership_id=${membershipId}
+          AND r.invoice_id=${invoiceId} AND r.rail=${rail}
+          AND r.amount_minor=${invoice.amount_minor} AND r.currency=${invoice.currency}
+          AND r.evidence_id=${evidenceId} AND r.provider_reference=${providerReference}
+        ON CONFLICT (evidence_id) DO NOTHING
+        RETURNING evidence_id`,
+      sql`
+        SELECT * FROM settle_membership_subscription(
+          ${invoiceId}, ${evidenceId}, ${sessionId}, ${auditId}, ${requestId}, ${nowIso}
+        )`,
+      sql`
+        UPDATE membership_subscription_sandbox_request r
+        SET state=CASE WHEN EXISTS (
+          SELECT 1 FROM membership_subscription_settlement_allocation a
+          WHERE a.invoice_id=${invoiceId} AND a.evidence_id=${evidenceId}
+        ) THEN 'COMMITTED' ELSE 'INVALID' END,
+          completed_at=COALESCE(r.completed_at, ${nowIso}::timestamptz),
+          result_public_member_id=CASE WHEN r.state='COMMITTED' THEN r.result_public_member_id ELSE m.public_member_id END,
+          result_membership_state=CASE WHEN r.state='COMMITTED' THEN r.result_membership_state ELSE m.state END,
+          result_standing=CASE WHEN r.state='COMMITTED' THEN r.result_standing ELSE m.standing END
+        FROM application_membership m
+        WHERE r.request_id=${requestId} AND r.membership_id=${membershipId}
+          AND r.invoice_id=${invoiceId} AND r.rail=${rail}
+          AND r.evidence_id=${evidenceId}
+          AND m.membership_id=r.membership_id
+        RETURNING r.request_id, r.result_public_member_id, r.result_membership_state,
+          r.result_standing`,
+    ]);
 
-    if (rows.length !== 1) return res.status(409).json({ ok: false, error: 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE' });
-    const result = rows[0];
+    if (bindingRows.length !== 1 || rows.length !== 1 || completionRows.length !== 1) return res.status(409).json({ ok: false, error: 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE' });
+    const result = rows[0], durableResult = completionRows[0];
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       ok: true,
@@ -71,12 +122,13 @@ export default async function handler(req, res, options = {}) {
       idempotent: result.idempotent === true || String(result.idempotent) === 'true',
       invoiceId,
       evidenceId,
-      membershipId: String(result.membership_id),
-      publicMemberId: String(result.public_member_id),
-      membershipState: String(result.membership_state),
-      standing: String(result.standing),
+      membershipId,
+      publicMemberId: String(durableResult.result_public_member_id),
+      membershipState: String(durableResult.result_membership_state),
+      standing: String(durableResult.result_standing),
     });
   } catch (error) {
+    if (error?.code === '23514' && error?.constraint === 'membership_subscription_sandbox_request_state_ck') return res.status(409).json({ ok: false, error: 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE' });
     console.error('Sandbox membership subscription payment failed', { name: error?.name, code: error?.code, message: error?.message });
     return res.status(503).json({ ok: false, error: 'SANDBOX_SUBSCRIPTION_PAYMENT_FAILED' });
   }

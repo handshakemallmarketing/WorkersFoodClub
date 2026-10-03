@@ -58,10 +58,20 @@
     button.onclick = async () => { button.disabled = true; try { const response = await upstream('/api/member-number-recovery-verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId: challenge.challengeId, code: input.value }) }); const result = await response.json().catch(() => null); if (!response.ok || !result?.publicMemberId) throw new Error(); body.innerHTML = ''; subtitle.textContent = 'Member Number recovered.'; const paragraph = document.createElement('p'); paragraph.textContent = `Your Member Number is ${result.publicMemberId}.`; const go = document.createElement('button'); go.className = 'primary'; go.textContent = 'Continue to sign in'; go.onclick = () => { const url = new URL(location.href); url.searchParams.set('memberId', result.publicMemberId); history.replaceState(null, '', url.pathname + url.search); render(); }; body.append(paragraph, go); } catch { message.textContent = 'Verification failed. Check the code and try again.'; } finally { button.disabled = false; } };
     body.append(input, button, message); if (challenge.previewCode) { const hint = document.createElement('code'); hint.textContent = `Preview code: ${challenge.previewCode}`; body.appendChild(hint); }
   }
+  function sandboxRequestId(invoiceId) {
+    const key = `wfc:sandbox-subscription-request:${invoiceId}`;
+    let existing;
+    try { existing = localStorage.getItem(key); } catch { throw new Error('DURABLE_REQUEST_ID_STORAGE_UNAVAILABLE'); }
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing || '')) return existing;
+    if (typeof crypto.randomUUID !== 'function') throw new Error('SECURE_REQUEST_ID_UNAVAILABLE');
+    const created = crypto.randomUUID();
+    try { localStorage.setItem(key, created); } catch { throw new Error('DURABLE_REQUEST_ID_STORAGE_UNAVAILABLE'); }
+    return created;
+  }
   async function paySandbox(invoiceId, message, button) {
     button.disabled = true;
     try {
-      const response = await upstream('/api/membership-subscription-pay-sandbox', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ invoiceId }) });
+      const response = await upstream('/api/membership-subscription-pay-sandbox', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Request-ID': sandboxRequestId(invoiceId) }, body: JSON.stringify({ invoiceId }) });
       const result = await response.json().catch(() => null);
       if (!response.ok || result?.ok !== true) throw new Error(result?.error || 'SANDBOX_PAYMENT_FAILED');
       message.textContent = 'Sandbox payment simulated. Refreshing membership status…'; await check();

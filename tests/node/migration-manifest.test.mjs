@@ -37,7 +37,7 @@ async function fixture(files, manifestOrder = Object.keys(files).sort()) {
 test('repository migration manifest covers and verifies every SQL migration', () => {
   const result = spawnSync(process.execPath, [verifier], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Migration manifest verified: 43 files/);
+  assert.match(result.stdout, /Migration manifest verified: 45 files/);
 });
 
 test('migration manifest verifier rejects tampering, coverage drift, ordering drift and symlinks', async t => {
