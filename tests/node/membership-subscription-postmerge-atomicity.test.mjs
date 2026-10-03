@@ -5,6 +5,7 @@ import fs from 'node:fs';
 const migration=fs.readFileSync(new URL('../../packages/durability/sql/038_membership_subscription_sandbox_atomicity.sql',import.meta.url),'utf8');
 const replayMigration=fs.readFileSync(new URL('../../packages/durability/sql/039_membership_subscription_sandbox_request_replay.sql',import.meta.url),'utf8');
 const endpoint=fs.readFileSync(new URL('../../api/membership-subscription-pay-sandbox.js',import.meta.url),'utf8');
+const memberUi=fs.readFileSync(new URL('../../public/member-auth.js',import.meta.url),'utf8');
 
 test('migration rejects every contradictory historical paid-state marker',()=>{
   assert.match(migration,/i\.state='PAID' OR i\.paid_at IS NOT NULL OR i\.settlement_evidence_id IS NOT NULL/);
@@ -31,10 +32,17 @@ test('Preview request replay is durably bound and rebound fails closed',()=>{
   assert.match(replayMigration,/state='COMMITTED'/);
   assert.match(replayMigration,/membership_subscription_sandbox_request_completion_ck/);
   assert.match(replayMigration,/committed subscription sandbox request is immutable/);
+  assert.match(replayMigration,/committed subscription sandbox request lineage is invalid/);
+  assert.match(replayMigration,/membership_subscription_settlement_allocation/);
+  assert.match(replayMigration,/electronic_payment_evidence_consumption/);
+  assert.match(replayMigration,/MEMBERSHIP_RENEWAL_SETTLED/);
   assert.match(endpoint,/ON CONFLICT \(request_id\) DO UPDATE/);
   assert.match(endpoint,/membership_subscription_sandbox_request\.membership_id=EXCLUDED\.membership_id/);
   assert.match(endpoint,/ON CONFLICT \(evidence_id\) DO NOTHING/);
   assert.match(endpoint,/COALESCE\(r\.completed_at/);
+  assert.match(endpoint,/PAYMENT_RAIL_INVALID/);
+  assert.match(memberUi,/crypto\.randomUUID\(\)/);
+  assert.match(memberUi,/'X-Request-ID': sandboxRequestId\(invoiceId\)/);
 });
 
 test('scope remains Preview-only and excludes blocked economic and authority surfaces',()=>{

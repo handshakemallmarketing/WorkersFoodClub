@@ -5,7 +5,7 @@ import handler from '../../api/membership-subscription-pay-sandbox.js';
 
 const NOW = Date.parse('2026-09-23T12:00:00Z');
 const TOKEN = 'wfc_test_member_session';
-const REQUEST_ID = 'request:subscription:test-1';
+const REQUEST_ID = '11111111-1111-4111-8111-111111111111';
 const SESSION_ID = 'member-session:' + createHash('sha256').update(TOKEN).digest('hex');
 const PREVIEW_ENV = { VERCEL_ENV: 'preview', DATABASE_URL: 'postgres://test' };
 
@@ -141,13 +141,13 @@ test('simulates a reconciled payment and settles the invoice atomically', async 
   assert.ok(sql.calls.some(c => c.text.includes('UPDATE membership_subscription_sandbox_request')));
 });
 
-test('rejects an unknown rail by defaulting to MOBILE_MONEY rather than failing', async () => {
-  const settled = { membership_id: 'membership:1', public_member_id: '555555555001', membership_state: 'ACTIVE', standing: 'ACTIVE', idempotent: false };
-  const sql = fakeSql({ session: activeSession, invoice: openInvoice, settled });
+test('rejects an explicitly unknown rail before database access', async () => {
+  const sql = fakeSql();
   const res = response();
   await handler(req({ invoiceId: 'invoice:1', rail: 'NOT_A_REAL_RAIL' }), res, { env: PREVIEW_ENV, now: NOW, sql });
-  const evidenceCall = sql.calls.find(c => c.text.includes('INSERT INTO electronic_payment_evidence'));
-  assert.ok(evidenceCall.values.includes('MOBILE_MONEY'));
+  assert.equal(res.result.statusCode, 400);
+  assert.equal(res.result.body.error, 'PAYMENT_RAIL_INVALID');
+  assert.equal(sql.calls.length, 0);
 });
 
 test('reports settlement not applicable when the atomic function settles nothing', async () => {

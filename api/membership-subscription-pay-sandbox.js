@@ -22,9 +22,11 @@ export default async function handler(req, res, options = {}) {
 
   const invoiceId = typeof req.body?.invoiceId === 'string' ? req.body.invoiceId.trim() : '';
   if (!invoiceId) return res.status(400).json({ ok: false, error: 'INVOICE_ID_REQUIRED' });
-  const rail = RAILS.includes(req.body?.rail) ? req.body.rail : 'MOBILE_MONEY';
+  const requestedRail = req.body?.rail;
+  const rail = requestedRail == null || requestedRail === '' ? 'MOBILE_MONEY' : requestedRail;
+  if (!RAILS.includes(rail)) return res.status(400).json({ ok: false, error: 'PAYMENT_RAIL_INVALID' });
   const requestId = typeof req.headers?.['x-request-id'] === 'string' ? req.headers['x-request-id'].trim() : '';
-  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(requestId)) return res.status(400).json({ ok: false, error: 'REQUEST_ID_REQUIRED' });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) return res.status(400).json({ ok: false, error: 'REQUEST_ID_REQUIRED' });
 
   const cs = options.databaseUrl || env.DATABASE_URL;
   if (!cs && !options.sql) return res.status(503).json({ ok: false, error: 'DATABASE_URL_MISSING' });
