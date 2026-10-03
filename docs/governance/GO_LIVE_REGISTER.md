@@ -112,6 +112,17 @@ before activation — it hard-fails closed on a subject mismatch by design.
 
 **RESOLVED 2026-09-18.** Migrations 001-011 were already applied to the real production Neon
 branch (`br-winter-poetry-ae8qho57`, project `wispy-dawn-96331519`, org "Ghana Food Group").
+
+**Correction, 2026-10-03 (`BLV2-DEC-049`): that "001-011 already applied" claim was never
+individually re-verified per migration, and migration `005_member_communications.sql` was in fact
+missing from both branches** (`communication_outbox`, `member_communication_preferences`,
+`member_communication_consent_event` did not exist) — discovered while building the admin
+broadcast feature. This meant `api/member-notifications.js`, the pre-existing member-facing
+"Notifications" tab, had been silently returning `503 MEMBER_NOTIFICATIONS_FETCH_FAILED` (shown to
+members as "Notifications unavailable") since whenever it shipped, independent of this session's
+own work. Applied migration 005 to preview, dry-run verified, then applied to production; both
+confirmed via `to_regclass`. Purely additive (`CREATE TABLE/INDEX IF NOT EXISTS`), no data risk.
+
 **Migrations 012-015 were confirmed missing** (`BLV2-DEC-009`) — `employee_session`,
 `member_application`, `beneficiary_invitation`, `membership_invoice(_settlement)`,
 `member_product_request_survey`, `support_case(_transition)`, and
