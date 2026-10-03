@@ -1,9 +1,13 @@
-version: "0.1"
+version: "0.2"
 status: WORKING_BASELINE_NOT_LAUNCH_AUTHORIZATION
-as_of_utc: "2026-09-18"
+as_of_utc: "2026-10-03"
 repository: handshakemallmarketing/WorkersFoodClub
-baseline_sha: f02caaa0d33e893e8cc3a72b6348eee971aaa4dc
+baseline_sha: ca9224c98f47cb8c50cac5033e053b081abd013f
 owner: A0_MASTER_ORCHESTRATOR
+reconciliation_scope: >-
+  Governance metadata and fail-closed controls reconciled only. Journey
+  classifications remain intentionally conservative pending exact-release-candidate
+  independent end-to-end evidence.
 classification_rule: >-
   PROVEN requires reproducible implementation, server-side authority, durable state,
   economic/physical truth, happy and adverse paths, applicable idempotency/concurrency,
@@ -18,34 +22,29 @@ global_safety_boundary:
   paystack_live_mode: WITHHELD
   live_paystack_credentials: WITHHELD
   live_funds: WITHHELD
+  production_application_access: WITHHELD
+  standing_governed_production_sha: e67bf163db4bf87317766b1c58da84ea076de76f
+  matrix_baseline_production_authorized: false
   production_payment_mutations: WITHHELD
   production_refund_mutations: WITHHELD
   production_fulfillment_mutations: WITHHELD
 global_gaps:
   - id: P0-GOV-CANON
     severity: P0
-    finding: constitution/baseline.json says PROPOSED_FOR_RATIFICATION while agent guidance describes C0-C10 as ratified; substantive C0-C10 text is not discoverable on main.
+    status: RESOLVED
+    finding: >-
+      constitution/baseline.json is RATIFIED, names the System Owner as ratification
+      authority, and points to constitution/WORKERSFOODCLUB_CONSTITUTION_V1.md as
+      the substantive canonical source. Ratification does not authorize withheld
+      Production or live-money capabilities.
   - id: P0-PROD-EXACT-HEAD
     severity: P0
     status: RESOLVED
     finding: >-
-      Two Vercel deployments of this repository existed, disagreeing on application-access state
-      at the same commit. Willie Adofo confirmed directly (BLV2-DEC-014): he personally requested
-      PRODUCTION_APPLICATION_ACCESS_ENABLED be turned on for workers-food-club.vercel.app (Vercel
-      team OriginOS, prj_Ti1NOQryzFeImhMSwncMXNxs01I8) for real-world testing, done via direct
-      Vercel dashboard toggle rather than the documented activation-gate ceremony -- a real,
-      intentional authorization, not a rogue/unauthorized one. The second project (the old
-      canonical alias, workers-food-club-chi.vercel.app) was identified (BLV2-DEC-018): same
-      project name and Project ID (prj_Y10EuTs8ttzcRg9LZl2BASSiOFUE, matching the old hardcoded
-      workflow value) under a different Vercel account (ghanafoodgroup@gmail.com, team
-      "FoodClub"). Willie paused it directly -- reversible, no deletion, visitors now get 503
-      DEPLOYMENT_PAUSED. Its GitHub integration still fires build status checks on every push
-      (confirmed on PR #98) even while paused; only serving traffic stopped. Remediated
-      (BLV2-DEC-015): the activation workflow and governance record (grant v4) on both main and
-      the sw1-production-application-access-activation-gate control branch were repointed to the
-      real project and current main HEAD. Exactly one project now actually serves real users.
-      Four older RC3-era workflows referencing the same stale org were left untouched as out of
-      scope (different, seemingly-retired control branch from an earlier release cycle).
+      Exact-SHA enforcement is implemented and the former automatic main-SHA writer is removed.
+      The standing governed Production SHA is e67bf163db4bf87317766b1c58da84ea076de76f.
+      This matrix baseline ca9224c98f47cb8c50cac5033e053b081abd013f is not authorized,
+      Production application access is disabled, and deployment alone confers no authority.
   - id: P0-DB-ISOLATION
     severity: P0
     status: RESOLVED
@@ -99,9 +98,9 @@ journeys:
   - {id: UC-05, objective: "Catalog product and SKU management", owner_agent: A3, dependencies: [], classification: PARTIAL, implementation_files: ["packages/catalog"], api_endpoints: [], database_tables: [], migrations: [], authorization_scopes: [], ui_entry_points: [], happy_path_tests: ["business-logic-v2-a3-commerce.test.mjs"], adverse_path_tests: [], concurrency_tests: [], idempotency_tests: [], durable_state_evidence: [], audit_evidence: [], recovery_evidence: [], preview_evidence: [], production_evidence: [], remaining_gaps: ["authorized durable operator API/UI"], severity: P1, launch_requirement: REQUIRED, final_disposition: OPEN}
   - {id: UC-06, objective: "Offer publication", owner_agent: A3, dependencies: [UC-05], classification: PARTIAL, implementation_files: ["packages/catalog"], api_endpoints: [], database_tables: ["preview_member_offer"], migrations: [], authorization_scopes: [], ui_entry_points: [], happy_path_tests: ["A3 offer versioning tests"], adverse_path_tests: ["stale version"], concurrency_tests: [], idempotency_tests: [], durable_state_evidence: ["legacy preview offer schema"], audit_evidence: [], recovery_evidence: [], preview_evidence: [], production_evidence: [], remaining_gaps: ["operator publication runtime"], severity: P1, launch_requirement: REQUIRED, final_disposition: OPEN}
   - {id: UC-07, objective: "Basket and commitment", owner_agent: A3, dependencies: [UC-02, UC-04, UC-06], classification: PARTIAL, implementation_files: ["packages/catalog", "api/commit-sandbox.js"], api_endpoints: ["/api/commit-sandbox"], database_tables: ["preview_member_commitment"], migrations: [], authorization_scopes: ["member:*"], ui_entry_points: [], happy_path_tests: ["business-logic-v2-a3-commerce.test.mjs"], adverse_path_tests: ["basket != commitment", "stale version", "quantity bounds"], concurrency_tests: ["partial"], idempotency_tests: ["request replay tests"], durable_state_evidence: ["accepted_at timestamptz NOT NULL default now()", "one persisted synthetic record observed"], audit_evidence: ["canonical_event"], recovery_evidence: ["partial A11 evidence"], preview_evidence: ["legacy runtime evidence"], production_evidence: [], remaining_gaps: ["complete authenticated BLV2 E2E and recovery"], severity: P1, launch_requirement: REQUIRED, final_disposition: OPEN}
-  - {id: UC-08, objective: "Minimum commitment payment", owner_agent: A4, dependencies: [UC-07], classification: UNPROVEN, implementation_files: ["payment primitives only", "api/pay-sandbox.js"], api_endpoints: ["/api/pay-sandbox"], database_tables: ["preview_sandbox_payment"], migrations: [], authorization_scopes: ["member:*"], ui_entry_points: [], happy_path_tests: ["test-provider paths"], adverse_path_tests: ["intent != settlement"], concurrency_tests: [], idempotency_tests: ["provider/reference uniqueness"], durable_state_evidence: ["recorded_at timestamptz NOT NULL default now()"], audit_evidence: ["canonical_event"], recovery_evidence: ["partial"], preview_evidence: ["sandbox only"], production_evidence: ["mutations withheld"], remaining_gaps: ["System Owner payment-qualification policy", "partial/overpayment/reversal/out-of-order proof"], severity: P0, launch_requirement: REQUIRED, final_disposition: FAIL_CLOSED_POLICY_BLOCKED}
+  - {id: UC-08, objective: "Minimum commitment payment", owner_agent: A4, dependencies: [UC-07], classification: UNPROVEN, policy_evidence: ["BLV2-DEC-024", "PR-15", "PR-16", "PR-17", "PR-18"], implementation_files: ["api/pay-sandbox.js", "lib/qualified-demand-policy.js"], api_endpoints: ["/api/pay-sandbox"], database_tables: ["preview_sandbox_payment", "preview_member_commitment", "canonical_event"], migrations: ["022_qualified_demand_credit_v1.sql", "025_deadline_fulfillment_planning_v1.sql", "027_final_policy_consistency_v1.sql"], authorization_scopes: ["member:payment.execute"], ui_entry_points: [], happy_path_tests: ["tests/node/pay-sandbox.test.mjs", "tests/node/j22-j24-qualified-demand-policy.test.mjs"], adverse_path_tests: ["Production denied", "non-Preview denied", "missing threshold rejected", "failed payment has NO_ECONOMIC_EFFECT"], concurrency_tests: ["unique request race recovery"], idempotency_tests: ["request replay", "request rebound denial"], durable_state_evidence: ["atomic Preview payment/qualification CTE"], audit_evidence: ["canonical_event"], recovery_evidence: ["partial"], preview_evidence: ["Preview-only atomic implementation"], production_evidence: ["mutations withheld"], remaining_gaps: ["exact-RC independent browser/API/PostgreSQL/TEST-provider proof", "partial/overpayment/reversal/out-of-order recovery certification", "obsolete Preview HTTP rehearsal assertions"], severity: P0, launch_requirement: REQUIRED, final_disposition: IMPLEMENTATION_EVIDENCE_OPEN_PRODUCTION_WITHHELD}
   - {id: UC-09, objective: "Minimum/maximum order quantity", owner_agent: A3, dependencies: [UC-06], classification: PARTIAL, implementation_files: ["packages/catalog"], api_endpoints: [], database_tables: [], migrations: [], authorization_scopes: [], ui_entry_points: [], happy_path_tests: ["A3 quantity tests"], adverse_path_tests: ["MOQ/max/version boundaries"], concurrency_tests: [], idempotency_tests: [], durable_state_evidence: [], audit_evidence: [], recovery_evidence: [], preview_evidence: [], production_evidence: [], remaining_gaps: ["publication-to-member runtime proof"], severity: P1, launch_requirement: REQUIRED, final_disposition: OPEN}
-  - {id: UC-10, objective: "Demand-pool qualification", owner_agent: A5, dependencies: [UC-08, UC-09], classification: PARTIAL, implementation_files: ["packages/catalog"], api_endpoints: [], database_tables: [], migrations: [], authorization_scopes: [], ui_entry_points: [], happy_path_tests: ["pooledDemandQuantity tests"], adverse_path_tests: ["unqualified commitments excluded"], concurrency_tests: [], idempotency_tests: ["replay no double-count"], durable_state_evidence: [], audit_evidence: [], recovery_evidence: ["partial A11"], preview_evidence: [], production_evidence: [], remaining_gaps: ["UC-08 blocker", "durable concurrent qualification"], severity: P0, launch_requirement: REQUIRED, final_disposition: DEPENDENCY_BLOCKED}
+  - {id: UC-10, objective: "Demand-pool qualification", owner_agent: A5, dependencies: [UC-08, UC-09], classification: PARTIAL, implementation_files: ["packages/catalog", "api/qualified-demand.js"], api_endpoints: ["/api/qualified-demand"], database_tables: ["preview_member_commitment", "preview_sandbox_payment"], migrations: ["022_qualified_demand_credit_v1.sql"], authorization_scopes: ["operator:fulfillment.manage"], authorized_operator_tiers: ["FULFILLMENT_CAPABLE_OPERATORS"], ui_entry_points: [], happy_path_tests: ["pooledDemandQuantity tests", "qualified-demand policy tests"], adverse_path_tests: ["unqualified commitments excluded", "failed payments excluded"], concurrency_tests: [], idempotency_tests: ["replay no double-count"], durable_state_evidence: ["Preview qualification state and confirmed payment evidence"], audit_evidence: [], recovery_evidence: ["partial A11"], preview_evidence: ["implementation evidence only"], production_evidence: ["mutations withheld"], remaining_gaps: ["UC-08 exact-RC evidence dependency", "durable concurrent qualification and reversal recovery"], severity: P0, launch_requirement: REQUIRED, final_disposition: DEPENDENCY_BLOCKED}
   - {id: UC-11, objective: "Item-level credit purchase", owner_agent: A4, dependencies: [UC-04, UC-06], classification: MISSING, implementation_files: [], api_endpoints: [], database_tables: [], migrations: [], authorization_scopes: [], ui_entry_points: [], happy_path_tests: [], adverse_path_tests: [], concurrency_tests: [], idempotency_tests: [], durable_state_evidence: [], audit_evidence: [], recovery_evidence: [], preview_evidence: [], production_evidence: [], remaining_gaps: ["credit eligibility/limits/terms policy", "receivables implementation"], severity: P1, launch_requirement: DECISION_REQUIRED, final_disposition: POLICY_BLOCKED}
   - {id: UC-12, objective: "Payroll/CAGD deduction mandate", owner_agent: A4, dependencies: [UC-11], classification: MISSING, implementation_files: [], api_endpoints: [], database_tables: [], migrations: [], authorization_scopes: [], ui_entry_points: [], happy_path_tests: [], adverse_path_tests: [], concurrency_tests: [], idempotency_tests: [], durable_state_evidence: [], audit_evidence: [], recovery_evidence: [], preview_evidence: [], production_evidence: [], remaining_gaps: ["legal/operational activation and full mandate lifecycle"], severity: P1, launch_requirement: NOT_AUTHORIZED_FOR_INITIAL_LIVE_OPERATION, final_disposition: WITHHELD}
   - {id: UC-13, objective: "Third-party release code", owner_agent: A7, dependencies: [UC-23], classification: UNPROVEN, implementation_files: ["release authority references"], api_endpoints: [], database_tables: [], migrations: [], authorization_scopes: [], ui_entry_points: [], happy_path_tests: [], adverse_path_tests: [], concurrency_tests: [], idempotency_tests: [], durable_state_evidence: [], audit_evidence: [], recovery_evidence: [], preview_evidence: [], production_evidence: [], remaining_gaps: ["bounded single-use durable release lifecycle"], severity: P1, launch_requirement: REQUIRED_IF_THIRD_PARTY_PICKUP, final_disposition: OPEN}
