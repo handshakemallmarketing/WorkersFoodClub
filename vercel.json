@@ -7,6 +7,7 @@
     { "source": "/operator-fulfillment", "destination": "/operator-fulfillment.html" },
     { "source": "/settings", "destination": "/settings.html" },
     { "source": "/workforce", "destination": "/workforce.html" },
+    { "source": "/broadcast", "destination": "/broadcast.html" },
     { "source": "/promotions", "destination": "/promotions.html" },
     { "source": "/join", "destination": "/join.html" },
     { "source": "/apply", "destination": "/join.html" },

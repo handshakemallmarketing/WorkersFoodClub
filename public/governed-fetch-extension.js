@@ -8,6 +8,7 @@
     '/api/workforce-domains',
     '/api/fulfillment-plan-schedule',
     '/api/promotion-compliance',
+    '/api/admin-broadcast',
   ]);
   let operatorAuthorization = null;
   let employeeSession = null;
