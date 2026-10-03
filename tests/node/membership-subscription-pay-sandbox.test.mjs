@@ -27,6 +27,7 @@ function fakeSql({ session, invoice, settled, durable = settled, requestAccepted
     if (text.includes('FROM member_session')) { assert.equal(values[0], SESSION_ID); return session ? [session] : []; }
     if (text.includes('FROM membership_subscription_invoice')) return invoice ? [invoice] : [];
     if (text.includes('INSERT INTO membership_subscription_sandbox_request')) return requestAccepted ? [{ request_id: REQUEST_ID }] : [];
+    if (text.includes('SELECT request_id FROM membership_subscription_sandbox_request')) return requestAccepted ? [{ request_id: REQUEST_ID }] : [];
     if (text.includes('INSERT INTO electronic_payment_evidence')) return [{ evidence_id: 'evidence:test' }];
     if (text.includes('settle_membership_subscription')) return settled ? [settled] : [];
     if (text.includes('UPDATE membership_subscription_sandbox_request')) return completed ? [{

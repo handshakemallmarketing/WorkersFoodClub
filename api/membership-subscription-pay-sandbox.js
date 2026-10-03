@@ -56,7 +56,7 @@ export default async function handler(req, res, options = {}) {
     const auditId = `audit:subscription:sandbox:${requestDigest}`;
 
     if (typeof sql.transaction !== 'function') return res.status(503).json({ ok: false, error: 'DATABASE_TRANSACTION_UNAVAILABLE' });
-    const [requestRows, , rows, completionRows] = await sql.transaction([
+    const [, bindingRows, , rows, completionRows] = await sql.transaction([
       sql`
         INSERT INTO membership_subscription_sandbox_request(
           request_id, membership_id, invoice_id, rail, amount_minor, currency,
@@ -66,16 +66,16 @@ export default async function handler(req, res, options = {}) {
           ${invoice.amount_minor}, ${invoice.currency}, ${evidenceId},
           ${providerReference}, ${auditId}, ${nowIso}
         )
-        ON CONFLICT (request_id) DO UPDATE SET request_id=EXCLUDED.request_id
-        WHERE membership_subscription_sandbox_request.membership_id=EXCLUDED.membership_id
-          AND membership_subscription_sandbox_request.invoice_id=EXCLUDED.invoice_id
-          AND membership_subscription_sandbox_request.rail=EXCLUDED.rail
-          AND membership_subscription_sandbox_request.amount_minor=EXCLUDED.amount_minor
-          AND membership_subscription_sandbox_request.currency=EXCLUDED.currency
-          AND membership_subscription_sandbox_request.evidence_id=EXCLUDED.evidence_id
-          AND membership_subscription_sandbox_request.provider_reference=EXCLUDED.provider_reference
-          AND membership_subscription_sandbox_request.audit_id=EXCLUDED.audit_id
+        ON CONFLICT DO NOTHING
         RETURNING request_id`,
+      sql`
+        SELECT request_id FROM membership_subscription_sandbox_request
+        WHERE request_id=${requestId} AND membership_id=${membershipId}
+          AND invoice_id=${invoiceId} AND rail=${rail}
+          AND amount_minor=${invoice.amount_minor} AND currency=${invoice.currency}
+          AND evidence_id=${evidenceId} AND provider_reference=${providerReference}
+          AND audit_id=${auditId}
+        LIMIT 1`,
       sql`
         INSERT INTO electronic_payment_evidence(
           evidence_id, membership_id, obligation_id, rail, state, amount_minor,
@@ -113,7 +113,7 @@ export default async function handler(req, res, options = {}) {
           r.result_standing`,
     ]);
 
-    if (requestRows.length !== 1 || rows.length !== 1 || completionRows.length !== 1) return res.status(409).json({ ok: false, error: 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE' });
+    if (bindingRows.length !== 1 || rows.length !== 1 || completionRows.length !== 1) return res.status(409).json({ ok: false, error: 'SUBSCRIPTION_SETTLEMENT_NOT_APPLICABLE' });
     const result = rows[0], durableResult = completionRows[0];
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({

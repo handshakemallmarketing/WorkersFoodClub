@@ -280,6 +280,13 @@ BEGIN
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM='committed sandbox request was deletable' THEN RAISE; END IF;
   END;
+  BEGIN
+    UPDATE application_access_audit SET request_id='44444444-4444-4444-8444-444444444444'
+    WHERE audit_id='audit:sandbox-replay';
+    RAISE EXCEPTION 'committed sandbox audit lineage was mutable';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='committed sandbox audit lineage was mutable' THEN RAISE; END IF;
+  END;
 END $$;
 COMMIT;
 SQL
@@ -767,31 +774,40 @@ BEGIN
     'MOBILE_MONEY',10000,'GHS',requested_evidence_id,
     requested_provider_reference,requested_audit_id,now()
   )
-  ON CONFLICT (request_id) DO UPDATE SET request_id=EXCLUDED.request_id
-  WHERE membership_subscription_sandbox_request.membership_id=EXCLUDED.membership_id
-    AND membership_subscription_sandbox_request.invoice_id=EXCLUDED.invoice_id
-    AND membership_subscription_sandbox_request.rail=EXCLUDED.rail
-    AND membership_subscription_sandbox_request.amount_minor=EXCLUDED.amount_minor
-    AND membership_subscription_sandbox_request.currency=EXCLUDED.currency
-    AND membership_subscription_sandbox_request.evidence_id=EXCLUDED.evidence_id
-    AND membership_subscription_sandbox_request.provider_reference=EXCLUDED.provider_reference
-    AND membership_subscription_sandbox_request.audit_id=EXCLUDED.audit_id
-  RETURNING request_id INTO claimed;
-  IF claimed IS NULL THEN RETURN 'rebound'; END IF;
-
+  ON CONFLICT DO NOTHING;
+  SELECT request_id INTO claimed
+  FROM membership_subscription_sandbox_request
+  WHERE request_id=requested_request_id
+    AND membership_id=requested_membership_id
+    AND invoice_id=requested_invoice_id
+    AND rail='MOBILE_MONEY' AND amount_minor=10000 AND currency='GHS'
+    AND evidence_id=requested_evidence_id
+    AND provider_reference=requested_provider_reference
+    AND audit_id=requested_audit_id;
   INSERT INTO electronic_payment_evidence(
     evidence_id,membership_id,obligation_id,rail,state,amount_minor,currency,
     provider_reference,reconciled_at
-  ) VALUES (
-    requested_evidence_id,requested_membership_id,requested_invoice_id,
-    'MOBILE_MONEY','RECONCILED',10000,'GHS',requested_provider_reference,now()
-  ) ON CONFLICT (evidence_id) DO NOTHING;
+  ) SELECT
+    r.evidence_id,r.membership_id,r.invoice_id,r.rail,'RECONCILED',
+    r.amount_minor,r.currency,r.provider_reference,r.created_at
+  FROM membership_subscription_sandbox_request r
+  WHERE r.request_id=requested_request_id
+    AND r.membership_id=requested_membership_id
+    AND r.invoice_id=requested_invoice_id
+    AND r.rail='MOBILE_MONEY' AND r.amount_minor=10000 AND r.currency='GHS'
+    AND r.evidence_id=requested_evidence_id
+    AND r.provider_reference=requested_provider_reference
+    AND r.audit_id=requested_audit_id
+  ON CONFLICT (evidence_id) DO NOTHING;
 
   SELECT * INTO settled FROM settle_membership_subscription(
     requested_invoice_id,requested_evidence_id,requested_session_id,
     requested_audit_id,requested_request_id,now()
   );
-  IF NOT FOUND THEN RAISE EXCEPTION 'sandbox settlement did not apply'; END IF;
+  IF NOT FOUND THEN
+    IF claimed IS NULL THEN RETURN 'rebound'; END IF;
+    RAISE EXCEPTION 'sandbox settlement did not apply';
+  END IF;
 
   UPDATE membership_subscription_sandbox_request r
   SET state='COMMITTED',completed_at=COALESCE(r.completed_at,now()),

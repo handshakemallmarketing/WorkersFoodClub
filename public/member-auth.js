@@ -60,10 +60,13 @@
   }
   function sandboxRequestId(invoiceId) {
     const key = `wfc:sandbox-subscription-request:${invoiceId}`;
-    const existing = sessionStorage.getItem(key);
+    let existing;
+    try { existing = localStorage.getItem(key); } catch { throw new Error('DURABLE_REQUEST_ID_STORAGE_UNAVAILABLE'); }
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing || '')) return existing;
     if (typeof crypto.randomUUID !== 'function') throw new Error('SECURE_REQUEST_ID_UNAVAILABLE');
-    const created = crypto.randomUUID(); sessionStorage.setItem(key, created); return created;
+    const created = crypto.randomUUID();
+    try { localStorage.setItem(key, created); } catch { throw new Error('DURABLE_REQUEST_ID_STORAGE_UNAVAILABLE'); }
+    return created;
   }
   async function paySandbox(invoiceId, message, button) {
     button.disabled = true;

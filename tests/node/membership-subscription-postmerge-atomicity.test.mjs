@@ -36,12 +36,14 @@ test('Preview request replay is durably bound and rebound fails closed',()=>{
   assert.match(replayMigration,/membership_subscription_settlement_allocation/);
   assert.match(replayMigration,/electronic_payment_evidence_consumption/);
   assert.match(replayMigration,/MEMBERSHIP_RENEWAL_SETTLED/);
-  assert.match(endpoint,/ON CONFLICT \(request_id\) DO UPDATE/);
-  assert.match(endpoint,/membership_subscription_sandbox_request\.membership_id=EXCLUDED\.membership_id/);
+  assert.match(endpoint,/ON CONFLICT DO NOTHING/);
+  assert.match(endpoint,/SELECT request_id FROM membership_subscription_sandbox_request/);
   assert.match(endpoint,/ON CONFLICT \(evidence_id\) DO NOTHING/);
   assert.match(endpoint,/COALESCE\(r\.completed_at/);
   assert.match(endpoint,/PAYMENT_RAIL_INVALID/);
   assert.match(memberUi,/crypto\.randomUUID\(\)/);
+  assert.match(memberUi,/localStorage\.getItem/);
+  assert.match(memberUi,/DURABLE_REQUEST_ID_STORAGE_UNAVAILABLE/);
   assert.match(memberUi,/'X-Request-ID': sandboxRequestId\(invoiceId\)/);
 });
 
