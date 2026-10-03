@@ -80,11 +80,18 @@ BEGIN
     RAISE EXCEPTION 'subscription sandbox request binding is immutable';
   END IF;
 
-  IF OLD.state='COMMITTED' AND NEW IS DISTINCT FROM OLD THEN
-    RAISE EXCEPTION 'committed subscription sandbox request is immutable';
+  IF OLD.state='COMMITTED' THEN
+    IF NEW IS DISTINCT FROM OLD THEN
+      RAISE EXCEPTION 'committed subscription sandbox request is immutable';
+    END IF;
+    -- Exact replay must remain valid after later, legitimate membership
+    -- lifecycle transitions.  The durable result is the settlement-time
+    -- snapshot; the referenced settlement and audit rows are independently
+    -- immutable, so a byte-for-byte no-op needs no current-state revalidation.
+    RETURN OLD;
   END IF;
 
-  IF NEW.state='COMMITTED' AND NOT EXISTS (
+  IF OLD.state='PENDING' AND NEW.state='COMMITTED' AND NOT EXISTS (
     SELECT 1
     FROM membership_subscription_invoice i
     JOIN electronic_payment_evidence e

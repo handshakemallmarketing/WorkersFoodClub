@@ -865,6 +865,14 @@ sandbox_race_effects=$("${PSQL[@]}" -Atc "SELECT
   (SELECT count(*) FROM application_access_audit WHERE request_id='22222222-2222-4222-8222-222222222222')")
 [[ "$sandbox_race_results" == "replay,settled" && "$sandbox_race_effects" == "1:1:1:1" ]] || { echo "same-request sandbox race was not exactly-once with durable replay" >&2; exit 1; }
 
+# A later legitimate lifecycle transition must not invalidate the immutable
+# settlement-time result. Exercise the real PostgreSQL trigger and the same
+# helper path used by the concurrency test, rather than relying on mocked SQL.
+"${PSQL[@]}" -c "UPDATE application_membership SET state='SUSPENDED',standing='SUSPENDED',suspended_at=now() WHERE membership_id='membership:sandbox-race'"
+sandbox_later_state_replay=$("${PSQL[@]}" -Atc "SELECT test_run_subscription_sandbox_request('22222222-2222-4222-8222-222222222222','membership:sandbox-race','invoice:sandbox-race','session:sandbox-race','evidence:sandbox-race','provider:sandbox-race','audit:sandbox-race')")
+sandbox_later_state_snapshot=$("${PSQL[@]}" -Atc "SELECT result_membership_state||':'||result_standing FROM membership_subscription_sandbox_request WHERE request_id='22222222-2222-4222-8222-222222222222'")
+[[ "$sandbox_later_state_replay" == "replay" && "$sandbox_later_state_snapshot" == "ACTIVE:ACTIVE" ]] || { echo "later membership lifecycle state invalidated durable sandbox replay" >&2; exit 1; }
+
 sandbox_rebound_a=$(mktemp)
 sandbox_rebound_b=$(mktemp)
 "${PSQL[@]}" -Atc "SELECT test_run_subscription_sandbox_request('33333333-3333-4333-8333-333333333333','membership:sandbox-rebound:a','invoice:sandbox-rebound:a','session:sandbox-rebound:a','evidence:sandbox-rebound:a','provider:sandbox-rebound:a','audit:sandbox-rebound:a')" >"$sandbox_rebound_a" &
