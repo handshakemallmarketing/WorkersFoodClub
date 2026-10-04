@@ -126,7 +126,7 @@ function parseFlowDocument(source) {
     while (index < source.length) {
       skip();
       const key = source[index] === '"' || source[index] === "'" ? quoted() : bare();
-      if (typeof key !== 'string') fail('invalid-key');
+      if (typeof key !== 'string' || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(key)) fail('invalid-key');
       skip();
       if (source[index] !== ':') fail('missing-colon');
       index += 1;
@@ -276,6 +276,11 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
 
   const journeysSource = topLevelBlock(matrixSource, 'journeys');
   if (!journeysSource) throw new Error('JOURNEYS_SECTION_MISSING');
+  for (const line of journeysSource.split('\n')) {
+    if (line && !/^ {2}- \{.*\}[ \t]*$/.test(line)) {
+      throw new Error(`INVALID_JOURNEY_SYNTAX:${line.slice(0, 60)}`);
+    }
+  }
   const journeySources = [...journeysSource.matchAll(/^ {2}- (\{.*\})\s*$/gm)].map((match) => match[1]);
   const journeys = journeySources.map((source) => ({ ...parseFlowDocument(source), source }));
   if (journeys.length !== 30) throw new Error(`JOURNEY_COUNT_INVALID:${journeys.length}`);
@@ -337,6 +342,8 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
   const uc08 = journeys.find((journey) => journey.id === 'UC-08') ?? {};
   if (uc08.classification !== 'UNPROVEN'
       || uc08.severity !== 'P0'
+      || uc08.launch_requirement !== 'REQUIRED'
+      || JSON.stringify(uc08.dependencies) !== JSON.stringify(['UC-07'])
       || JSON.stringify(uc08.policy_evidence) !== JSON.stringify(['BLV2-DEC-024', 'PR-15', 'PR-16', 'PR-17', 'PR-18'])
       || JSON.stringify(uc08.authorization_scopes) !== JSON.stringify(['member:payment.execute'])
       || uc08.final_disposition !== 'IMPLEMENTATION_EVIDENCE_OPEN_PRODUCTION_WITHHELD'
@@ -345,8 +352,12 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
   }
   const uc10 = journeys.find((journey) => journey.id === 'UC-10') ?? {};
   if (uc10.dependencies?.join(',') !== 'UC-08,UC-09'
+      || uc10.classification !== 'PARTIAL'
+      || uc10.severity !== 'P0'
+      || uc10.launch_requirement !== 'REQUIRED'
       || JSON.stringify(uc10.authorization_scopes) !== JSON.stringify(['operator:fulfillment.manage'])
       || JSON.stringify(uc10.authorized_operator_tiers) !== JSON.stringify(['FULFILLMENT_CAPABLE_OPERATORS'])
+      || JSON.stringify(uc10.production_evidence) !== JSON.stringify(['mutations withheld'])
       || uc10.final_disposition !== 'DEPENDENCY_BLOCKED') {
     throw new Error('UC10_DEPENDENCY_BOUNDARY_INVALID');
   }
