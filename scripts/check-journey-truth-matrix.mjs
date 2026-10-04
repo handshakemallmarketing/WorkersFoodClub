@@ -277,8 +277,9 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
   const journeysSource = topLevelBlock(matrixSource, 'journeys');
   if (!journeysSource) throw new Error('JOURNEYS_SECTION_MISSING');
   for (const line of journeysSource.split('\n')) {
-    if (line && !/^ {2}- \{.*\}[ \t]*$/.test(line)) {
-      throw new Error(`INVALID_JOURNEY_SYNTAX:${line.slice(0, 60)}`);
+    const canonicalLine = line.endsWith('\r') ? line.slice(0, -1) : line;
+    if (canonicalLine && !/^ {2}- \{.*\}[ \t]*$/.test(canonicalLine)) {
+      throw new Error(`INVALID_JOURNEY_SYNTAX:${canonicalLine.slice(0, 60)}`);
     }
   }
   const journeySources = [...journeysSource.matchAll(/^ {2}- (\{.*\})\s*$/gm)].map((match) => match[1]);
