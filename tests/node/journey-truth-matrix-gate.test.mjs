@@ -120,7 +120,22 @@ test('requires records to live under the journeys section', () => {
   assert.throws(() => validate(matrixSource.replace(/^journeys:/m, 'not_journeys:')), /UNKNOWN_TOP_LEVEL_KEY:not_journeys|JOURNEYS_SECTION_MISSING/);
   assert.throws(
     () => validate(matrixSource.replace(/^  - \{id: UC-01/m, '\t\t- {id: UC-01')),
-    /JOURNEY_COUNT_INVALID:29/,
+    /INVALID_JOURNEY_SYNTAX/,
+  );
+  assert.throws(
+    () => validate(`${matrixSource}\n  - id: UC-31\n    classification: PROVEN\n`),
+    /INVALID_JOURNEY_SYNTAX/,
+  );
+  assert.throws(
+    () => validate(`${matrixSource}\n  - UC-31\n`),
+    /INVALID_JOURNEY_SYNTAX/,
+  );
+});
+
+test('rejects tagged semantic aliases inside journey mappings', () => {
+  assert.throws(
+    () => validate(matrixSource.replace('classification: PARTIAL', 'classification: PARTIAL, !!str classification: PROVEN')),
+    /JOURNEY_FLOW_PARSE_ERROR:invalid-key/,
   );
 });
 
@@ -149,6 +164,26 @@ test('rejects additional UC-08 and UC-10 authority', () => {
   );
   assert.throws(
     () => validate(matrixSource.replace('authorized_operator_tiers: ["FULFILLMENT_CAPABLE_OPERATORS"]', 'authorized_operator_tiers: ["FULFILLMENT_CAPABLE_OPERATORS", "UNBOUNDED"]')),
+    /UC10_DEPENDENCY_BOUNDARY_INVALID/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('severity: P0, launch_requirement: REQUIRED, final_disposition: DEPENDENCY_BLOCKED', 'severity: P2, launch_requirement: OPTIONAL, final_disposition: DEPENDENCY_BLOCKED')),
+    /UC10_DEPENDENCY_BOUNDARY_INVALID/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('remaining_gaps: ["exact-RC independent browser/API/PostgreSQL/TEST-provider proof", "partial/overpayment/reversal/out-of-order recovery certification", "obsolete Preview HTTP rehearsal assertions"], severity: P0, launch_requirement: REQUIRED, final_disposition: IMPLEMENTATION_EVIDENCE_OPEN_PRODUCTION_WITHHELD', 'remaining_gaps: ["exact-RC independent browser/API/PostgreSQL/TEST-provider proof", "partial/overpayment/reversal/out-of-order recovery certification", "obsolete Preview HTTP rehearsal assertions"], severity: P0, launch_requirement: OPTIONAL, final_disposition: IMPLEMENTATION_EVIDENCE_OPEN_PRODUCTION_WITHHELD')),
+    /UC08_FAIL_CLOSED_BOUNDARY_INVALID/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('id: UC-08, objective: "Minimum commitment payment", owner_agent: A4, dependencies: [UC-07]', 'id: UC-08, objective: "Minimum commitment payment", owner_agent: A4, dependencies: []')),
+    /UC08_FAIL_CLOSED_BOUNDARY_INVALID/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('id: UC-10, objective: "Demand-pool qualification", owner_agent: A5, dependencies: [UC-08, UC-09], classification: PARTIAL', 'id: UC-10, objective: "Demand-pool qualification", owner_agent: A5, dependencies: [UC-08, UC-09], classification: MISSING').replace('  PARTIAL: 21', '  PARTIAL: 20').replace('  MISSING: 7', '  MISSING: 8')),
+    /UC10_DEPENDENCY_BOUNDARY_INVALID/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('id: UC-10, objective: "Demand-pool qualification"', 'id: UC-10, objective: "Demand-pool qualification"').replace('preview_evidence: ["implementation evidence only"], production_evidence: ["mutations withheld"], remaining_gaps: ["UC-08 exact-RC evidence dependency"', 'preview_evidence: ["implementation evidence only"], production_evidence: ["mutations enabled"], remaining_gaps: ["UC-08 exact-RC evidence dependency"')),
     /UC10_DEPENDENCY_BOUNDARY_INVALID/,
   );
 });
