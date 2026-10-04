@@ -28,6 +28,8 @@ global_safety_boundary:
   production_payment_mutations: WITHHELD
   production_refund_mutations: WITHHELD
   production_fulfillment_mutations: WITHHELD
+  production_credit_mutations: WITHHELD
+  production_payroll_cagd_mutations: WITHHELD
 global_gaps:
   - id: P0-GOV-CANON
     severity: P0

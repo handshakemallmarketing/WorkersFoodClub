@@ -83,6 +83,10 @@ test('rejects duplicate top-level authority keys and sections', () => {
     () => validate(`${matrixSource}\nsummary:\n  PROVEN: 30\n`),
     /DUPLICATE_TOP_LEVEL_KEY:summary/,
   );
+  assert.throws(
+    () => validate(`${matrixSource}\n"status": LAUNCH_AUTHORIZED\n`),
+    /DUPLICATE_TOP_LEVEL_KEY:status/,
+  );
 });
 
 test('rejects fabricated format-only exact-RC evidence', () => {
@@ -109,5 +113,114 @@ test('rejects fully shaped but unverifiable remote evidence', () => {
   assert.throws(
     () => validate(changed),
     /PROVEN_REQUIRES_ONLINE_INDEPENDENT_CERTIFICATION_GATE/,
+  );
+});
+
+test('requires records to live under the journeys section', () => {
+  assert.throws(() => validate(matrixSource.replace(/^journeys:/m, 'not_journeys:')), /UNKNOWN_TOP_LEVEL_KEY:not_journeys|JOURNEYS_SECTION_MISSING/);
+  assert.throws(
+    () => validate(matrixSource.replace(/^  - \{id: UC-01/m, '\t\t- {id: UC-01')),
+    /JOURNEY_COUNT_INVALID:29/,
+  );
+});
+
+test('rejects tagged or explicit-key top-level aliases', () => {
+  assert.throws(
+    () => validate(`${matrixSource}\n!!str status: LAUNCH_AUTHORIZED\n`),
+    /INVALID_TOP_LEVEL_SYNTAX/,
+  );
+  assert.throws(
+    () => validate(`${matrixSource}\n? status\n: LAUNCH_AUTHORIZED\n`),
+    /INVALID_TOP_LEVEL_SYNTAX/,
+  );
+});
+
+test('rejects inherited object-property classifications', () => {
+  const changed = matrixSource
+    .replace('  UNPROVEN: 2', '  UNPROVEN: 1')
+    .replace('id: UC-13, objective: "Third-party release code", owner_agent: A7, dependencies: [UC-23], classification: UNPROVEN', 'id: UC-13, objective: "Third-party release code", owner_agent: A7, dependencies: [UC-23], classification: toString');
+  assert.throws(() => validate(changed), /JOURNEY_CLASSIFICATION_INVALID:UC-13/);
+});
+
+test('rejects additional UC-08 and UC-10 authority', () => {
+  assert.throws(
+    () => validate(matrixSource.replace('authorization_scopes: ["member:payment.execute"]', 'authorization_scopes: ["member:payment.execute", "member:live-funds.execute"]')),
+    /UC08_FAIL_CLOSED_BOUNDARY_INVALID/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('authorized_operator_tiers: ["FULFILLMENT_CAPABLE_OPERATORS"]', 'authorized_operator_tiers: ["FULFILLMENT_CAPABLE_OPERATORS", "UNBOUNDED"]')),
+    /UC10_DEPENDENCY_BOUNDARY_INVALID/,
+  );
+});
+
+test('rejects unknown or widened safety-boundary capabilities', () => {
+  assert.throws(
+    () => validate(matrixSource.replace('  production_credit_mutations: WITHHELD', '  production_credit_mutations: WITHHELD\n  production_new_capability: ENABLED')),
+    /UNKNOWN_SAFETY_BOUNDARY_KEY:production_new_capability/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('  production_payroll_cagd_mutations: WITHHELD', '  production_payroll_cagd_mutations: ENABLED')),
+    /AUTHORITY_WIDENING_FORBIDDEN:production_payroll_cagd_mutations/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('  production_credit_mutations: WITHHELD', '  production_credit_mutations: WITHHELD\n  "production_credit_mutations": ENABLED')),
+    /DUPLICATE_MAPPING_KEY:safety_boundary.production_credit_mutations/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('  production_credit_mutations: WITHHELD', '  production_credit_mutations: WITHHELD\n  "production_new_capability": ENABLED')),
+    /UNKNOWN_SAFETY_BOUNDARY_KEY:production_new_capability/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('  live_funds: WITHHELD', '  live_funds: WITHHELD"')),
+    /AUTHORITY_WIDENING_FORBIDDEN:live_funds/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('status: WORKING_BASELINE_NOT_LAUNCH_AUTHORIZATION', 'status: WORKING_BASELINE_NOT_LAUNCH_AUTHORIZATION"')),
+    /JOURNEY_MATRIX_STATUS_MUST_NOT_AUTHORIZE_LAUNCH/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('  production_credit_mutations: WITHHELD', '  !!str production_credit_mutations: ENABLED')),
+    /INVALID_SAFETY_BOUNDARY_SYNTAX/,
+  );
+});
+
+test('requires canonical summary counts', () => {
+  assert.throws(
+    () => validate(matrixSource.replace('  PROVEN: 0', '  PROVEN: 0x0')),
+    /JOURNEY_SUMMARY_VALUE_INVALID:PROVEN/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('  PROVEN: 0', '  PROVEN: ""')),
+    /JOURNEY_SUMMARY_VALUE_INVALID:PROVEN/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('  PROVEN: 0', '  PROVEN: "0"')),
+    /JOURNEY_SUMMARY_VALUE_INVALID:PROVEN/,
+  );
+});
+
+test('rejects contradictory UC-08 evidence additions', () => {
+  assert.throws(
+    () => validate(matrixSource.replace('production_evidence: ["mutations withheld"]', 'production_evidence: ["mutations withheld", "mutations enabled"]')),
+    /UC08_FAIL_CLOSED_BOUNDARY_INVALID/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('policy_evidence: ["BLV2-DEC-024", "PR-15", "PR-16", "PR-17", "PR-18"]', 'policy_evidence: ["BLV2-DEC-024", "PR-15", "PR-16", "PR-17", "PR-18", "UNRATIFIED"]')),
+    /UC08_FAIL_CLOSED_BOUNDARY_INVALID/,
+  );
+});
+
+test('rejects unknown and cyclic dependencies', () => {
+  assert.throws(
+    () => validate(matrixSource.replace('id: UC-01, objective: "Member application", owner_agent: A2, dependencies: []', 'id: UC-01, objective: "Member application", owner_agent: A2, dependencies: [UC-99]')),
+    /JOURNEY_DEPENDENCY_UNKNOWN:UC-01:UC-99/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('id: UC-01, objective: "Member application", owner_agent: A2, dependencies: []', 'id: UC-01, objective: "Member application", owner_agent: A2, dependencies: [UC-02]')),
+    /JOURNEY_DEPENDENCY_CYCLE:/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace('id: UC-02, objective: "Membership activation and Member ID", owner_agent: A2, dependencies: [UC-01]', 'id: UC-02, objective: "Membership activation and Member ID", owner_agent: A2, dependencies: [UC-01, UC-01]')),
+    /JOURNEY_DEPENDENCY_DUPLICATE:UC-02/,
   );
 });

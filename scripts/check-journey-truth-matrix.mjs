@@ -7,18 +7,61 @@ const BASELINE_PATH = 'constitution/baseline.json';
 const PRODUCTION_AUTHORIZATION_PATH = 'docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json';
 const CLASSIFICATIONS = ['PROVEN', 'PARTIAL', 'UNPROVEN', 'MISSING'];
 
-function scalar(source, key) {
-  return source.match(new RegExp(`^${key}:\\s*["']?([^\\n"']+)["']?\\s*$`, 'm'))?.[1]?.trim();
+function decodeMappingKey(doubleQuoted, singleQuoted, bare) {
+  const rawKey = doubleQuoted ?? singleQuoted ?? bare;
+  return doubleQuoted
+    ? JSON.parse(rawKey)
+    : singleQuoted
+      ? rawKey.slice(1, -1).replace(/''/g, "'")
+      : rawKey;
 }
 
-function block(source, start, end) {
-  return source.match(new RegExp(`^${start}:\\s*\\n([\\s\\S]*?)(?=^${end}:\\s*(?:\\n|$))`, 'm'))?.[1] ?? '';
+function decodeScalar(rawValue) {
+  if (rawValue === undefined) return undefined;
+  if (/^"(?:[^"\\]|\\.)*"$/.test(rawValue)) return JSON.parse(rawValue);
+  if (/^'(?:[^']|'')*'$/.test(rawValue)) return rawValue.slice(1, -1).replace(/''/g, "'");
+  return rawValue;
+}
+
+function topLevelEntries(source) {
+  const entries = [];
+  const pattern = /^(?:("(?:[^"\\]|\\.)*")|('(?:[^']|'')*')|([A-Za-z_][A-Za-z0-9_-]*))[ \t]*:[ \t]*([^\n]*)$/gm;
+  for (const match of source.matchAll(pattern)) {
+    const key = decodeMappingKey(match[1], match[2], match[3]);
+    entries.push({ key, value: match[4].trim(), start: match.index, contentStart: match.index + match[0].length + 1 });
+  }
+  return entries;
+}
+
+function topLevelScalar(source, key) {
+  const entry = topLevelEntries(source).find((candidate) => candidate.key === key);
+  return decodeScalar(entry?.value);
+}
+
+function topLevelBlock(source, key) {
+  const entries = topLevelEntries(source);
+  const index = entries.findIndex((entry) => entry.key === key);
+  if (index === -1 || entries[index].value !== '') return '';
+  return source.slice(entries[index].contentStart, entries[index + 1]?.start ?? source.length);
+}
+
+function indentedMappingEntries(source) {
+  const entries = [];
+  const pattern = /^  (?:("(?:[^"\\]|\\.)*")|('(?:[^']|'')*')|([A-Za-z_][A-Za-z0-9_-]*))[ \t]*:[ \t]*([^\n]*)$/gm;
+  for (const match of source.matchAll(pattern)) {
+    entries.push({ key: decodeMappingKey(match[1], match[2], match[3]), value: match[4].trim() });
+  }
+  return entries;
+}
+
+function blockRawScalar(source, key) {
+  const lines = indentedMappingEntries(source).filter((entry) => entry.key === key);
+  if (lines.length > 1) throw new Error(`DUPLICATE_MAPPING_KEY:${key}`);
+  return lines[0]?.value;
 }
 
 function blockScalar(source, key) {
-  const lines = [...source.matchAll(new RegExp(`^\\s{2}${key}:\\s*([^\\n]*)$`, 'gm'))];
-  if (lines.length > 1) throw new Error(`DUPLICATE_MAPPING_KEY:${key}`);
-  return lines[0]?.[1]?.trim().replace(/^['"]|['"]$/g, '');
+  return decodeScalar(blockRawScalar(source, key));
 }
 
 function parseFlowDocument(source) {
@@ -104,11 +147,45 @@ function parseFlowDocument(source) {
 
 function rejectDuplicateTopLevelKeys(source) {
   const seen = new Set();
-  for (const match of source.matchAll(/^([A-Za-z_][A-Za-z0-9_-]*):(?:\s|$)/gm)) {
-    const key = match[1];
+  for (const { key } of topLevelEntries(source)) {
     if (seen.has(key)) throw new Error(`DUPLICATE_TOP_LEVEL_KEY:${key}`);
     seen.add(key);
   }
+}
+
+function strictTopLevelKeys(source, expectedKeys) {
+  const entries = topLevelEntries(source);
+  const validStarts = new Set(entries.map((entry) => entry.start));
+  let offset = 0;
+  for (const line of source.split(/(?<=\n)/)) {
+    const text = line.replace(/\n$/, '');
+    if (text && !/^\s/.test(text) && !validStarts.has(offset)) throw new Error(`INVALID_TOP_LEVEL_SYNTAX:${text.slice(0, 60)}`);
+    offset += line.length;
+  }
+  const keys = entries.map((entry) => entry.key);
+  const expected = new Set(expectedKeys);
+  const unknown = keys.find((key) => !expected.has(key));
+  if (unknown) throw new Error(`UNKNOWN_TOP_LEVEL_KEY:${unknown}`);
+  const missing = expectedKeys.find((key) => !keys.includes(key));
+  if (missing) throw new Error(`MISSING_TOP_LEVEL_KEY:${missing}`);
+}
+
+function strictBlockKeys(source, expectedKeys, blockName) {
+  const entries = indentedMappingEntries(source);
+  for (const line of source.split('\n')) {
+    if (!line) continue;
+    if (!/^  (?:("(?:[^"\\]|\\.)*")|('(?:[^']|'')*')|([A-Za-z_][A-Za-z0-9_-]*))[ \t]*:[ \t]*[^\n]*$/.test(line)) {
+      throw new Error(`INVALID_${blockName.toUpperCase()}_SYNTAX:${line.slice(0, 60)}`);
+    }
+  }
+  const keys = entries.map((entry) => entry.key);
+  const duplicates = keys.filter((key, index) => keys.indexOf(key) !== index);
+  if (duplicates.length) throw new Error(`DUPLICATE_MAPPING_KEY:${blockName}.${duplicates[0]}`);
+  const expected = new Set(expectedKeys);
+  const unknown = keys.find((key) => !expected.has(key));
+  if (unknown) throw new Error(`UNKNOWN_${blockName.toUpperCase()}_KEY:${unknown}`);
+  const missing = expectedKeys.find((key) => !keys.includes(key));
+  if (missing) throw new Error(`MISSING_${blockName.toUpperCase()}_KEY:${missing}`);
 }
 
 function durableEvidenceReference(value) {
@@ -144,13 +221,18 @@ function exactRcEvidenceValid(evidence, baselineSha) {
 
 export function validateJourneyTruthMatrix({ matrixSource, baseline, productionAuthorization, corpusExists }) {
   rejectDuplicateTopLevelKeys(matrixSource);
-  if (scalar(matrixSource, 'status') !== 'WORKING_BASELINE_NOT_LAUNCH_AUTHORIZATION') {
+  strictTopLevelKeys(matrixSource, [
+    'version', 'status', 'as_of_utc', 'repository', 'baseline_sha', 'owner',
+    'reconciliation_scope', 'classification_rule', 'summary', 'global_safety_boundary',
+    'global_gaps', 'field_legend', 'journeys',
+  ]);
+  if (topLevelScalar(matrixSource, 'status') !== 'WORKING_BASELINE_NOT_LAUNCH_AUTHORIZATION') {
     throw new Error('JOURNEY_MATRIX_STATUS_MUST_NOT_AUTHORIZE_LAUNCH');
   }
-  if (!/^20\d\d-\d\d-\d\d$/.test(scalar(matrixSource, 'as_of_utc') ?? '')) {
+  if (!/^20\d\d-\d\d-\d\d$/.test(topLevelScalar(matrixSource, 'as_of_utc') ?? '')) {
     throw new Error('JOURNEY_MATRIX_AS_OF_INVALID');
   }
-  if (!/^[0-9a-f]{40}$/.test(scalar(matrixSource, 'baseline_sha') ?? '')) {
+  if (!/^[0-9a-f]{40}$/.test(topLevelScalar(matrixSource, 'baseline_sha') ?? '')) {
     throw new Error('JOURNEY_MATRIX_BASELINE_SHA_INVALID');
   }
   if (baseline?.status !== 'RATIFIED' || baseline?.ratification_authority !== 'System Owner') {
@@ -160,21 +242,29 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
     throw new Error('CONSTITUTIONAL_SOURCE_NOT_PROVEN');
   }
 
-  const summarySource = block(matrixSource, 'summary', 'global_safety_boundary');
-  const safetySource = block(matrixSource, 'global_safety_boundary', 'global_gaps');
-  for (const key of [
+  const summarySource = topLevelBlock(matrixSource, 'summary');
+  const safetySource = topLevelBlock(matrixSource, 'global_safety_boundary');
+  const summaryKeys = [...CLASSIFICATIONS, 'FUTURE_NOT_REQUIRED_FOR_INITIAL_LAUNCH'];
+  strictBlockKeys(summarySource, summaryKeys, 'summary');
+  const safetyKeys = [
     'paystack_live_mode',
     'live_paystack_credentials',
     'live_funds',
     'production_application_access',
+    'standing_governed_production_sha',
+    'matrix_baseline_production_authorized',
     'production_payment_mutations',
     'production_refund_mutations',
     'production_fulfillment_mutations',
-  ]) {
+    'production_credit_mutations',
+    'production_payroll_cagd_mutations',
+  ];
+  strictBlockKeys(safetySource, safetyKeys, 'safety_boundary');
+  for (const key of safetyKeys.filter((key) => !['standing_governed_production_sha', 'matrix_baseline_production_authorized'].includes(key))) {
     if (blockScalar(safetySource, key) !== 'WITHHELD') throw new Error(`AUTHORITY_WIDENING_FORBIDDEN:${key}`);
   }
   const governedSha = productionAuthorization?.grant?.candidateSha;
-  const baselineSha = scalar(matrixSource, 'baseline_sha');
+  const baselineSha = topLevelScalar(matrixSource, 'baseline_sha');
   if (!/^[0-9a-f]{40}$/.test(governedSha ?? '')
       || blockScalar(safetySource, 'standing_governed_production_sha') !== governedSha) {
     throw new Error('STANDING_PRODUCTION_SHA_TRUTH_INVALID');
@@ -184,7 +274,9 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
     throw new Error('MATRIX_BASELINE_PRODUCTION_AUTHORITY_INVALID');
   }
 
-  const journeySources = [...matrixSource.matchAll(/^\s{2}- (\{.*\})\s*$/gm)].map((match) => match[1]);
+  const journeysSource = topLevelBlock(matrixSource, 'journeys');
+  if (!journeysSource) throw new Error('JOURNEYS_SECTION_MISSING');
+  const journeySources = [...journeysSource.matchAll(/^ {2}- (\{.*\})\s*$/gm)].map((match) => match[1]);
   const journeys = journeySources.map((source) => ({ ...parseFlowDocument(source), source }));
   if (journeys.length !== 30) throw new Error(`JOURNEY_COUNT_INVALID:${journeys.length}`);
   const ids = new Set(journeys.map((journey) => journey.id));
@@ -196,19 +288,42 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
 
   const counts = Object.fromEntries(CLASSIFICATIONS.map((classification) => [classification, 0]));
   for (const journey of journeys) {
-    if (!(journey.classification in counts)) throw new Error(`JOURNEY_CLASSIFICATION_INVALID:${journey.id}`);
+    if (!Object.hasOwn(counts, journey.classification)) throw new Error(`JOURNEY_CLASSIFICATION_INVALID:${journey.id}`);
     counts[journey.classification] += 1;
     if (journey.classification === 'PROVEN' && !exactRcEvidenceValid(journey.exact_rc_evidence, baselineSha)) {
       throw new Error(`PROVEN_WITHOUT_EXACT_RC_EVIDENCE:${journey.id}`);
     }
   }
+  for (const journey of journeys) {
+    if (!Array.isArray(journey.dependencies)) throw new Error(`JOURNEY_DEPENDENCIES_INVALID:${journey.id}`);
+    if (new Set(journey.dependencies).size !== journey.dependencies.length) throw new Error(`JOURNEY_DEPENDENCY_DUPLICATE:${journey.id}`);
+    for (const dependency of journey.dependencies) {
+      if (typeof dependency !== 'string' || !ids.has(dependency)) throw new Error(`JOURNEY_DEPENDENCY_UNKNOWN:${journey.id}:${dependency}`);
+      if (dependency === journey.id) throw new Error(`JOURNEY_DEPENDENCY_CYCLE:${journey.id}`);
+    }
+  }
+  const byId = new Map(journeys.map((journey) => [journey.id, journey]));
+  const visiting = new Set(), visited = new Set();
+  const visit = (id) => {
+    if (visiting.has(id)) throw new Error(`JOURNEY_DEPENDENCY_CYCLE:${id}`);
+    if (visited.has(id)) return;
+    visiting.add(id);
+    for (const dependency of byId.get(id).dependencies) visit(dependency);
+    visiting.delete(id);
+    visited.add(id);
+  };
+  for (const id of ids) visit(id);
   for (const classification of CLASSIFICATIONS) {
-    const declared = Number(blockScalar(summarySource, classification));
+    const rawDeclared = blockRawScalar(summarySource, classification);
+    if (!/^(?:0|[1-9][0-9]*)$/.test(rawDeclared ?? '')) {
+      throw new Error(`JOURNEY_SUMMARY_VALUE_INVALID:${classification}`);
+    }
+    const declared = Number(rawDeclared);
     if (declared !== counts[classification]) {
       throw new Error(`JOURNEY_SUMMARY_MISMATCH:${classification}:${declared}:${counts[classification]}`);
     }
   }
-  if (Number(blockScalar(summarySource, 'FUTURE_NOT_REQUIRED_FOR_INITIAL_LAUNCH')) !== 0) {
+  if (blockRawScalar(summarySource, 'FUTURE_NOT_REQUIRED_FOR_INITIAL_LAUNCH') !== '0') {
     throw new Error('FUTURE_NOT_REQUIRED_COUNT_UNSUPPORTED');
   }
   // This offline repository gate can reject malformed evidence, but it cannot prove
@@ -222,20 +337,20 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
   const uc08 = journeys.find((journey) => journey.id === 'UC-08') ?? {};
   if (uc08.classification !== 'UNPROVEN'
       || uc08.severity !== 'P0'
-      || uc08.policy_evidence?.[0] !== 'BLV2-DEC-024'
-      || uc08.authorization_scopes?.[0] !== 'member:payment.execute'
+      || JSON.stringify(uc08.policy_evidence) !== JSON.stringify(['BLV2-DEC-024', 'PR-15', 'PR-16', 'PR-17', 'PR-18'])
+      || JSON.stringify(uc08.authorization_scopes) !== JSON.stringify(['member:payment.execute'])
       || uc08.final_disposition !== 'IMPLEMENTATION_EVIDENCE_OPEN_PRODUCTION_WITHHELD'
-      || uc08.production_evidence?.[0] !== 'mutations withheld') {
+      || JSON.stringify(uc08.production_evidence) !== JSON.stringify(['mutations withheld'])) {
     throw new Error('UC08_FAIL_CLOSED_BOUNDARY_INVALID');
   }
   const uc10 = journeys.find((journey) => journey.id === 'UC-10') ?? {};
   if (uc10.dependencies?.join(',') !== 'UC-08,UC-09'
-      || uc10.authorization_scopes?.[0] !== 'operator:fulfillment.manage'
-      || uc10.authorized_operator_tiers?.[0] !== 'FULFILLMENT_CAPABLE_OPERATORS'
+      || JSON.stringify(uc10.authorization_scopes) !== JSON.stringify(['operator:fulfillment.manage'])
+      || JSON.stringify(uc10.authorized_operator_tiers) !== JSON.stringify(['FULFILLMENT_CAPABLE_OPERATORS'])
       || uc10.final_disposition !== 'DEPENDENCY_BLOCKED') {
     throw new Error('UC10_DEPENDENCY_BOUNDARY_INVALID');
   }
-  return { counts, baselineSha: scalar(matrixSource, 'baseline_sha') };
+  return { counts, baselineSha: topLevelScalar(matrixSource, 'baseline_sha') };
 }
 
 export function checkJourneyTruthMatrix(root = process.cwd()) {
