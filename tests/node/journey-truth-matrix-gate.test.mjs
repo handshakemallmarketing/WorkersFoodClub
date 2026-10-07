@@ -19,6 +19,42 @@ test('accepts the conservative 30-journey baseline', () => {
   assert.deepEqual(result.counts, { PROVEN: 0, PARTIAL: 21, UNPROVEN: 2, MISSING: 7 });
 });
 
+test('accepts the canonical baseline with CRLF line endings', () => {
+  const result = validate(matrixSource.replace(/\n/g, '\r\n'));
+  assert.deepEqual(result.counts, { PROVEN: 0, PARTIAL: 21, UNPROVEN: 2, MISSING: 7 });
+});
+
+test('rejects erased or falsely resolved global gaps', () => {
+  assert.throws(
+    () => validate(matrixSource.replace(/global_gaps:\n[\s\S]*?(?=field_legend:)/, 'global_gaps: []\n')),
+    /GLOBAL_GAPS_TRUTH_INVALID/,
+  );
+  assert.throws(
+    () => validate(matrixSource.replace(
+      'id: P1-DB-RECOVERY\n    severity: P1\n    finding:',
+      'id: P1-DB-RECOVERY\n    severity: P1\n    status: RESOLVED\n    finding:',
+    )),
+    /GLOBAL_GAPS_TRUTH_INVALID/,
+  );
+});
+
+test('rejects erased gaps and fabricated Preview evidence', () => {
+  assert.throws(
+    () => validate(matrixSource.replace(/remaining_gaps: \[[^\]]*\]/g, 'remaining_gaps: []')),
+    /JOURNEY_DESCRIPTIVE_FIELDS_INVALID/,
+  );
+  const fabricated = matrixSource
+    .replace(
+      'id: UC-01, objective: "Member application"',
+      'id: UC-01, objective: "Member application"',
+    )
+    .replace(
+      'preview_evidence: [], production_evidence: [], remaining_gaps: ["authenticated UI→API→PostgreSQL proof"]',
+      'preview_evidence: ["exact-RC hosted browser/API/PostgreSQL/provider certification passed"], production_evidence: [], remaining_gaps: ["none"]',
+    );
+  assert.throws(() => validate(fabricated), /JOURNEY_DESCRIPTIVE_TRUTH_INVALID/);
+});
+
 test('rejects a silent UC-08 promotion', () => {
   const changed = matrixSource.replace(
     'id: UC-08, objective: "Minimum commitment payment", owner_agent: A4, dependencies: [UC-07], classification: UNPROVEN',

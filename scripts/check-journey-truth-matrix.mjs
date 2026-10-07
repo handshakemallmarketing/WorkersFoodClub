@@ -1,11 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const MATRIX_PATH = 'docs/business-logic-v2/master-journey-truth-matrix.yaml';
 const BASELINE_PATH = 'constitution/baseline.json';
 const PRODUCTION_AUTHORIZATION_PATH = 'docs/governance/PRODUCTION_APPLICATION_ACCESS_ACTIVATION-v1.json';
 const CLASSIFICATIONS = ['PROVEN', 'PARTIAL', 'UNPROVEN', 'MISSING'];
+const GLOBAL_GAPS_SHA256 = '5f462dec5b60a48aa1b8dacdfb83b26d5761f1ae33606f2971ef3dc5a556f0e5';
+const JOURNEY_DESCRIPTIVE_TRUTH_SHA256 = '3b14b73b8c6c35c907bf537ec07a684597389add1fc3ce3aee2c925242c8880e';
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
 
 function decodeMappingKey(doubleQuoted, singleQuoted, bare) {
   const rawKey = doubleQuoted ?? singleQuoted ?? bare;
@@ -242,6 +249,11 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
     throw new Error('CONSTITUTIONAL_SOURCE_NOT_PROVEN');
   }
 
+  const globalGapsSource = topLevelBlock(matrixSource, 'global_gaps').replace(/\r\n/g, '\n');
+  if (sha256(globalGapsSource) !== GLOBAL_GAPS_SHA256) {
+    throw new Error('GLOBAL_GAPS_TRUTH_INVALID');
+  }
+
   const summarySource = topLevelBlock(matrixSource, 'summary');
   const safetySource = topLevelBlock(matrixSource, 'global_safety_boundary');
   const summaryKeys = [...CLASSIFICATIONS, 'FUTURE_NOT_REQUIRED_FOR_INITIAL_LAUNCH'];
@@ -277,13 +289,31 @@ export function validateJourneyTruthMatrix({ matrixSource, baseline, productionA
   const journeysSource = topLevelBlock(matrixSource, 'journeys');
   if (!journeysSource) throw new Error('JOURNEYS_SECTION_MISSING');
   for (const line of journeysSource.split('\n')) {
-    if (line && !/^ {2}- \{.*\}[ \t]*$/.test(line)) {
-      throw new Error(`INVALID_JOURNEY_SYNTAX:${line.slice(0, 60)}`);
+    const canonicalLine = line.endsWith('\r') ? line.slice(0, -1) : line;
+    if (canonicalLine && !/^ {2}- \{.*\}[ \t]*$/.test(canonicalLine)) {
+      throw new Error(`INVALID_JOURNEY_SYNTAX:${canonicalLine.slice(0, 60)}`);
     }
   }
   const journeySources = [...journeysSource.matchAll(/^ {2}- (\{.*\})\s*$/gm)].map((match) => match[1]);
   const journeys = journeySources.map((source) => ({ ...parseFlowDocument(source), source }));
   if (journeys.length !== 30) throw new Error(`JOURNEY_COUNT_INVALID:${journeys.length}`);
+  for (const journey of journeys) {
+    if (!Array.isArray(journey.preview_evidence)
+        || !journey.preview_evidence.every((value) => typeof value === 'string')
+        || !Array.isArray(journey.remaining_gaps)
+        || journey.remaining_gaps.length === 0
+        || !journey.remaining_gaps.every((value) => typeof value === 'string' && value.trim().length > 0)) {
+      throw new Error(`JOURNEY_DESCRIPTIVE_FIELDS_INVALID:${journey.id ?? 'UNKNOWN'}`);
+    }
+  }
+  const descriptiveTruth = journeys.map(({ id, preview_evidence, remaining_gaps }) => ({
+    id,
+    preview_evidence,
+    remaining_gaps,
+  }));
+  if (sha256(JSON.stringify(descriptiveTruth)) !== JOURNEY_DESCRIPTIVE_TRUTH_SHA256) {
+    throw new Error('JOURNEY_DESCRIPTIVE_TRUTH_INVALID');
+  }
   const ids = new Set(journeys.map((journey) => journey.id));
   for (let number = 1; number <= 30; number += 1) {
     const id = `UC-${String(number).padStart(2, '0')}`;
