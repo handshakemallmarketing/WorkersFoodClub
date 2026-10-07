@@ -79,7 +79,7 @@ jobs:
         run: |
           echo "Exact-head Vercel deployment is proven by the preceding status check."
           echo "The live HTTP adversarial rehearsal is intentionally not run against a hard-coded branch alias from this required gate."
-          echo "Run the rc2-preview-http-rehearsal workflow with the exact immutable Vercel deployment URL; RC2-E2E-001 remains open until that workflow passes."
+          echo "The hosted mutating Preview rehearsal is retired. Use only isolated child databases for destructive tests; hosted certification remains blocked pending an independent Vercel/Neon control-plane identity verifier."
       - name: RC3 exact-head deployment boundary status
         if: github.event_name == 'pull_request' && github.head_ref == 'sw1-rc3-production-identity-live-provider-falsification'
         run: |

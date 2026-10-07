@@ -1,76 +1,16 @@
-name: rc2-preview-http-rehearsal
+name: retired-hosted-mutating-preview-rehearsal
 on:
   workflow_dispatch:
-    inputs:
-      preview_url:
-        description: Exact immutable Vercel deployment URL to attack
-        required: true
-        type: string
-      expected_sha:
-        description: Exact Git commit SHA deployed at preview_url
-        required: true
-        type: string
-      expected_database_host_sha256:
-        description: SHA-256 of the separately verified isolated Preview database hostname
-        required: true
-        type: string
 permissions:
   contents: read
-  id-token: write
 jobs:
-  rehearsal:
+  retired:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.expected_sha }}
-      - uses: pnpm/action-setup@v4
-        with: { version: 9.15.4 }
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - name: Validate rehearsal script
-        run: node --check scripts/test-preview-http-rehearsal.mjs
-      - name: Mint GitHub OIDC token for Vercel Trusted Sources
-        id: oidc
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const token = await core.getIDToken();
-            core.setSecret(token);
-            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-            const safeClaims = {
-              iss: payload.iss ?? null,
-              aud: payload.aud ?? null,
-              sub: payload.sub ?? null,
-              repository: payload.repository ?? null,
-              repository_id: payload.repository_id ?? null,
-              repository_owner: payload.repository_owner ?? null,
-              repository_owner_id: payload.repository_owner_id ?? null,
-              ref: payload.ref ?? null,
-              ref_type: payload.ref_type ?? null,
-              event_name: payload.event_name ?? null,
-              workflow: payload.workflow ?? null,
-              workflow_ref: payload.workflow_ref ?? null,
-              job_workflow_ref: payload.job_workflow_ref ?? null
-            };
-            core.info(`OIDC_SAFE_CLAIMS=${JSON.stringify(safeClaims)}`);
-            core.setOutput('token', token);
-      - name: Attack exact immutable Vercel deployment
-        env:
-          PREVIEW_BASE_URL: ${{ inputs.preview_url }}
-          EXPECTED_COMMIT_SHA: ${{ inputs.expected_sha }}
-          EXPECTED_DATABASE_HOST_SHA256: ${{ inputs.expected_database_host_sha256 }}
-          VERCEL_TRUSTED_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+      - name: Fail closed
         shell: bash
         run: |
-          set -o pipefail
-          node scripts/test-preview-http-rehearsal.mjs | tee rc2-preview-http-rehearsal-evidence.json
-      - name: Upload rehearsal evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rc2-preview-http-rehearsal-${{ inputs.expected_sha }}
-          path: rc2-preview-http-rehearsal-evidence.json
-          if-no-files-found: warn
-          retention-days: 30
+          echo 'RETIRED_MUTATING_HOSTED_REHEARSAL'
+          echo 'Hosted source databases are read-only certification targets. Destructive tests must use an isolated child database.'
+          echo 'An independent Vercel/Neon control-plane identity verifier is required before hosted evidence can be certified.'
+          exit 1
