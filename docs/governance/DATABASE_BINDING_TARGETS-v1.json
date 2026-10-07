@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "provider": "NEON",
+    "projectId": "wispy-dawn-96331519"
+  },
+  "preview": {
+    "branchId": "br-purple-grass-aej54d2x",
+    "databaseName": "neondb",
+    "hostSha256": "efecbc10be311dc3b95f981eb70329b7e2402e526399b4414083e96f56549946",
+    "evidenceDecision": "BLV2-DEC-016"
+  },
+  "production": {
+    "branchId": "br-winter-poetry-ae8qho57",
+    "databaseName": "neondb",
+    "hostSha256": null,
+    "verificationStatus": "UNVERIFIED"
+  },
+  "constraints": {
+    "sourceDatabasesReadOnly": true,
+    "destructiveTestsRestrictedToIsolatedChildren": true,
+    "hostedAppliedSchemaCertification": "UNKNOWN"
+  }
+}
